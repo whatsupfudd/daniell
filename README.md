@@ -78,7 +78,7 @@ A <value> is called a *pipeline* in golang *template/text* library.  It is defin
     <pipeline> ::= <args> | <call>
     <call> ::= <function> [ <args> ] [ "|" <call> ]
     <args>::= <var> | <constant> | "."
-    <var> ::= "." <predef-label> | <local-var>
+    <var> ::= [ <var> ] "." <label> | <local-var>
     <local-var> ::= "$" <label>
     <var-def> ::= <local-var> ":=" <pipelines>
     <var-assign> ::= <local-var> "=" <pipelines>
@@ -163,11 +163,63 @@ to obtain both a CSS file in the resulting static site and a link referring to t
 
 
 ### Daniell implementation
-- configuration logic (yaml, htoml, aeson) + cli (options-applicative)
-- folder hierarchy traversal for acquiring config, markup, templates and theme files ([dir-traverse](https://hackage.haskell.org/package/dir-traverse), [pathwalk](https://hackage.haskell.org/package/pathwalk))
-- associtation logic for markup and templates
-- markup files parser ([mmark](https://hackage.haskell.org/package/mmark), [cmark](https://hackage.haskell.org/package/cmark))
-- template files parser
-- scripting interpreter
-- simple http service for providing browser access to the static site generated (wai, warp, servant)
-- publishing logic to construct a self-sufficient folder for the static site
+#### Configuration logic (yaml, htoml, aeson) + cli (options-applicative)
+- Options
+    - CliOptions
+    - FileOptions
+    - SiteConfig
+
+At bootstrap, produce a CliOptions and FileOptions structure to select which main action(s) to perform and parameters for the action(s) execution.
+
+During template interpretation, provides the SiteConfig context, loaded from the config.<ext> file(s).
+
+#### Folder hierarchy traversal for acquiring config, markup, templates and theme files ([dir-traverse](https://hackage.haskell.org/package/dir-traverse), [pathwalk](https://hackage.haskell.org/package/pathwalk))
+- Hierarchy
+    - MarkupPage
+    - Template
+    - Asset
+    - Data
+    - Reources
+    - Static
+    - Theme
+
+Provides a tree of content for a given site description top-level folder
+
+#### Associtation logic for markup and templates
+- WorkPlan
+- Transformation
+
+Creates a workplan of transformations to apply to page markup descriptions in order to generate the static site.
+
+#### Markup files parser ([mmark](https://hackage.haskell.org/package/mmark), [cmark](https://hackage.haskell.org/package/cmark))
+- MarkLoader
+  - Page
+
+Uses the markdown library to read the content of a markup file into an internal list of parameters and HTML content.
+
+#### Template files parser
+- TmplParser
+    - TextTmplParser
+    - Template
+    - TextBlock
+    - Statement
+    - Variable
+    - Reference
+
+Read a *template/text* template, referred templates and partials, and create a interpretable representation of the whole set of content/logic ready for the next phase.
+
+#### Scripting interpreter
+- Interpreter
+    - TextTmplInterpreter
+    - RtContext
+    - Output
+
+#### Simple http service for providing browser access to the static site generated (wai, warp, servant)
+- WebServer
+    - SimpleHandler
+
+#### Publishing logic to construct a self-sufficient folder for the static site
+- Publisher
+  - Dependency
+
+Takes out the (sucessful) output of the interpreter and serializes it into a self-sufficient folder that makes up a static site.

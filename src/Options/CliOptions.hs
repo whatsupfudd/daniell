@@ -17,7 +17,7 @@ parseCliOptions =
 parser :: ParserInfo CliOptions
 parser =
   info (arguments <**> helper) $
-    fullDesc <> progDesc "File import/export service." <> header "core-api"
+    fullDesc <> progDesc "Static Site generator." <> header "daniell"
 
 
 arguments :: Parser CliOptions
