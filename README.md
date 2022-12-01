@@ -57,15 +57,40 @@ If there is a *partials* folder in the *layout* folder, files in that folder wil
 WHen transforming a markup file, the simplest template is made purely of HTML text, which means that none of the markup content being used for the generation of the static page.  It is the absorbant case.
 
 Content from the markup file can be inserted in the HTML text by using the **{{ <value> }}** syntax. The *<value>* will be transformed based on the interpreter context and inserted at the position it appears into the HTML stream of text.
+
 For example to transfer all of the content of a markup file at a given position through the HTML stream of text, it is simply a matter of putting *{{ .Content }}* at that position. The *.Content* value is a predefined variable in the interpreter context that is simply all the content of the markup file being processed.
 
+Beside value inserting, the scripting syntax provides typical control structures and function application to source values.  The statements are:
+    {{ if <cond> }} TrueBlock [ {{ else }} FalseBlock ] {{ end }}
+    {{ with <value> }} JustBlock [ {{ else }} NothingBlock ] {{ end }}
+    {{ range <array | slice | map | channel> }} LoopBlock [ {{ else }} OtherwiseBlock ] {{ end }}
+    {{ break }}
+    {{ continue }}
+    {{ template <label> [ <context> ] }}
+ *var-def* and *var-assign* are also statements.
 
 
+A <value> is called a *pipeline* in golang *template/text* library.  It is defined as:
+    <pipelines> ::= <pipeline> | "(" <pipeline> ")"
+    <pipeline> ::= <args> | <call>
+    <call> ::= <function> [ <args> ] [ "|" <call> ]
+    <args>::= <var> | <constant> | "."
+    <var> ::= "." <predef-label> | <local-var>
+    <local-var> ::= "$" <label>
+    <var-def> ::= <local-var> ":=" <pipelines>
+    <var-assign> ::= <local-var> "=" <pipelines>
 
 
 ### Markup file to Layout association:
 - _index.md => list
 - *anything*.md => single
+
+### Resource transformatoin:
+Files in *assets* folder can be passed through scripting pipeline to obtain HTML text.  For example, if the SCSS file *assets/sass/style.scss* is available for styling, a template can do:
+    {{ $style := resources.Get "sass/style.scss" | resources.ToCSS | resources.Minify }}
+and then:
+    ... href="{{ $style.Permalink }}" ...
+to obtain both a CSS file in the resulting static site and a link referring to that file in the HTML code that will use the CSS styling.
 
 
 ### Hugo command set:
@@ -128,3 +153,14 @@ For example to transfer all of the content of a markup file at a given position 
       -v, --verbose                    verbose output
           --verboseLog                 verbose logging
       -w, --watch                      watch filesystem for changes and recreate as needed
+
+
+### Daniell implementation
+- configuration logic (yaml, htoml, aeson) + cli (options-applicative)
+- folder hierarchy traversal for acquiring config, markup, templates and theme files ([dir-traverse](https://hackage.haskell.org/package/dir-traverse), [pathwalk](https://hackage.haskell.org/package/pathwalk))
+- associtation logic for markup and templates
+- markup files parser ([mmark](https://hackage.haskell.org/package/mmark), [cmark](https://hackage.haskell.org/package/cmark))
+- template files parser
+- scripting interpreter
+- simple http service for providing browser access to the static site generated (wai, warp, servant)
+- publishing logic to construct a self-sufficient folder for the static site
