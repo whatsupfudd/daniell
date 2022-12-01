@@ -35,6 +35,39 @@
 - themes: reusable version of site definitions that provide a much faster and simpler creation process.
 - config.<ext> : the configuration for driving the transformation logic, provided either in yaml, toml or json format.
 
+
+### Transformation concept:
+The main idea for the transformation of the site description into a static site of HTML pages is to apply to each markup file found in the hierarchy of folders in *content* the simple formula of:
+    Transform interpreter-context markup template => static-page.html
+
+The main transformation logic is provided by a path.html template file, which contains a mix of HTML code and golang *template/text* scripting statements.
+
+
+### Templating structure:
+The *layout* folder provides at the top level templates for kinds of pages that are pre-defined in the logic. Each subfolder in *layout* defines templating logic for the kind of page named identically to the subfolder.
+
+Templates can provides *blocks* of definitions with the directive *define <label>*.  A block can be applied with the *block <label>* directive.
+  
+If there is file *baseof.html* is present in a folder, it serves as a base defintion for every other template file. In this case, the *baseof.html* template will be the main logic, and other templates will provide alternative block definitions that the main logic uses, similarly to an abstract class logic that is complemented by concrete class implementations.
+
+If there is a *partials* folder in the *layout* folder, files in that folder will represent a *subroutine* of templating logic.  The *partial <path.html>* directive in a template will get the logic to insert the content of the *path.html* file (relative to *layout/partials*) at that position in the calling template, and instatiate a new interpreter context to process its content to generate static text.  the *partial <path.html> .* directive will pass the existing interpreter context to the generating logic.
+
+
+### Template scripting:
+WHen transforming a markup file, the simplest template is made purely of HTML text, which means that none of the markup content being used for the generation of the static page.  It is the absorbant case.
+
+Content from the markup file can be inserted in the HTML text by using the **{{ <value> }}** syntax. The *<value>* will be transformed based on the interpreter context and inserted at the position it appears into the HTML stream of text.
+For example to transfer all of the content of a markup file at a given position through the HTML stream of text, it is simply a matter of putting *{{ .Content }}* at that position. The *.Content* value is a predefined variable in the interpreter context that is simply all the content of the markup file being processed.
+
+
+
+
+
+### Markup file to Layout association:
+- _index.md => list
+- *anything*.md => single
+
+
 ### Hugo command set:
     Usage:
       hugo [flags]
@@ -95,4 +128,3 @@
       -v, --verbose                    verbose output
           --verboseLog                 verbose logging
       -w, --watch                      watch filesystem for changes and recreate as needed
-
