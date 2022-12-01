@@ -1,0 +1,55 @@
+name:                daniell
+version:             0.1.0.0
+# github:              "hugodro/fudd/daniell"
+license:             BSD3
+author:              "Hugo DesRosiers"
+maintainer:          "hugo.desrosiers@boardingcities.com"
+copyright:           "Boarding Cities"
+
+extra-source-files:
+- README.md
+
+description: Please see the README on GitHub at <https://github.com/hugodrw/fudd/daniell>
+
+
+dependencies:
+  - aeson
+  - base >= 4.7 && < 5
+  - base-compat
+  - bytestring
+  - containers
+  - directory
+  - either
+  - filepath
+  - optparse-applicative
+  - servant
+  - servant-server
+  - text
+  - time
+  - utf8-string
+  - vector
+  - wai
+  - warp
+  - yaml
+
+default-extensions:
+- OverloadedStrings
+- DuplicateRecordFields
+- OverloadedRecordDot
+
+library:
+  source-dirs: src
+
+executables:
+  daniell:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -O2  
+    dependencies:
+    - base
+    - daniell
+
