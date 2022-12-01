@@ -61,16 +61,19 @@ Content from the markup file can be inserted in the HTML text by using the **{{ 
 For example to transfer all of the content of a markup file at a given position through the HTML stream of text, it is simply a matter of putting *{{ .Content }}* at that position. The *.Content* value is a predefined variable in the interpreter context that is simply all the content of the markup file being processed.
 
 Beside value inserting, the scripting syntax provides typical control structures and function application to source values.  The statements are:
+
     {{ if <cond> }} TrueBlock [ {{ else }} FalseBlock ] {{ end }}
     {{ with <value> }} JustBlock [ {{ else }} NothingBlock ] {{ end }}
     {{ range <array | slice | map | channel> }} LoopBlock [ {{ else }} OtherwiseBlock ] {{ end }}
     {{ break }}
     {{ continue }}
     {{ template <label> [ <context> ] }}
+
  *var-def* and *var-assign* are also statements.
 
 
 A <value> is called a *pipeline* in golang *template/text* library.  It is defined as:
+  
     <pipelines> ::= <pipeline> | "(" <pipeline> ")"
     <pipeline> ::= <args> | <call>
     <call> ::= <function> [ <args> ] [ "|" <call> ]
@@ -87,9 +90,13 @@ A <value> is called a *pipeline* in golang *template/text* library.  It is defin
 
 ### Resource transformatoin:
 Files in *assets* folder can be passed through scripting pipeline to obtain HTML text.  For example, if the SCSS file *assets/sass/style.scss* is available for styling, a template can do:
+
     {{ $style := resources.Get "sass/style.scss" | resources.ToCSS | resources.Minify }}
+
 and then:
+
     ... href="{{ $style.Permalink }}" ...
+
 to obtain both a CSS file in the resulting static site and a link referring to that file in the HTML code that will use the CSS styling.
 
 
