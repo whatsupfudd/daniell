@@ -1,5 +1,8 @@
-module Commands.Env where 
+module Commands.Env where
 
+import qualified Conclusion as Ccl
+import qualified Options.RunOptions as Rto
 
-envHu =
-  putStrLn "@[envHu] starting."
+envHu :: Rto.RunOptions -> IO Ccl.Conclusion
+envHu rtOpts =
+  putStrLn "@[envHu] starting." >> pure Ccl.NilCcl

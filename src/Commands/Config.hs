@@ -1,4 +1,8 @@
-module Commands.Config where 
+module Commands.Config where
 
-configHu =
-  putStrLn "@[configHu] starting."
+import qualified Conclusion as Ccl
+import qualified Options.RunOptions as Rto
+
+configHu :: Rto.RunOptions -> IO Ccl.Conclusion
+configHu rtOpts =
+  putStrLn "@[configHu] starting." >> pure Ccl.NilCcl

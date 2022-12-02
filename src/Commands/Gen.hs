@@ -1,4 +1,8 @@
-module Commands.Gen where 
+module Commands.Gen where
 
-genHu =
-  putStrLn "@[genHu] starting."
+import qualified Conclusion as Ccl
+import qualified Options.RunOptions as Rto
+
+genHu :: Rto.RunOptions -> IO Ccl.Conclusion
+genHu rtOpts =
+  putStrLn "@[genHu] starting." >> pure Ccl.NilCcl

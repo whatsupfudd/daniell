@@ -1,4 +1,8 @@
-module Commands.Mod where 
+module Commands.Mod where
 
-modHu =
-  putStrLn "@[modHu] starting."
+import qualified Conclusion as Ccl
+import qualified Options.RunOptions as Rto
+
+modHu :: Rto.RunOptions -> IO Ccl.Conclusion
+modHu rtOpts =
+  putStrLn "@[modHu] starting." >> pure Ccl.NilCcl

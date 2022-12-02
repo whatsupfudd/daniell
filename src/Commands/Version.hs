@@ -1,4 +1,8 @@
-module Commands.Version where 
+module Commands.Version where
 
-versionHu =
-  putStrLn "Daniell, version 0.1.0.0"
+import qualified Conclusion as Ccl
+import qualified Options.RunOptions as Rto
+
+versionHu :: Rto.RunOptions -> IO Ccl.Conclusion
+versionHu rtOpts =
+  putStrLn "@[versionHu] starting." >> pure Ccl.NilCcl

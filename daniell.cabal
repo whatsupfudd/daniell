@@ -38,6 +38,7 @@ library
       Options.FileOptions
       Options.RunOptions
       Options.SiteConfig
+      SiteDefinition.Explore
   other-modules:
       Paths_daniell
   hs-source-dirs:
@@ -56,8 +57,10 @@ library
     , either
     , filepath
     , optparse-applicative
+    , pathwalk
     , servant
     , servant-server
+    , split
     , text
     , time
     , utf8-string
@@ -89,8 +92,10 @@ executable daniell
     , either
     , filepath
     , optparse-applicative
+    , pathwalk
     , servant
     , servant-server
+    , split
     , text
     , time
     , utf8-string
