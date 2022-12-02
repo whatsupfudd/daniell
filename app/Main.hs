@@ -2,6 +2,7 @@ module Main where
 
 import qualified Options as Opt
 import qualified MainLogic as Ml
+import qualified Conclusion as Cnc
 
 main :: IO ()
 main = do
@@ -16,6 +17,7 @@ main = do
           Just aPath -> Opt.parseFileOptions aPath
       case mbFileOptions of
         Left errMsg -> putStrLn $ "err: " <> errMsg
-        Right fileOptions -> Ml.runWithOptions cliOptions fileOptions
+        Right fileOptions ->
+          Ml.runWithOptions cliOptions fileOptions >>= Cnc.conclude
 
 

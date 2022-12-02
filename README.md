@@ -1,5 +1,6 @@
+![](/resources/img/daniellLogo_4_anno.jpg)
 # DANIELL
-## A fast static site builder compatible with HUGO.
+## A fast and flexible generator of static website compatible with HUGO.
 
 
 ### Goal: generate static website from markup files, with ability to read HUGO site definitions and templates.

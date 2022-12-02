@@ -17,10 +17,27 @@ extra-source-files:
 
 library
   exposed-modules:
+      Commands
+      Commands.Config
+      Commands.Convert
+      Commands.Deploy
+      Commands.Env
+      Commands.Gen
+      Commands.Help
+      Commands.Import
+      Commands.List
+      Commands.Mod
+      Commands.New
+      Commands.Publish
+      Commands.Server
+      Commands.Version
+      Conclusion
       MainLogic
       Options
       Options.CliOptions
       Options.FileOptions
+      Options.RunOptions
+      Options.SiteConfig
   other-modules:
       Paths_daniell
   hs-source-dirs:
