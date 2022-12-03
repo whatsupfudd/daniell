@@ -1,13 +1,15 @@
 module SiteDefinition.Explore where
 
 import Control.Monad (forM_)
+import qualified Control.Exception as Cexc
 import qualified Data.Char as DC
 import Data.List (isSuffixOf)
 -- import Data.List.Split (splitOn, splitOneOf)
 import qualified Data.Vector as Vc
 import qualified Data.Sequence as Seq
-import System.FilePath (joinPath)
 import qualified System.Directory.PathWalk as Wlk
+import System.FilePath (joinPath)
+import qualified System.IO.Error as Serr
 
 
 data FileItem =
@@ -24,9 +26,16 @@ loadFolderTree :: FilePath -> IO RType
 loadFolderTree rootPath = do
   -- putStrLn "@[loadFolderTree] starting."
   -- TODO: run in a try to catch non-existent rootPath
-  t <- Wlk.pathWalkAccumulate rootPath filesAnalyser
-  pure t
-  -- Wlk.pathWalkAccumulate "." filesAnalyser
+  mbRez <- Cexc.try (Wlk.pathWalkAccumulate rootPath filesAnalyser) :: IO (Either Serr.IOError RType)
+  case mbRez of
+    Left exception -> do
+      if Serr.isDoesNotExistErrorType . Serr.ioeGetErrorType $ exception then do
+        pure ()
+      else
+        putStrLn $ "@[loadFolderTree] err: " <> show exception
+      pure Seq.empty
+    Right rez -> pure rez
+
 
 filesAnalyser :: FilePath -> [FilePath] -> [[Char]] -> IO RType
 filesAnalyser root dirs files =
