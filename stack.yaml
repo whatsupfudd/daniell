@@ -44,6 +44,9 @@ extra-deps:
   - ../LocalPkgs/tomland-1.3.3.2
   # For tomland:
   - validation-selective-0.1.0.2@sha256:c878846bfffeba69efa3b4866025f249656e0e0a129fed6d446eb602382d328b,3856
+  - servant-errors-0.1.7.0@sha256:a36a8bf86a7bd96201308dfaf5f16b07b6743defe41a8ceaf9845ad467cd163c,2627
+  - ../LocalPkgs/ginger-0.10.4.1
+
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
@@ -53,6 +56,7 @@ extra-deps:
 
 # Control whether we use the GHC we find on the path
 system-ghc: true
+allow-newer: true
 #
 # Require a specific version of stack, using version ranges
 # require-stack-version: -any # Default

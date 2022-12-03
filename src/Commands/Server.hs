@@ -8,7 +8,8 @@ import qualified Options.RunOptions as Rto
 import qualified Conclusion as Ccl
 import qualified SiteDefinition.Explore as Expl
 import qualified Options.Config as Cfgp
-import qualified Markup.Parser as Mrkp
+import qualified Markup.Markdown as Mrkp
+import qualified WebServer.Servant as WSrv
 
 serverHu :: Rto.RunOptions -> IO Ccl.Conclusion
 serverHu rtOpts = do
@@ -16,9 +17,9 @@ serverHu rtOpts = do
   case mbStaticSite of
     Left errMsg ->
       putStrLn $ "@[serverHu] err: " <> errMsg
-    Right aSite ->
-      -- TODO: start web service on the root path to the site.
-      putStrLn $ "@[serverHu] happy!"
+    Right aSite -> do
+      putStrLn $ "@[serverHu] starting listener."
+      WSrv.listen rtOpts
   pure Ccl.NilCcl
 
 
@@ -51,11 +52,13 @@ displayFTrees fTrees = do
             forM_ items (\item -> do
                 putStrLn $ "  | " <> show item
                 case item of
+                  {-
                   Expl.TomlFI filePath -> do
                     rez <- Cfgp.parseToml (r <> "/" <> filePath)
                     pure ()
+                  -}
                   Expl.MarkupFI filePath -> do
-                    Mrkp.parseMarkdown (r <> "/" <> filePath)
+                    Mrkp.parse (r <> "/" <> filePath)
                   _ -> pure ()
               )
           )
