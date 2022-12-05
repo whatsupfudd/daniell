@@ -25,6 +25,7 @@ dependencies:
   - exceptions
   - filepath
   - ginger >= 0.10.4.1
+  - gitrev
   # For CORS:
   - http-types
   # For //, /: of http content types in accept HTML:
@@ -53,6 +54,8 @@ dependencies:
   - unix
   - unordered-containers
   - utf8-string
+  # For TOML transformation into data structure:
+  - validation-selective
   - vector
   - wai
   # For CORS:

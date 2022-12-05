@@ -47,6 +47,7 @@ library
       Template.Jinja2
       Template.Parser
       Template.TemplateText
+      Template.TemplateText.Parser
       WebServer.CorsPolicy
       WebServer.JWT
       WebServer.Servant
@@ -70,6 +71,7 @@ library
     , exceptions
     , filepath
     , ginger >=0.10.4.1
+    , gitrev
     , http-media
     , http-types
     , jose
@@ -92,6 +94,7 @@ library
     , unix
     , unordered-containers
     , utf8-string
+    , validation-selective
     , vector
     , wai
     , wai-cors
@@ -124,6 +127,7 @@ executable daniell
     , exceptions
     , filepath
     , ginger >=0.10.4.1
+    , gitrev
     , http-media
     , http-types
     , jose
@@ -146,6 +150,7 @@ executable daniell
     , unix
     , unordered-containers
     , utf8-string
+    , validation-selective
     , vector
     , wai
     , wai-cors

@@ -1,5 +1,9 @@
 module Main where
 
+import qualified Control.Exception as Cexc
+import qualified System.Environment as Senv
+import qualified System.IO.Error as Serr
+
 import qualified Options as Opt
 import qualified MainLogic as Ml
 import qualified Conclusion as Cnc
@@ -13,7 +17,13 @@ main = do
     Right cliOptions -> do
       mbFileOptions <- 
         case cliOptions.configFile of
-          Nothing -> Opt.parseFileOptions Opt.defaultConfigFilePath
+          Nothing -> do
+            eiEnvConfFile <- Cexc.try $ Senv.getEnv "DANIELLCONF" :: IO (Either Serr.IOError String)
+            case eiEnvConfFile of
+              Left errMsg -> do
+                confPath <- Opt.defaultConfigFilePath
+                Opt.parseFileOptions confPath
+              Right aPath -> Opt.parseFileOptions aPath
           Just aPath -> Opt.parseFileOptions aPath
       case mbFileOptions of
         Left errMsg -> putStrLn $ "err: " <> errMsg

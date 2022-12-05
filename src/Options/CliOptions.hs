@@ -35,26 +35,31 @@ parseCliOptions =
 parser :: ParserInfo CliOptions
 parser =
   info (argumentsP <**> helper) $
-    fullDesc <> progDesc "Static Site generator." <> header "daniell"
+    fullDesc <> progDesc "Simple and flexible Static Site generator." <> header "daniell"
 
 
 argumentsP :: Parser CliOptions
 argumentsP = do
   buildOptions <$> globConfFileDef <*> (subparser commandsDef)
   where
-    buildOptions filePath cmd =
+    buildOptions confPath cmd =
+      let
+        mbConfPath = case confPath of
+          "" -> Nothing
+          aValue -> Just aValue
+      in
       CliOptions {
         debug = Nothing
-        , configFile = Nothing
+        , configFile = mbConfPath
         , job = Just cmd
       }
 
-globConfFileDef :: Parser FilePath
+globConfFileDef :: Parser (FilePath)
 globConfFileDef =
   strOption (
     long "danconf"
-    <> metavar "GLOBCONFIG"
-    <> value "~/.daniell/global.conf"
+    <> metavar "DANIELLCONF"
+    <> value ""
     <> showDefault
     <> help "global config file (default is ~/.daniell/config.yaml"
   )
