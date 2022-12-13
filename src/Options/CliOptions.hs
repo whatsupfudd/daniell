@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+
 module Options.CliOptions where
 
 import qualified Data.Int as DI
@@ -19,13 +21,14 @@ data Command =
   | VersionCmd
   -- Daniell specific:
   | PublishCmd
-
+  deriving stock (Show)
 
 data CliOptions = CliOptions {
   debug :: Maybe DI.Int32
   , configFile :: Maybe FilePath
   , job :: Maybe Command
  }
+ deriving stock (Show)
 
 
 parseCliOptions :: IO (Either String CliOptions)
@@ -61,7 +64,7 @@ globConfFileDef =
     <> metavar "DANIELLCONF"
     <> value ""
     <> showDefault
-    <> help "global config file (default is ~/.daniell/config.yaml"
+    <> help "Global config file (default is ~/.daniell/config.yaml)."
   )
 
 commandsDef :: Mod CommandFields Command

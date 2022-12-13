@@ -11,5 +11,5 @@ import Paths_daniell (version)
 
 versionHu :: Rto.RunOptions -> IO Ccl.Conclusion
 versionHu rtOpts = do
-  putStrLn $ "Version: " <> showVersion version <> ", git: " <> $(gitHash) <> " (" <> $(gitCommitDate) <> ")."
+  putStrLn $ "Version: " <> showVersion version <> ", git " <> $(gitHash) <> " (" <> $(gitCommitDate) <> ")."
   pure Ccl.NilCcl

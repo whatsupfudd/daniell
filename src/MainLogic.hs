@@ -14,7 +14,9 @@ data EnvOptions = EnvOptions {
   }
 
 runWithOptions :: Opt.CliOptions -> Opt.FileOptions -> IO Cnc.Conclusion
-runWithOptions cliOptions fileOptions =
+runWithOptions cliOptions fileOptions = do
+  putStrLn $ "@[runWithOptions] cliOpts: " <> show cliOptions
+  putStrLn $ "@[runWithOptions] fileOpts: " <> show fileOptions
   case cliOptions.job of
     Nothing -> do
       putStrLn "@[runWithOptions] start on nil command."
