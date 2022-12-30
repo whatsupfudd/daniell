@@ -22,6 +22,15 @@ data FileItem =
 
 type RType = Seq.Seq (FilePath, [FileItem])
 
+buildGenDef :: RtOptions -> SiteDefinition
+buildGenDef rtOpts =
+  -- descent into the relevant folders for the generation of the SiteDefinition
+
+
+getContentPages =
+  -- find the content pages in the SiteDefinition
+
+
 loadFolderTree :: FilePath -> IO RType
 loadFolderTree rootPath = do
   -- putStrLn "@[loadFolderTree] starting."

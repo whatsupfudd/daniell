@@ -1,5 +1,11 @@
 module Conclusion where
 
+import Data.Text (Text)
+
+
+data GenError =
+  SimpleMsg Text
+
 data Conclusion = 
   NilCcl
   | ErrorCcl String

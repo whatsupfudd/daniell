@@ -32,9 +32,10 @@ library
       Commands.Server
       Commands.Version
       Conclusion
+      Generator.Logic
       MainLogic
+      Markup.ContentGen
       Markup.Markdown
-      Markup.Page
       Options
       Options.CliOptions
       Options.Config
@@ -43,6 +44,7 @@ library
       Options.SiteConfig
       RunTime.Interpreter
       RunTime.StaticSite
+      SiteDefinition.AssocRule
       SiteDefinition.Explore
       Template.Jinja2
       Template.Parser
