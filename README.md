@@ -164,6 +164,20 @@ to obtain both a CSS file in the resulting static site and a link referring to t
 
 
 ### Daniell implementation
+#### General Structure
+The Main simply invokes configuration for the runtime, and based on the outcome of reading all arguments and config files it calls the **MainLogic**'s execution function **runwithOptions**.
+
+The **MainLogic.runwithOptions** unifies all options and default values and then switches to one of the **Commands** function.
+
+The principal ommand, *generate*:
+- launches a scan of the site definition folder,
+- assoicates a transformation rule for each markup file from the **content* directory,
+- applies the transformation logic to each instantiated rule,
+- consolidates the result of the transformations and takes care of global resources if required,
+- reports on the execution results.
+
+
+
 #### Configuration logic (yaml, htoml, aeson) + cli (options-applicative)
 - Options
     - CliOptions
