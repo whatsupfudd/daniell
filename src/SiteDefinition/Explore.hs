@@ -11,6 +11,7 @@ import qualified System.Directory.PathWalk as Wlk
 import System.FilePath (joinPath)
 import qualified System.IO.Error as Serr
 
+import SiteDefinition.Types (SiteDefinition)
 
 data FileItem =
   MarkupFI FilePath
@@ -25,10 +26,16 @@ type RType = Seq.Seq (FilePath, [FileItem])
 buildGenDef :: RtOptions -> SiteDefinition
 buildGenDef rtOpts =
   -- descent into the relevant folders for the generation of the SiteDefinition
+  folderTree <- loadFolderTree rtOpts.baseDir
+  -- TODO: finish
+  SiteDefinition rtOpts.baseDir
+  
 
 
-getContentPages =
+getContentPages siteDef =
   -- find the content pages in the SiteDefinition
+  -- TODO:
+  []
 
 
 loadFolderTree :: FilePath -> IO RType
