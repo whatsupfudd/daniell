@@ -8,15 +8,13 @@ import qualified Options as Opt
 import qualified Commands as Cmd
 import qualified Conclusion as Cnc
 
--- TODO: transfer to the Options package:
-data EnvOptions = EnvOptions {
-    danHome :: Maybe DT.Text
-  }
 
 runWithOptions :: Opt.CliOptions -> Opt.FileOptions -> IO Cnc.Conclusion
 runWithOptions cliOptions fileOptions = do
+  -- DBG:
   putStrLn $ "@[runWithOptions] cliOpts: " <> show cliOptions
   putStrLn $ "@[runWithOptions] fileOpts: " <> show fileOptions
+
   case cliOptions.job of
     Nothing -> do
       putStrLn "@[runWithOptions] start on nil command."
@@ -25,11 +23,11 @@ runWithOptions cliOptions fileOptions = do
       -- Get environmental context in case it's required in the merge. Done here to keep the merge pure:
       mbDanHome <- Env.lookupEnv "DANIELLHOME"
       let
-        envOptions = EnvOptions {
+        envOptions = Opt.EnvOptions {
             danHome = DT.pack <$> mbDanHome
             -- TODO: put additional env vars.
           }
-        rtOptions = mergeOptions cliOptions fileOptions envOptions 
+        rtOptions = Cmd.mergeOptions cliOptions fileOptions envOptions 
         -- switchboard to command executors:
         cmdExecutor =
           case aJob of
@@ -50,10 +48,3 @@ runWithOptions cliOptions fileOptions = do
       result <- cmdExecutor rtOptions
       -- TODO: return a properly kind of conclusion.
       pure result
-
--- | mergeOptions gives priority to CLI options, followed by config-file options, followed
---   by environment variables.
-mergeOptions :: Opt.CliOptions -> Opt.FileOptions -> EnvOptions -> Opt.RunOptions
-mergeOptions cli file env =
-  -- TODO: put proper priority filling of values for the Runtime Options.
-  Opt.defaultRun "test"

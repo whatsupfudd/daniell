@@ -82,6 +82,7 @@ listen rtOpts = do
     let shutdownCallback = putStrLn "@[Servant.run] Terminating..."
         settings = setupWai rtOpts.serverPort shutdownCallback
     webHandling <- runAPI rtOpts
+    putStrLn $ "@[listen] final listen on port " <> show rtOpts.serverPort
     Wrp.runSettings settings webHandling
 
 

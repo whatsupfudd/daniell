@@ -34,8 +34,9 @@ library
       Conclusion
       Generator.Logic
       MainLogic
-      Markup.ContentGen
       Markup.Markdown
+      Markup.Page
+      Markup.Types
       Options
       Options.CliOptions
       Options.Config
@@ -44,12 +45,15 @@ library
       Options.SiteConfig
       RunTime.Interpreter
       RunTime.StaticSite
-      SiteDefinition.AssocRule
+      SiteDefinition.AssocRules
       SiteDefinition.Explore
+      SiteDefinition.Types
       Template.Jinja2
       Template.Parser
       Template.TemplateText
+      Template.TemplateText.Ast
       Template.TemplateText.Parser
+      Template.Types
       WebServer.CorsPolicy
       WebServer.JWT
       WebServer.Servant

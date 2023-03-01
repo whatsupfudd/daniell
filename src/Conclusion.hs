@@ -5,6 +5,8 @@ import Data.Text (Text)
 
 data GenError =
   SimpleMsg Text
+  deriving (Show)
+
 
 data Conclusion = 
   NilCcl

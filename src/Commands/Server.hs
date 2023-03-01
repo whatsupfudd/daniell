@@ -12,8 +12,8 @@ serverHu :: Rto.RunOptions -> IO Ccl.Conclusion
 serverHu rtOpts = do
   mbStaticSite <- createSite rtOpts
   case mbStaticSite of
-    Left errMsg ->
-      putStrLn $ "@[serverHu] err: " <> errMsg
+    Left genErr ->
+      putStrLn $ "@[serverHu] err: " <> show genErr
     Right aSite -> do
       putStrLn $ "@[serverHu] starting listener."
       WSrv.listen rtOpts

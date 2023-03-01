@@ -50,7 +50,7 @@ data FileOptions = FileOptions {
  deriving stock (Show, Generic)
 
 
-defaultConfName = ".daniell.yaml"
+defaultConfName = ".daniell/config.yaml"
 
 
 defaultConfigFilePath :: IO FilePath

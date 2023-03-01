@@ -9,6 +9,7 @@ import qualified Text.Megaparsec as Prsc
 import qualified Lucid as Lcd
 import qualified System.FilePath as Sfp
 
+import Markup.Types
 
 {-
 TOML : identified by opening and closing +++.
@@ -24,30 +25,38 @@ parse :: FilePath -> IO ()
 parse filePath = do
   let
     fileName = Sfp.takeBaseName filePath
+    -- TODO: create real logic:
     outPath = Sfp.addExtension (Sfp.joinPath ["/tmp", fileName]) "html"
   txt <- DT.readFile filePath
-  (frontMatter, rest) = parseFrontMatter txt
-  case Mmkp.parse filePath txt of
-      Left bundle -> putStrLn (Prsc.errorBundlePretty bundle)
-      Right r -> TL.writeFile outPath . Lcd.renderText . Mmkp.render $ r
+  case parseFrontMatter txt of
+    Left errMsg ->  putStrLn $ "@[parse] parseFrontMatter err: " <> errMsg
+    Right (mbFrontMatter, rest) ->
+      -- TODO: do real stuff:
+      case Mmkp.parse filePath txt of
+          Left bundle -> putStrLn (Prsc.errorBundlePretty bundle)
+          Right r -> TL.writeFile outPath . Lcd.renderText . Mmkp.render $ r
 
 
 parseFrontMatter aTxt =
   let 
-    fmKind = case DT.head aTxt of
-      '-' : YamlEnc
-      '+' : TomlEnc 
-      '{' : JsonEnc
-      '#' : OrgEnc
-      _ : UnknownEnc
+    fmKind =
+      case DT.head aTxt of
+        '-' -> YamlEnc
+        '+' -> TomlEnc 
+        '{' -> JsonEnc
+        '#' -> OrgEnc
+        _ -> UnknownEnc
   in
-    parseFrontMatterFrom fmKind aTxt
+  parseFrontMatterFrom fmKind aTxt
+
 
 parseFrontMatterFrom :: FrontMatterEncoding -> Text -> Either String (Maybe FrontMatter, Text)
 parseFrontMatterFrom aKind aTxt =
   case aKind of
     UnknownEnc -> Right (Nothing, aTxt)
+    {- TODO:
     YamlEnc -> -- find '---\n'
     TomlEnc -> -- find '+++\n'
     JsonEnc -> -- find '}\n'
     OrgEnc -> -- Find first line that doesn't start with a '#+'
+    -}

@@ -63,12 +63,12 @@ For example to transfer all of the content of a markup file at a given position 
 
 Beside value inserting, the scripting syntax provides typical control structures and function application to source values.  The statements are:
 
-    {{ if <cond> }} TrueBlock [ {{ else }} FalseBlock ] {{ end }}
-    {{ with <value> }} JustBlock [ {{ else }} NothingBlock ] {{ end }}
+    {{ if <pipeline> }} TrueBlock [ {{ else [if <pipeline>] }} FalseBlock ] {{ end }}
+    {{ with <string-literal> }} JustBlock [ {{ else }} NothingBlock ] {{ end }}
     {{ range <array | slice | map | channel> }} LoopBlock [ {{ else }} OtherwiseBlock ] {{ end }}
     {{ break }}
     {{ continue }}
-    {{ template <label> [ <context> ] }}
+    {{ template <string-literal> [ <context-var> ] }}
 
  *var-def* and *var-assign* are also statements.
 
@@ -165,63 +165,84 @@ to obtain both a CSS file in the resulting static site and a link referring to t
 
 ### Daniell implementation
 #### General Structure
-The Main simply invokes configuration for the runtime, and based on the outcome of reading all arguments and config files it calls the **MainLogic**'s execution function **runwithOptions**.
+The Main simply invokes configuration for the runtime, and based on the outcome of reading all arguments and config files it calls the `MainLogic`'s execution function `runwithOptions`.
 
-The **MainLogic.runwithOptions** unifies all options and default values and then switches to one of the **Commands** function.
+The `MainLogic.runwithOptions` unifies all options and default values and then switches to one of the *Commands* function.
 
-The principal ommand, *generate*:
+The principal command, *generate*:
 - launches a scan of the site definition folder,
-- assoicates a transformation rule for each markup file from the **content* directory,
+- associates a transformation rule for each markup file from the **content* directory,
 - applies the transformation logic to each instantiated rule,
 - consolidates the result of the transformations and takes care of global resources if required,
 - reports on the execution results.
 
 
+Top-level execution of the software:
+
+- `app/Main.hs`
+    - parses the CLI options, then the config file, and if that went well enough pass the control to the command handlers (`runWithOptions`).
+
+- `src/MainLogic.hs`
+    - `runWithOptions` look for a job to do (**import**, **server**, etc), then merges the cli & file options into a runtime option set (`RunOptions`), and switches the execution to a command handler (`src/Commands/*.hs`).
 
 #### Configuration logic (yaml, htoml, aeson) + cli (options-applicative)
-- Options
-    - CliOptions
-    - FileOptions
-    - SiteConfig
+- Options (`src/Options/*.hs`)
+    - `CliOptions`: control of the launch of the software, 1st layer of control on execution.
+    - `FileOptions`: usual control of software parameters, provide most informatino about configuration
+    - `RunOptions`: final version of all parameters controlling execution of software, created by merging the cli, the file and default options.
+    - `SiteConfig`: parameters specific for a site, such as base URL, build expiry date, etc.
 
-At bootstrap, produce a CliOptions and FileOptions structure to select which main action(s) to perform and parameters for the action(s) execution.
+At bootstrap, produce a `CliOptions` and `FileOptions` structure to select which main action(s) to perform and parameters for the action(s) execution.
 
-During template interpretation, provides the SiteConfig context, loaded from the config.<ext> file(s).
+During template interpretation the `SiteConfig` context, loaded from the *config.<ext>* file(s), parametrizes the way the logic merges source data (markup files) and template structures.
 
 #### Folder hierarchy traversal for acquiring config, markup, templates and theme files ([dir-traverse](https://hackage.haskell.org/package/dir-traverse), [pathwalk](https://hackage.haskell.org/package/pathwalk))
-- Hierarchy
-    - MarkupPage
-    - Template
-    - Asset
-    - Data
-    - Reources
-    - Static
-    - Theme
 
-Provides a tree of content for a given site description top-level folder
+The `src/SiteDefinition` functions look into the folder hierarchy and create a model of its meaning using the `SiteDefinition` type. It provides information about the following items discovered parsing files in the source folders:
+
+- Hierarchy
+    - MarkupPage: represents a markup file, which will provide content into the templates.
+    - Template: represents a template file, which is structure + logic + parent + children.
+    - Asset :  ?
+    - Data : ?
+    - Reources : ?
+    - Static : ?
+    - Theme : ?
+
+The `src/SiteDefinition/Explore` logic walks through the source folders and gather information on all files available as content or logic.
 
 #### Associtation logic for markup and templates
+
+The `src/SiteDefinition/AssocRules` logic associates entries in the `SiteDefinition` to create a workplan for generating the static site content (ie the output).
+
 - WorkPlan
 - Transformation
 
 Creates a workplan of transformations to apply to page markup descriptions in order to generate the static site.
 
 #### Markup files parser ([mmark](https://hackage.haskell.org/package/mmark), [cmark](https://hackage.haskell.org/package/cmark))
-- MarkLoader
-  - Page
+
+The `src/Markup/Page` is the logic for handling marked up files operations.  It relies on the different markdup parsers (`src/Markup/Markdown`) that will parse content and transform it into an internal structure.
+
+- MarkupPage
+    - Encoding: The kind of markup the content is written in (eg Markdown).
+    - FrontMatter: configuration entries to drive the rendering of the page.
+    - Content: actual content for the page.
 
 Uses the markdown library to read the content of a markup file into an internal list of parameters and HTML content.
 
 #### Template files parser
-- TmplParser
-    - TextTmplParser
-    - Template
-    - TextBlock
-    - Statement
-    - Variable
-    - Reference
 
-Read a *template/text* template, referred templates and partials, and create a interpretable representation of the whole set of content/logic ready for the next phase.
+The `src/Template` logic handles the parsing of template files structure and logic and their representation into an internal format.  The `src/Template/Parser` is the top-level access to the logic, and it relies on `src/Template/Jinja2` and `src/TemplateText/Parser` to do the real work.
+
+- Template
+    - TextBlock: content that is to be entered verbatim into the output stream.
+    - Statement: logic in AST that needs to be converted for the interpreter
+    - Children: other templates utilised by this templates (inserted at runtime).
+    - Parent: template that creates a top-level setting for execution by the current template.
+
+
+Read a *template/text* template, referred templates and partials, and create an executable representation of the whole set of content/logic ready for the next phase.
 
 #### Scripting interpreter
 - Interpreter

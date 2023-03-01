@@ -4,14 +4,18 @@ import Control.Monad (forM_)
 import qualified Control.Exception as Cexc
 import qualified Data.Char as DC
 import Data.List (isSuffixOf)
+import qualified Data.Map as Mp
+import Data.Text (Text)
 -- import Data.List.Split (splitOn, splitOneOf)
 import qualified Data.Vector as Vc
 import qualified Data.Sequence as Seq
 import qualified System.Directory.PathWalk as Wlk
-import System.FilePath (joinPath)
+import System.FilePath (joinPath, splitDirectories, makeRelative)
 import qualified System.IO.Error as Serr
 
-import SiteDefinition.Types (SiteDefinition)
+import Options.RunOptions (RunOptions (..))
+import SiteDefinition.Types (SiteDefinition (..))
+
 
 data FileItem =
   MarkupFI FilePath
@@ -23,15 +27,80 @@ data FileItem =
 
 type RType = Seq.Seq (FilePath, [FileItem])
 
-buildGenDef :: RtOptions -> SiteDefinition
-buildGenDef rtOpts =
+type DirTreeMap = Mp.Map FilePath DirNode
+
+data DirNode = DirNode {
+    dirPath :: FilePath
+    , subTree :: DirTreeMap
+    , files :: [FileItem]
+  }
+
+showNode :: String -> DirNode -> String
+showNode tab node =
+  let
+    mainPath = tab <> "| " <> node.dirPath <> " : " <> (foldl (\accum f -> if accum == "" then show f else accum <> ", " <> show f) "" node.files)
+  in
+  if Mp.size node.subTree == 0 then
+    mainPath
+  else
+    mainPath <> "\n" <> tab <> "|-->" <> (Mp.foldl (\accum st -> accum <> "\n" <> (showNode (tab <> "  ") st)) "" node.subTree)
+      
+
+buildGenDef :: RunOptions -> IO (Either Text SiteDefinition)
+buildGenDef rtOpts = do
   -- descent into the relevant folders for the generation of the SiteDefinition
-  folderTree <- loadFolderTree rtOpts.baseDir
-  -- TODO: finish
-  SiteDefinition rtOpts.baseDir
-  
+  fileLists <- loadFolderTree rtOpts.baseDir
+  let
+    prefixLength = length rtOpts.baseDir
+    pathList = Seq.foldlWithIndex (massgeDirName rtOpts.baseDir) (Mp.empty :: DirTreeMap) fileLists
+  -- TODO: construct a proper site definition from the file list.
+  {-- DBG: 
+  putStrLn $ "[buildGenDef] # of dir lists: " <> show (length pathList)
+  putStrLn $ "[buildGenDef] # of dir lists: " <> (Mp.foldl (\accum node -> accum <> "\n" <> (showNode "" node)) "" pathList) -- Mp.keys 
+  --}
+  pure $ Right (SiteDefinition rtOpts.baseDir)
+  where
+  massgeDirName baseDir dMap index (aPath, fileList) =
+    let
+      relDirs = splitDirectories $ makeRelative baseDir aPath -- drop prefixLength aPath
+    in
+    addTreeNode dMap relDirs fileList
 
+  addTreeNode dMap dirList fileItems =
+    case dirList of
+      -- Protect against a weird case:
+      [] -> dMap
+      hDir : tDirs ->
+        case Mp.lookup hDir dMap of
+          Nothing ->
+            case tDirs of
+              [] ->
+                let
+                  newNode = DirNode hDir Mp.empty fileItems
+                in
+                Mp.insert hDir newNode dMap
+              _ ->
+                let
+                  subTree = addTreeNode Mp.empty tDirs fileItems
+                  newNode = DirNode hDir subTree []
+                in
+                Mp.insert hDir newNode dMap
+          Just aNode ->
+            case tDirs of
+              [] ->
+                let
+                  newNode = aNode { files = aNode.files <> fileItems }
+                in
+                Mp.insert hDir newNode dMap
+              _ ->
+                let
+                  newSubTree = addTreeNode aNode.subTree tDirs fileItems
+                  newNode = aNode { subTree = newSubTree }
+                in
+                Mp.insert hDir newNode dMap
+    
 
+getContentPages :: SiteDefinition -> [ FilePath ]
 getContentPages siteDef =
   -- find the content pages in the SiteDefinition
   -- TODO:
@@ -40,8 +109,7 @@ getContentPages siteDef =
 
 loadFolderTree :: FilePath -> IO RType
 loadFolderTree rootPath = do
-  -- putStrLn "@[loadFolderTree] starting."
-  -- TODO: run in a try to catch non-existent rootPath
+  -- DBG: putStrLn "@[loadFolderTree] starting."
   mbRez <- Cexc.try (Wlk.pathWalkAccumulate rootPath filesAnalyser) :: IO (Either Serr.IOError RType)
   case mbRez of
     Left exception -> do
