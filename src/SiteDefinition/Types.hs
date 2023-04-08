@@ -5,8 +5,8 @@ module SiteDefinition.Types where
  TODO:
  * Add:
   - markup content
-  - themes (vs ?templates? )
-  - templates ( vs ?themes? )
+  - themes (layouts + support data to implement a look)
+  - templates (rendering sources (html, xml, ...))
   - assets
   - data sources
   - static resources + ?destination?
@@ -19,6 +19,28 @@ module SiteDefinition.Types where
 -}
 
 
+data SiteEntry a = SiteEntry {
+    path :: FilePath
+    deref :: Maybe a
+  }
+
+data SiteVarMap = Map Text SiteCVarTree
+
+
+data SiteVarTree =
+  TermSO SiteVar
+  | NodeSO SiteVar [ SiteVarTree ]
+
+
 data SiteDefinition = SiteDefinition {
     baseDir :: String
+    , markupContent :: [ SiteEntry ]
+    , themes :: [ SiteEntry ]
+    , templates :: [ SiteEntry ]
+    , assets :: [ SiteEntry ]
+    , dataSources :: [ SiteEntry ]
+    , resources :: [ SiteEntry ]
+    , staticDest :: FilePath
+    , configs :: [ SiteEntry ]
   }
+
