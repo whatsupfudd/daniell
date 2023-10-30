@@ -14,7 +14,7 @@ import System.FilePath (joinPath, splitDirectories, makeRelative)
 import qualified System.IO.Error as Serr
 
 import Options.RunOptions (RunOptions (..))
-import SiteDefinition.Types (SiteDefinition (..))
+import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
 
 
 data FileItem =
@@ -44,9 +44,9 @@ showNode tab node =
     mainPath
   else
     mainPath <> "\n" <> tab <> "|-->" <> (Mp.foldl (\accum st -> accum <> "\n" <> (showNode (tab <> "  ") st)) "" node.subTree)
-      
 
-buildGenDef :: RunOptions -> IO (Either Text SiteDefinition)
+
+buildGenDef :: RunOptions -> IO (Either Text (SiteDefinition TmpFileDef))
 buildGenDef rtOpts = do
   -- descent into the relevant folders for the generation of the SiteDefinition
   fileLists <- loadFolderTree rtOpts.baseDir
@@ -54,11 +54,11 @@ buildGenDef rtOpts = do
     prefixLength = length rtOpts.baseDir
     pathList = Seq.foldlWithIndex (massgeDirName rtOpts.baseDir) (Mp.empty :: DirTreeMap) fileLists
   -- TODO: construct a proper site definition from the file list.
-  {-- DBG: 
+  {-- DBG:
   putStrLn $ "[buildGenDef] # of dir lists: " <> show (length pathList)
-  putStrLn $ "[buildGenDef] # of dir lists: " <> (Mp.foldl (\accum node -> accum <> "\n" <> (showNode "" node)) "" pathList) -- Mp.keys 
+  putStrLn $ "[buildGenDef] # of dir lists: " <> (Mp.foldl (\accum node -> accum <> "\n" <> (showNode "" node)) "" pathList) -- Mp.keys
   --}
-  pure $ Right (SiteDefinition rtOpts.baseDir)
+  pure $ Right (SiteDefinition { baseDir = rtOpts.baseDir })
   where
   massgeDirName baseDir dMap index (aPath, fileList) =
     let
@@ -98,9 +98,9 @@ buildGenDef rtOpts = do
                   newNode = aNode { subTree = newSubTree }
                 in
                 Mp.insert hDir newNode dMap
-    
 
-getContentPages :: SiteDefinition -> [ FilePath ]
+
+getContentPages :: SiteDefinition TmpFileDef -> [ FilePath ]
 getContentPages siteDef =
   -- find the content pages in the SiteDefinition
   -- TODO:

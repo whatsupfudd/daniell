@@ -8,7 +8,7 @@ import Conclusion (GenError (..))
 import Markup.Types (MarkupPage (..))
 import Options.RunOptions (RunOptions (..))
 import qualified SiteDefinition.Explore as Expl
-import SiteDefinition.Types (SiteDefinition (..))
+import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
 import qualified SiteDefinition.AssocRules as Rules
 import qualified RunTime.Interpreter as Rt
 import qualified Markup.Page as Mrkp
@@ -49,7 +49,7 @@ createSite rtOpts = do
                 -- Send back a result that will help the upper layer; maybe the list of all things created?
                 pure $ Right ()
   where
-  eiTemplateFinder :: SiteDefinition -> TemplateMatches -> Either GenError MarkupPage -> Either GenError TemplateMatches
+  eiTemplateFinder :: SiteDefinition TmpFileDef -> TemplateMatches -> Either GenError MarkupPage -> Either GenError TemplateMatches
   eiTemplateFinder siteDef matchSet genItem =
     case genItem of
       Left err -> Left . SimpleMsg . pack $ "@[createSite] parseContent err: " <> show err
@@ -63,7 +63,7 @@ createSite rtOpts = do
           Just genList -> Right $ Mp.insert aTmpl (anItem : genList) matchSet
 
 
-genOutput :: RunOptions -> SiteDefinition -> Rt.ExecContext -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Rt.ExecContext)
+genOutput :: RunOptions -> SiteDefinition TmpFileDef -> Rt.ExecContext -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Rt.ExecContext)
 genOutput rtOpts siteDef execCtxt (tmplName, genList) = do
   eiTemplate <- Tmpl.parse rtOpts siteDef tmplName
   case eiTemplate of
@@ -117,7 +117,7 @@ displayFTrees rtOpts fTrees = do
 
 countItems fTrees =
   let
-    totalItems = 
+    totalItems =
       foldl (\accum fTree ->
           foldl (\accum (r, items) -> accum + length items) accum fTree
       ) 0 fTrees

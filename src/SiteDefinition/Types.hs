@@ -1,5 +1,6 @@
 module SiteDefinition.Types where
 
+import Data.Text (Text)
 
 {-
  TODO:
@@ -19,28 +20,31 @@ module SiteDefinition.Types where
 -}
 
 
+newtype TmpFileDef = TmpFileDef { aPath :: FilePath }
+
+
 data SiteEntry a = SiteEntry {
     path :: FilePath
-    deref :: Maybe a
+    , deref :: Maybe a
   }
 
-data SiteVarMap = Map Text SiteCVarTree
+data SiteVarMap a = Map Text (SiteVarTree a)
 
 
-data SiteVarTree =
-  TermSO SiteVar
-  | NodeSO SiteVar [ SiteVarTree ]
+data SiteVarTree a =
+  TermSO (SiteEntry a)
+  | NodeSO (SiteEntry a) [ SiteVarTree a ]
 
 
-data SiteDefinition = SiteDefinition {
+data SiteDefinition a = SiteDefinition {
     baseDir :: String
-    , markupContent :: [ SiteEntry ]
-    , themes :: [ SiteEntry ]
-    , templates :: [ SiteEntry ]
-    , assets :: [ SiteEntry ]
-    , dataSources :: [ SiteEntry ]
-    , resources :: [ SiteEntry ]
+    , markupContent :: [ SiteEntry a ]
+    , themes :: [ SiteEntry a ]
+    , templates :: [ SiteEntry a ]
+    , assets :: [ SiteEntry a ]
+    , dataSources :: [ SiteEntry a ]
+    , resources :: [ SiteEntry a ]
     , staticDest :: FilePath
-    , configs :: [ SiteEntry ]
+    , configs :: [ SiteEntry a ]
   }
 
