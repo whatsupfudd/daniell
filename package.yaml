@@ -64,6 +64,8 @@ dependencies:
   - split
   # For CORS:
   - http-types
+  # For testing http get:
+  - http-client
 
 default-extensions:
 - OverloadedStrings

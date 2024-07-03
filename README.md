@@ -22,7 +22,7 @@
 - **new site** <path> : populates a folder *path* with the required basic scaffholding, creating the folder if it doesn't already exist.
 - **new** <path> : creates a markup file at *path* with the minimal content to be useful in static site processing.
 - **server** : creates an internal representation of the static site and and make it available to browsers on a HTTP channel.
-- **mod init** <path> : populates a folder *path> with the required basic scaffholding for a **module**, creates the folder *path* if it doesn't already exist.
+- **mod init** <path> : populates a folder *path>* with the required basic scaffholding for a **module**, creates the folder *path* if it doesn't already exist.
 - **mod get** : updates the modules from their git repo.
 
 ### Site Description Folder Structure:
@@ -48,7 +48,7 @@ The main transformation logic is provided by a path.html template file, which co
 The *layout* folder provides at the top level templates for kinds of pages that are pre-defined in the logic. Each subfolder in *layout* defines templating logic for the kind of page named identically to the subfolder.
 
 Templates can provides *blocks* of definitions with the directive *define <label>*.  A block can be applied with the *block <label>* directive.
-  
+
 If there is file *baseof.html* is present in a folder, it serves as a base defintion for every other template file. In this case, the *baseof.html* template will be the main logic, and other templates will provide alternative block definitions that the main logic uses, similarly to an abstract class logic that is complemented by concrete class implementations.
 
 If there is a *partials* folder in the *layout* folder, files in that folder will represent a *subroutine* of templating logic.  The *partial <path.html>* directive in a template will get the logic to insert the content of the *path.html* file (relative to *layout/partials*) at that position in the calling template, and instatiate a new interpreter context to process its content to generate static text.  the *partial <path.html> .* directive will pass the existing interpreter context to the generating logic.
@@ -74,7 +74,7 @@ Beside value inserting, the scripting syntax provides typical control structures
 
 
 A <value> is called a *pipeline* in golang *template/text* library.  It is defined as:
-  
+
     <pipelines> ::= <pipeline> | "(" <pipeline> ")"
     <pipeline> ::= <args> | <call>
     <call> ::= <function> [ <args> ] [ "|" <call> ]
@@ -86,7 +86,7 @@ A <value> is called a *pipeline* in golang *template/text* library.  It is defin
 
 
 ### Markup file to Layout association:
-- _index.md => list
+- \_index.md => list
 - *anything*.md => single
 
 ### Resource transformatoin:
@@ -105,7 +105,7 @@ to obtain both a CSS file in the resulting static site and a link referring to t
     Usage:
       hugo [flags]
       hugo [command]
-    
+
     Available Commands:
       config      Print the site configuration
       convert     Convert your content to different formats
@@ -119,7 +119,7 @@ to obtain both a CSS file in the resulting static site and a link referring to t
       new         Create new content for your site
       server      A high performance webserver
       version     Print the version number of Hugo
-    
+
     Flags:
       -b, --baseURL string             hostname (and path) to the root, e.g. http://spf13.com/
       -D, --buildDrafts                include content marked as draft
@@ -171,7 +171,7 @@ The `MainLogic.runwithOptions` unifies all options and default values and then s
 
 The principal command, *generate*:
 - launches a scan of the site definition folder,
-- associates a transformation rule for each markup file from the **content* directory,
+- associates a transformation rule for each markup file from the **content** directory,
 - applies the transformation logic to each instantiated rule,
 - consolidates the result of the transformations and takes care of global resources if required,
 - reports on the execution results.
