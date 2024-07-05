@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 module Options  (
   module Options.Cli
   , module Fo
@@ -7,22 +8,33 @@ module Options  (
  )
 where
 
-import Control.Monad.State ( MonadState, runState, State, modify )
+import Control.Monad.State ( MonadState (put), MonadIO, runStateT, State, StateT, modify, lift, liftIO )
+import Control.Monad.Except ( ExceptT, MonadError (throwError) )
+import Data.Functor.Identity ( Identity (..) )
 
 import Data.Text (Text, unpack, pack)
 import Data.Maybe (maybe, isJust, isNothing)
+import Data.Foldable (for_)
+
+import qualified System.IO.Error as Serr
+import qualified Control.Exception as Cexc
+import qualified System.Posix.Env as Senv
 
 import Options.Cli
 import Options.ConfFile as Fo
 import qualified Options.Runtime as Rt ( RunOptions (..), defaultRun )
 import WebServer.CorsPolicy ( CORSConfig(..), defaultCorsPolicy )
 
+
 data EnvOptions = EnvOptions {
     danHome :: Maybe Text
     , listenPort :: Maybe Int
   }
 
+
 type RunOptSt = State Rt.RunOptions (Either String ())
+type RunOptIOSt = StateT Rt.RunOptions IO (Either String ())
+
 mconf :: MonadState s m => Maybe t -> (t -> s -> s) -> m ()
 mconf mbOpt setter =
   case mbOpt of
@@ -31,47 +43,64 @@ mconf mbOpt setter =
 
 -- | mergeOptions gives priority to CLI options, followed by config-file options, followed
 --   by environment variables.
-mergeOptions :: CliOptions -> Fo.FileOptions -> EnvOptions -> Rt.RunOptions
-mergeOptions cli file env =
-  let
-    (result, runtimeOpts) = runState (parseOptions cli file) (Rt.defaultRun "http://localhost")
-  in
+mergeOptions :: CliOptions -> Fo.FileOptions -> EnvOptions -> IO Rt.RunOptions
+mergeOptions cli file env = do
+  (result, runtimeOpts) <- runStateT (parseOptions cli file) (Rt.defaultRun "http://localhost")
   case result of
     Left errMsg -> error errMsg
-    Right _ -> runtimeOpts
+    Right _ -> pure runtimeOpts
   where
-    parseOptions :: CliOptions -> Fo.FileOptions -> RunOptSt
+    parseOptions :: CliOptions -> Fo.FileOptions -> RunOptIOSt
     parseOptions cli file = do
       mconf cli.debug $ \nVal s -> s { Rt.debug = nVal }
-      case file.server of
-        Nothing -> pure . Right $ ()
-        Just so -> parseServer so
-      case file.jwt of
-        Nothing -> pure . Right $ ()
-        Just jo -> parseJWT jo
-      pure . Right $ ()
+      for_ file.server parseServer
+      for_ file.jwt parseJWT
+      for_ file.cors parseCors
+      pure $ Right ()
 
-    parseServer :: ServerOpts -> RunOptSt
+
+    parseServer :: ServerOpts -> RunOptIOSt
     parseServer so = do
       mconf so.port $ \nVal s -> s { Rt.serverPort = nVal }
       -- TODO: parse cache
-      pure . Right $ ()
+      pure $ Right ()
 
-    parseJWT :: JwtOpts -> RunOptSt
+    parseJWT :: JwtOpts -> RunOptIOSt
     parseJWT jo = do
       case jo.jEnabled of
-        Just False ->
+        Just False -> do
           modify $ \s -> s { Rt.jwkConfFile = Nothing }
+          pure $ Right ()
         _ ->
-          mconf jo.keyFile $ \nVal s -> s { Rt.jwkConfFile = Just nVal }
-      pure . Right $ ()
+          case jo.keyFile of
+            Nothing -> pure $ Right ()
+            Just aPath -> do
+              mbJwkPath <- liftIO $ resolveEnvValue aPath
+              case mbJwkPath of
+                Nothing -> pure . Left $ "Could not resolve JWK file path: " <> aPath
+                Just aPath -> do
+                  modify $ \s -> s { Rt.jwkConfFile = Just aPath }
+                  pure $ Right ()
 
-    parseCors :: CorsOpts -> RunOptSt
+    parseCors :: CorsOpts -> RunOptIOSt
     parseCors co = do
       case co.oEnabled of
         Just False ->
           modify $ \s -> s { Rt.corsPolicy = Nothing }
         _ ->
           mconf co.allowed $ \nVal s -> s { Rt.corsPolicy = Just $ defaultCorsPolicy { allowedOrigins = map pack nVal } }
-      pure . Right $ ()
+      pure $ Right ()
 
+-- | resolveEnvValue resolves an environment variable value.
+resolveEnvValue :: FilePath -> IO (Maybe FilePath)
+resolveEnvValue aVal =
+  case head aVal of
+      '$' ->
+        let
+          (envName, leftOver) = break ('/' ==) aVal
+        in do
+        mbEnvValue <- Senv.getEnv $ tail envName
+        case mbEnvValue of
+          Nothing -> pure Nothing
+          Just aVal -> pure . Just $ aVal <> leftOver
+      _ -> pure $ Just aVal
