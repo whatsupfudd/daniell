@@ -13,7 +13,7 @@ import qualified System.Directory.PathWalk as Wlk
 import System.FilePath (joinPath, splitDirectories, makeRelative)
 import qualified System.IO.Error as Serr
 
-import Options.RunOptions (RunOptions (..))
+import Options.Runtime (RunOptions (..))
 import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
 
 
@@ -46,6 +46,20 @@ showNode tab node =
     mainPath <> "\n" <> tab <> "|-->" <> (Mp.foldl (\accum st -> accum <> "\n" <> (showNode (tab <> "  ") st)) "" node.subTree)
 
 
+defaultSiteDef :: FilePath -> Either Text (SiteDefinition TmpFileDef)
+defaultSiteDef baseDir = Right $ SiteDefinition {
+    baseDir = baseDir
+    , markupContent = []
+    , themes = []
+    , templates = []
+    , assets = []
+    , dataSources = []
+    , resources = []
+    , staticDest = "public"
+    , configs = []
+   }
+
+
 buildGenDef :: RunOptions -> IO (Either Text (SiteDefinition TmpFileDef))
 buildGenDef rtOpts = do
   -- descent into the relevant folders for the generation of the SiteDefinition
@@ -58,7 +72,7 @@ buildGenDef rtOpts = do
   putStrLn $ "[buildGenDef] # of dir lists: " <> show (length pathList)
   putStrLn $ "[buildGenDef] # of dir lists: " <> (Mp.foldl (\accum node -> accum <> "\n" <> (showNode "" node)) "" pathList) -- Mp.keys
   --}
-  pure $ Right (SiteDefinition { baseDir = rtOpts.baseDir })
+  pure $ defaultSiteDef rtOpts.baseDir
   where
   massgeDirName baseDir dMap index (aPath, fileList) =
     let

@@ -38,10 +38,10 @@ library
       Markup.Page
       Markup.Types
       Options
-      Options.CliOptions
+      Options.Cli
+      Options.ConfFile
       Options.Config
-      Options.FileOptions
-      Options.RunOptions
+      Options.Runtime
       Options.SiteConfig
       RunTime.Interpreter
       RunTime.StaticSite

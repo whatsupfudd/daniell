@@ -1,7 +1,7 @@
 module Commands.Import where
 
 import qualified Conclusion as Ccl
-import qualified Options.RunOptions as Rto
+import qualified Options.Runtime as Rto
 
 importHu :: Rto.RunOptions -> IO Ccl.Conclusion
 importHu rtOpts =

@@ -12,7 +12,6 @@ module Commands  (
   , module Commands.Server
   , module Commands.Version
   , module Commands.Publish
-  , mergeOptions
  )
 where
 
@@ -31,10 +30,3 @@ import Commands.Version
 import Commands.Publish
 
 import qualified Options as Opt
-
--- | mergeOptions gives priority to CLI options, followed by config-file options, followed
---   by environment variables.
-mergeOptions :: Opt.CliOptions -> Opt.FileOptions -> Opt.EnvOptions -> Opt.RunOptions
-mergeOptions cli file env =
-  -- TODO: put proper priority filling of values for the Runtime Options.
-  Opt.defaultRun "test"

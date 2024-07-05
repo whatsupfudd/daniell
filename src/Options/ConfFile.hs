@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Options.FileOptions where
+module Options.ConfFile where
 
 import qualified Control.Exception as Cexc
 import Data.Aeson ((.:))
@@ -50,7 +50,7 @@ data FileOptions = FileOptions {
  deriving stock (Show, Generic)
 
 
-defaultConfName = ".daniell/config.yaml"
+defaultConfName = ".fudd/daniell/config.yaml"
 
 
 defaultConfigFilePath :: IO FilePath
@@ -101,12 +101,6 @@ parseFileOptions filePath =
       case eiRez of
         Left err -> pure . Left $ "@[parseYaml] err: " <> show err
         Right aContent -> pure $ Right aContent
-      {-
-      eiContent <- Cnfg.parseYaml filePath
-      case eiContent of
-        Left errMsg -> pure . Left $ "@[parseFileOptions] err: " <> errMsg
-        Right aConfig -> pure aConfig
-      -}
     ".toml" -> do
       eiContent <- Cnfg.parseToml filePath
       case eiContent of

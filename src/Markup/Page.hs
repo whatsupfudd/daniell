@@ -1,7 +1,7 @@
 module Markup.Page where
 
 import Conclusion (GenError (..))
-import Options.RunOptions
+import Options.Runtime
 import Markup.Types
 
 

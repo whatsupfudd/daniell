@@ -11,10 +11,10 @@ import qualified Conclusion as Cnc
 
 runWithOptions :: Opt.CliOptions -> Opt.FileOptions -> IO Cnc.Conclusion
 runWithOptions cliOptions fileOptions = do
-  -- DBG:
-  putStrLn $ "@[runWithOptions] cliOpts: " <> show cliOptions
-  putStrLn $ "@[runWithOptions] fileOpts: " <> show fileOptions
-
+  {- DBG:
+    putStrLn $ "@[runWithOptions] cliOpts: " <> show cliOptions
+    putStrLn $ "@[runWithOptions] fileOpts: " <> show fileOptions
+  -}
   case cliOptions.job of
     Nothing -> do
       putStrLn "@[runWithOptions] start on nil command."
@@ -25,9 +25,10 @@ runWithOptions cliOptions fileOptions = do
       let
         envOptions = Opt.EnvOptions {
             danHome = DT.pack <$> mbDanHome
+            , listenPort = Nothing
             -- TODO: put additional env vars.
           }
-        rtOptions = Cmd.mergeOptions cliOptions fileOptions envOptions 
+        rtOptions = Opt.mergeOptions cliOptions fileOptions envOptions 
         -- switchboard to command executors:
         cmdExecutor =
           case aJob of
@@ -40,11 +41,10 @@ runWithOptions cliOptions fileOptions = do
             Opt.ImportCmd -> Cmd.importHu
             Opt.ListCmd -> Cmd.listHu
             Opt.ModCmd -> Cmd.modHu
-            Opt.NewCmd -> Cmd.newHu
+            Opt.NewCmd opts -> Cmd.newCmd opts
             Opt.ServerCmd -> Cmd.serverHu
             Opt.VersionCmd -> Cmd.versionHu
             -- Daniell specific:
             Opt.PublishCmd -> Cmd.publishDan
-      result <- cmdExecutor rtOptions
+      cmdExecutor rtOptions
       -- TODO: return a properly kind of conclusion.
-      pure result

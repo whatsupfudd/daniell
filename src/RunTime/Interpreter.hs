@@ -3,7 +3,7 @@ module RunTime.Interpreter where
 import Data.Text (Text)
 
 import Conclusion (GenError (..))
-import Options.RunOptions (RunOptions (..))
+import Options.Runtime (RunOptions (..))
 import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
 import Markup.Types (MarkupPage)
 import Template.Types (Template)

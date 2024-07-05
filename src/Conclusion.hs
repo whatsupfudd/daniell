@@ -3,14 +3,15 @@ module Conclusion where
 import Data.Text (Text)
 
 
-data GenError =
-  SimpleMsg Text
+newtype GenError =
+    SimpleMsg Text
   deriving (Show)
 
 
 data Conclusion = 
-  NilCcl
-  | ErrorCcl String
+    NilCcl
+    | ErrorCcl String
+  deriving (Show)
 
 conclude :: Conclusion -> IO ()
 conclude c =

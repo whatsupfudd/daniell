@@ -1,7 +1,7 @@
 module WebServer.JWT where
 
 import Control.Lens ((?~), (^.))
-import Control.Monad.Except
+import Control.Monad.Except ( MonadIO(liftIO), runExceptT, withExceptT )
 import Crypto.JOSE.JWA.JWS (Alg (ES256))
 import Crypto.JOSE.JWK (AsPublicKey (asPublicKey), Crv (P_256),
                                        JWK, JWKAlg (JWSAlg),
@@ -10,6 +10,21 @@ import Crypto.JOSE.JWK (AsPublicKey (asPublicKey), Crv (P_256),
                                        MonadRandom, genJWK, jwkAlg, jwkKeyOps,
                                        jwkUse)
 import Crypto.JWT
+    ( Alg(ES256),
+      genJWK,
+      jwkAlg,
+      jwkKeyOps,
+      jwkUse,
+      MonadRandom,
+      AsPublicKey(asPublicKey),
+      Crv(P_256),
+      KeyMaterialGenParam(ECGenParam),
+      JWK,
+      JWKAlg(JWSAlg),
+      KeyOp(Verify, Sign),
+      KeyUse(Sig),
+      defaultJWTValidationSettings,
+      JWTError )
 import qualified Crypto.JWT as Jose
 import Data.Aeson (eitherDecodeFileStrict, encodeFile)
 import qualified Data.ByteString as BS
@@ -19,6 +34,9 @@ import Data.Text (Text)
 import qualified Data.Text as DT
 
 import Servant.Auth.Server
+    ( FromJWT(..),
+      IsMatch(DoesNotMatch, Matches),
+      JWTSettings(audienceMatches, validationKeys) )
 
 
 generateKeyPair :: MonadRandom m => m JWK
@@ -56,9 +74,10 @@ verifyJWT' :: FromJWT a => JWTSettings -> BS.ByteString -> IO (Either Text a)
 verifyJWT' jwtCfg input = do
   verifiedJWT <- liftIO $ runExceptT . withExceptT formJWTError $ do
     unverifiedJWT <- Jose.decodeCompact (BSL.fromStrict input)
+    valKeys <- liftIO $ validationKeys jwtCfg
     Jose.verifyClaims
       (jwtSettingsToJwtValidationSettings jwtCfg)
-      (validationKeys jwtCfg)
+      valKeys
       unverifiedJWT
 
   let eitherResult = verifiedJWT >>= decodeJWT

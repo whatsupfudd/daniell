@@ -6,7 +6,7 @@ import Data.Text (Text, pack)
 import Control.Monad (foldM, forM, forM_)
 import Conclusion (GenError (..))
 import Markup.Types (MarkupPage (..))
-import Options.RunOptions (RunOptions (..))
+import Options.Runtime (RunOptions (..))
 import qualified SiteDefinition.Explore as Expl
 import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
 import qualified SiteDefinition.AssocRules as Rules

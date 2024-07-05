@@ -8,6 +8,8 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
 
 
 module WebServer.Servant where
@@ -52,7 +54,7 @@ import System.Posix.Signals as Sgnl
 
 import WebServer.JWT (readJWK)
 import WebServer.CorsPolicy (setCorsPolicy)
-import Options.RunOptions as Ropt
+import Options.Runtime as Ropt
 
 setupWai :: Int -> IO () -> Settings
 setupWai port shutdownCallback =
@@ -88,24 +90,24 @@ listen rtOpts = do
 
 runAPI ::  Ropt.RunOptions -> IO Application
 runAPI rtOpts = do
-  myKey <- readJWK rtOpts.jwkConfFile
+  myKey <- maybe (pure Nothing) (fmap Just . readJWK) rtOpts.jwkConfFile
 
   let
     cookieCfg = defaultCookieSettings { cookieIsSecure = NotSecure }
-    jwtDefSettings  = Sauth.defaultJWTSettings myKey
+    jwtDefSettings = Sauth.defaultJWTSettings <$> myKey
     -- FOr file upload support, will be used later:
-    multipartOpts = (defaultMultipartOptions (Proxy :: Proxy Tmp)) { 
+    multipartOpts = (defaultMultipartOptions (Proxy :: Proxy Tmp)) {
           generalOptions = setMaxRequestKeyLength 512 defaultParseRequestBodyOptions
       }
 
     runContext = cookieCfg :. jwtDefSettings :. multipartOpts :. EmptyContext
-    runCtxtProxy = Proxy :: Proxy '[CookieSettings, JWTSettings, BasicAuthCfg]
+    runCtxtProxy = Proxy :: Proxy '[CookieSettings, Maybe JWTSettings, BasicAuthCfg]
 
-    corsMiddleware  = setCorsPolicy rtOpts.corsPolicy
+    corsMiddleware  = rtOpts.corsPolicy >>= (Just <$> setCorsPolicy)
 
     -- TODO: add errorMw @JSON @'["message", "status"] when Servant.Errors is compatible with aeson-2.
     -- TODO: enable corsMiddleware based on rtOpts.
-    middlewares = linkUp $ id :| [ logStdout ]   
+    middlewares = linkUp $ id :| [ logStdout ]
 
     appEnv = AppEnv { jwtSettings = jwtDefSettings, rtOptions = rtOpts }
     server = hoistServerWithContext serverApiProxy runCtxtProxy (toHandler appEnv) serverApiT
@@ -121,19 +123,19 @@ type ServerApi = ToServantApi ServerRoutes
 
 data ServerRoutes route = ServerRoutes {
     -- TODO: find why the authenticated route creates a non-instantiated [] BasicAuth...
-    -- authenticated :: route :- Auth '[JWT, Sauth.BasicAuth] SessionContext :> ToServantApi AuthenticatedRoutes
+    -- authenticated :: route :- Auth '[Maybe JWT, Sauth.BasicAuth] SessionContext :> ToServantApi AuthenticatedRoutes
     anonymous :: route :- ToServantApi AnonymousRoutes
   }
   deriving stock (Generic)
 
 
-data AuthenticatedRoutes route = AuthenticatedRoutes { 
+data AuthenticatedRoutes route = AuthenticatedRoutes {
     getPage :: route :- ToServantApi GetPageRoutes
   }
   deriving stock (Generic)
 
 
-data AnonymousRoutes route = AnonymousRoutes { 
+data AnonymousRoutes route = AnonymousRoutes {
     login :: route :- "inlogin" :> ReqBody '[JSON] LoginForm :> Post '[JSON] LoginResult
     , anonGetPage :: route :- "site" :> Capture "path" String :> Get '[HTML] RawHtml
     , homePage :: route :- Get '[HTML] RawHtml
@@ -141,7 +143,7 @@ data AnonymousRoutes route = AnonymousRoutes {
   deriving stock (Generic)
 
 
-data GetPageRoutes route = GetPageRoutes { 
+data GetPageRoutes route = GetPageRoutes {
     getPage :: route :- "private" :> Capture "path" String :> Get '[HTML] RawHtml
   }
   deriving stock (Generic)
@@ -185,15 +187,15 @@ anonHandlers =
 loginHandler :: LoginForm -> WebApp LoginResult
 loginHandler form@LoginForm {..} = do
   pure $ LoginResult {
-      context = (SessionContext 1)
-      , jwt = (decodeUtf8 . LBS.toStrict $ "<fake-jwt")
+      context = SessionContext 1
+      , jwt = decodeUtf8 . LBS.toStrict $ "<fake-jwt"
     }
 
 
 anonGetPageHandler :: String -> WebApp RawHtml
 anonGetPageHandler pageUrl = do
   let
-    tmpStr = (encodeUtf8 . DT.pack $ pageUrl)
+    tmpStr = encodeUtf8 . DT.pack $ pageUrl
   pageContent <- liftIO $ LBS.readFile ("/tmp/" <>pageUrl)
   pure . RawHtml $ "<html><head><title>TEST</title></head><body>TEST: " <> LBS.toStrict pageContent <> "</body></html>"
 
@@ -260,12 +262,12 @@ toServerError err =
 
 
 data AppEnv = AppEnv {
-    jwtSettings :: JWTSettings
+    jwtSettings :: Maybe JWTSettings
   , rtOptions :: Ropt.RunOptions
   }
 
 
-newtype WebApp a = WebApp { 
+newtype WebApp a = WebApp {
     runApp :: ReaderT AppEnv (ExceptT ServerApiError IO) a
   }
   deriving newtype (

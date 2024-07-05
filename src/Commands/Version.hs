@@ -3,7 +3,7 @@
 module Commands.Version where
 
 import qualified Conclusion as Ccl
-import qualified Options.RunOptions as Rto
+import qualified Options.Runtime as Rto
 
 import Data.Version (showVersion)
 import Development.GitRev (gitHash, gitCommitDate)
