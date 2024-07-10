@@ -55,7 +55,7 @@ defaultConfName = ".fudd/daniell/config.yaml"
 
 defaultConfigFilePath :: IO FilePath
 defaultConfigFilePath = do
-  eiHomeDir <- Cexc.try $ Sdir.getHomeDirectory :: IO (Either Serr.IOError FilePath)
+  eiHomeDir <- Cexc.try Sdir.getHomeDirectory :: IO (Either Serr.IOError FilePath)
   case eiHomeDir of
     Left err -> pure defaultConfName
     Right aPath -> pure $ Spsx.joinPath [aPath, defaultConfName]

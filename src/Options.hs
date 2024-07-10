@@ -19,6 +19,7 @@ import Data.Foldable (for_)
 import qualified System.IO.Error as Serr
 import qualified Control.Exception as Cexc
 import qualified System.Posix.Env as Senv
+import qualified System.Directory as Sdir
 
 import Options.Cli
 import Options.ConfFile as Fo
@@ -27,7 +28,7 @@ import WebServer.CorsPolicy ( CORSConfig(..), defaultCorsPolicy )
 
 
 data EnvOptions = EnvOptions {
-    danHome :: Maybe Text
+    danHome :: Maybe FilePath
     , listenPort :: Maybe Int
   }
 
@@ -45,7 +46,14 @@ mconf mbOpt setter =
 --   by environment variables.
 mergeOptions :: CliOptions -> Fo.FileOptions -> EnvOptions -> IO Rt.RunOptions
 mergeOptions cli file env = do
-  (result, runtimeOpts) <- runStateT (parseOptions cli file) (Rt.defaultRun "http://localhost")
+  danHome <- case env.danHome of
+    Nothing -> do
+      eiHomeDir <- Cexc.try Sdir.getHomeDirectory :: IO (Either Serr.IOError FilePath)
+      case eiHomeDir of
+        Left err -> pure $ ".fudd/daniell"
+        Right aVal -> pure $ aVal <> "/.fudd/daniell"
+    Just aVal -> pure $ aVal
+  (result, runtimeOpts) <- runStateT (parseOptions cli file) (Rt.defaultRun danHome "http://localhost")
   case result of
     Left errMsg -> error errMsg
     Right _ -> pure runtimeOpts
@@ -77,7 +85,8 @@ mergeOptions cli file env = do
             Just aPath -> do
               mbJwkPath <- liftIO $ resolveEnvValue aPath
               case mbJwkPath of
-                Nothing -> pure . Left $ "Could not resolve JWK file path: " <> aPath
+                Nothing ->
+                  pure . Left $ "Could not resolve JWK file path: " <> aPath
                 Just aPath -> do
                   modify $ \s -> s { Rt.jwkConfFile = Just aPath }
                   pure $ Right ()

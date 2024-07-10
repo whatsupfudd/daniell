@@ -24,7 +24,7 @@ runWithOptions cliOptions fileOptions = do
       mbDanHome <- Env.lookupEnv "DANIELLHOME"
       let
         envOptions = Opt.EnvOptions {
-            danHome = DT.pack <$> mbDanHome
+            danHome = mbDanHome
             , listenPort = Nothing
             -- TODO: put additional env vars.
           }
@@ -43,7 +43,7 @@ runWithOptions cliOptions fileOptions = do
             Opt.ListCmd -> Cmd.listHu
             Opt.ModCmd -> Cmd.modHu
             Opt.NewCmd opts -> Cmd.newCmd opts
-            Opt.ServerCmd -> Cmd.serverHu
+            Opt.ServerCmd -> Cmd.serverCmd
             Opt.VersionCmd -> Cmd.versionHu
             -- Daniell specific:
             Opt.PublishCmd -> Cmd.publishDan

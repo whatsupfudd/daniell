@@ -1,4 +1,4 @@
-module Template.TemplateText.Parser where
+module Template.Golang.Parser where
 
 import Control.Applicative (asum, optional, many, (<|>), some)
 
@@ -9,7 +9,7 @@ import qualified Text.Megaparsec as M
 import qualified Text.Megaparsec.Char as M
 import qualified Text.Megaparsec.Char.Lexer as ML
 
-import Template.TemplateText.Ast
+import Template.Golang.Ast
 
 {-
     {{ if <cond> }} TrueBlock [ {{ else }} FalseBlock ] {{ end }}
@@ -68,15 +68,13 @@ ifStmt :: Parser GoStmt
 ifStmt = do
   M.string "if"
   M.space1
-  a <- pipelineExpr
-  pure $ IfST a
+  IfST <$> pipelineExpr
 
 
 withStmt = do
   M.string "with"
   M.space1
-  a <- qualifiedVar -- valueExpr
-  pure $ WithST a
+  WithST <$> qualifiedVar -- valueExpr
 
 
 rangeStmt = do
@@ -95,8 +93,7 @@ rangeStmt = do
 elseIfStmt = do
   M.string "else if"
   M.space1
-  a <- pipelineExpr
-  pure $ ElseIfST a
+  ElseIfST <$> pipelineExpr
 
 
 elseStmt = do
@@ -119,9 +116,7 @@ continueSttmt = do
 partialStmt = do
   M.string "partial"
   M.space1
-  a <- stringLiteral
-  b <- M.optional (M.space1 *> qualifiedVar)
-  pure $ PartialST a b
+  PartialST <$> stringLiteral <*> M.optional (M.space1 *> qualifiedVar)
 
 
 templateStmt = do
@@ -131,9 +126,8 @@ templateStmt = do
   b <- M.optional (M.space1 *> qualifiedVar)
   pure $ TemplateST a b
 
-valueStmt = do
-  a <- pipelineExpr
-  pure $ ValueST a
+valueStmt =
+  ValueST <$> pipelineExpr
 
 
 pipelineExpr :: Parser PipelineExpr
@@ -155,8 +149,7 @@ pipelineExpr = do
       M.space
       op <- binaryOperator
       M.space
-      b <- pipelineExpr
-      pure $ BinaryOperExpr op a b
+      BinaryOperExpr op a <$> pipelineExpr
     )
   case binConn of
     Just aRez -> pure aRez

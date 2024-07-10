@@ -5,13 +5,13 @@ import Data.Text (Text)
 
 newtype GenError =
     SimpleMsg Text
-  deriving (Show)
+  deriving Show
 
 
 data Conclusion = 
     NilCcl
     | ErrorCcl String
-  deriving (Show)
+  deriving Show
 
 conclude :: Conclusion -> IO ()
 conclude c =

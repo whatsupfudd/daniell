@@ -66,6 +66,9 @@ dependencies:
   - http-types
   # For testing http get:
   - http-client
+  # For parsing programming languages:
+  - tree-sitter
+  - tree-sitter-haskell
 
 default-extensions:
 - OverloadedStrings

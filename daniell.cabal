@@ -32,8 +32,12 @@ library
       Commands.Server
       Commands.Version
       Conclusion
+      FileSystem.Explore
+      FileSystem.Types
       Generator.Logic
+      Generator.Types
       MainLogic
+      Markup.Haskell
       Markup.Markdown
       Markup.Page
       Markup.Types
@@ -43,17 +47,22 @@ library
       Options.Config
       Options.Runtime
       Options.SiteConfig
+      Options.Types
+      ProjectDefinition.AssocRules
+      ProjectDefinition.Defaults
+      ProjectDefinition.Hugo
+      ProjectDefinition.Logic
+      ProjectDefinition.NextJS
+      ProjectDefinition.Types
       RunTime.Interpreter
       RunTime.StaticSite
-      SiteDefinition.AssocRules
-      SiteDefinition.Explore
-      SiteDefinition.Types
+      Template.Golang.Ast
+      Template.Golang.Parser
       Template.Jinja2
       Template.Parser
-      Template.TemplateText
-      Template.TemplateText.Ast
-      Template.TemplateText.Parser
+      Template.Project
       Template.Types
+      Utils
       WebServer.CorsPolicy
       WebServer.JWT
       WebServer.Servant
@@ -98,6 +107,8 @@ library
     , text
     , time
     , tomland >=1.3.3.2
+    , tree-sitter
+    , tree-sitter-haskell
     , unix
     , unordered-containers
     , utf8-string
@@ -155,6 +166,8 @@ executable daniell
     , text
     , time
     , tomland >=1.3.3.2
+    , tree-sitter
+    , tree-sitter-haskell
     , unix
     , unordered-containers
     , utf8-string

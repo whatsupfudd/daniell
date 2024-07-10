@@ -1,4 +1,4 @@
-module Template.TemplateText.Ast where
+module Template.Golang.Ast where
 
 import Data.Text (Text)
 
@@ -18,7 +18,7 @@ data GoStmt =
   -- Binds a local name to a value, possibly (Bool) adding the name.
   | VarBindingST Bool LocalVar PipelineExpr
   | ValueST PipelineExpr
-  deriving (Show)
+  deriving Show
 
 data PipelineExpr =
   LiteralEX LiteralValue

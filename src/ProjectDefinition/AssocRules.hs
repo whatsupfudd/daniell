@@ -1,6 +1,6 @@
-module SiteDefinition.AssocRules where
+module ProjectDefinition.AssocRules where
 
-import SiteDefinition.Types (SiteDefinition (..), TmpFileDef)
+import ProjectDefinition.Types (ProjectDefinition (..), TmpFileDef)
 import Markup.Types (MarkupPage (..))
 
 {-
@@ -10,7 +10,7 @@ import Markup.Types (MarkupPage (..))
  * Porivde the output generator required to create the proper format of content (Transformation type).
 -}
 
-findTemplForContent :: SiteDefinition TmpFileDef -> MarkupPage -> FilePath
+findTemplForContent :: a -> MarkupPage -> FilePath
 findTemplForContent siteDef contentGen =
   -- TODO: use page kind, page section, other rules
   "/tmp/gaga"

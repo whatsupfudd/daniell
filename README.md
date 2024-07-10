@@ -198,7 +198,7 @@ During template interpretation the `SiteConfig` context, loaded from the *config
 
 #### Folder hierarchy traversal for acquiring config, markup, templates and theme files ([dir-traverse](https://hackage.haskell.org/package/dir-traverse), [pathwalk](https://hackage.haskell.org/package/pathwalk))
 
-The `src/SiteDefinition` functions look into the folder hierarchy and create a model of its meaning using the `SiteDefinition` type. It provides information about the following items discovered parsing files in the source folders:
+The `src/ProjectDefinition` functions look into the folder hierarchy and create a model of its meaning using the `ProjectDefinition` type. It provides information about the following items discovered parsing files in the source folders:
 
 - Hierarchy
     - MarkupPage: represents a markup file, which will provide content into the templates.
@@ -209,11 +209,11 @@ The `src/SiteDefinition` functions look into the folder hierarchy and create a m
     - Static : ?
     - Theme : ?
 
-The `src/SiteDefinition/Explore` logic walks through the source folders and gather information on all files available as content or logic.
+The `src/ProjectDefinition/Explore` logic walks through the source folders and gather information on all files available as content or logic.
 
 #### Associtation logic for markup and templates
 
-The `src/SiteDefinition/AssocRules` logic associates entries in the `SiteDefinition` to create a workplan for generating the static site content (ie the output).
+The `src/ProjectDefinition/AssocRules` logic associates entries in the `ProjectDefinition` to create a workplan for generating the static site content (ie the output).
 
 - WorkPlan
 - Transformation

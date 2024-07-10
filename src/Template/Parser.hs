@@ -4,11 +4,11 @@ module Template.Parser where
 import Data.Text (Text)
 
 import Options.Runtime (RunOptions (..))
-import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
+import ProjectDefinition.Types (ProjectDefinition (..), TmpFileDef (..))
 import Template.Types (Template (..))
 
 
--- TODO:
-parse :: RunOptions -> SiteDefinition TmpFileDef -> FilePath -> IO (Either Text Template)
+-- TODO: the main entry point for parsing a template file (source code for creating content).
+parse :: RunOptions -> ProjectDefinition -> FilePath -> IO (Either Text Template)
 parse rtOpts siteDef tmplName =
   pure $ Left "@[parse] TODO"

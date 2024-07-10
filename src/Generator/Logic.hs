@@ -1,43 +1,51 @@
 module Generator.Logic where
 
+import Control.Monad (foldM, forM, forM_)
+
 import qualified Data.Map as Mp
 import Data.Text (Text, pack)
+import qualified Data.Sequence as Seq
+import qualified Data.Foldable as Fld
 
-import Control.Monad (foldM, forM, forM_)
 import Conclusion (GenError (..))
-import Markup.Types (MarkupPage (..))
 import Options.Runtime (RunOptions (..))
-import qualified SiteDefinition.Explore as Expl
-import SiteDefinition.Types (SiteDefinition (..), TmpFileDef (..))
-import qualified SiteDefinition.AssocRules as Rules
+import Options.Types (NewOptions)
+import qualified FileSystem.Types as Fs
+import qualified FileSystem.Explore as Fs
 import qualified RunTime.Interpreter as Rt
 import qualified Markup.Page as Mrkp
+import Markup.Types (MarkupPage (..))
 import qualified Template.Parser as Tmpl
+import Template.Types (ProjectTempl (..))
+import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..))
+import qualified ProjectDefinition.AssocRules as Rules
+import qualified ProjectDefinition.Hugo as Hu
+
+import Generator.Types
 
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
 
+{- First draft of logic: -}
+
 createSite :: RunOptions -> IO (Either GenError ())
 createSite rtOpts = do
   putStrLn $ "@[createSite] starting, root: " <> rtOpts.baseDir
-  -- explore the folder for the site -> SiteDefinition
-  eiSiteDef <- Expl.buildGenDef rtOpts
+  -- explore the folder for the site -> flat list of all dirs and files.
+  -- eiSiteDef <- Fs.buildDirTree rtOpts
+  eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
   -- extract the content pages, turn them into with Markup.parseContent to [ MarkupPage ]
   case eiSiteDef of
     Left err -> pure . Left $ SimpleMsg (pack . show $ err)
-    Right siteDef ->
+    Right dirTree ->
       let
-        -- contentPages :: [ File{ath ]
-        contentPages = Expl.getContentPages siteDef
+        contentPages = []   -- Fs.getContentPages siteDef
+        siteDef = ProjectDefinition rtOpts.baseDir (Site (Hugo Hu.defaultComponents)) [] dirTree
       in do
-        -- Mrkp.parseContent rtOpts -> IO (Either GenError MarkupPage )
-        --  => mapM = IO [ Either GenError MarkupPage ] ; listEiGen :: [ Either GenError MarkupPage ]
         listEiGen <- mapM (Mrkp.parseContent rtOpts) contentPages
         let
-          -- templateSet :: Either GenError TemplateMatches; (mapM :: (a -> m b) -> t a -> m (t b))
           eiTemplateSet = foldM (eiTemplateFinder siteDef) (Mp.empty :: TemplateMatches) listEiGen
-          -- execContext :: Rt.ExecContext
           execContext = Rt.createContext rtOpts
         case eiTemplateSet of
           Left err -> pure $ Left err
@@ -49,7 +57,7 @@ createSite rtOpts = do
                 -- Send back a result that will help the upper layer; maybe the list of all things created?
                 pure $ Right ()
   where
-  eiTemplateFinder :: SiteDefinition TmpFileDef -> TemplateMatches -> Either GenError MarkupPage -> Either GenError TemplateMatches
+  eiTemplateFinder :: ProjectDefinition -> TemplateMatches -> Either GenError MarkupPage -> Either GenError TemplateMatches
   eiTemplateFinder siteDef matchSet genItem =
     case genItem of
       Left err -> Left . SimpleMsg . pack $ "@[createSite] parseContent err: " <> show err
@@ -63,16 +71,13 @@ createSite rtOpts = do
           Just genList -> Right $ Mp.insert aTmpl (anItem : genList) matchSet
 
 
-genOutput :: RunOptions -> SiteDefinition TmpFileDef -> Rt.ExecContext -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Rt.ExecContext)
+genOutput :: RunOptions -> ProjectDefinition -> Rt.ExecContext -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Rt.ExecContext)
 genOutput rtOpts siteDef execCtxt (tmplName, genList) = do
   eiTemplate <- Tmpl.parse rtOpts siteDef tmplName
   case eiTemplate of
     Left err -> pure . Left . SimpleMsg $ err
-    Right template -> do
-      -- execute :: RunOptions -> SiteDefinition -> Template -> ExecContext -> MarkupPage -> IO (Either GenError ExecContext)
-      rez <- foldM (\eiCtxt item -> case eiCtxt of Left err -> pure $ Left err; Right aCtxt -> Rt.execute rtOpts siteDef template aCtxt item) (Right execCtxt) genList
-      pure rez
-
+    Right template ->
+      foldM (\eiCtxt item -> case eiCtxt of Left err -> pure $ Left err; Right aCtxt -> Rt.execute rtOpts siteDef template aCtxt item) (Right execCtxt) genList
 
 
 -- Tests:
@@ -83,9 +88,11 @@ fullExploration rtOpts = do
     -- folders = ["archetypes", "assets", "config", "content", "data", "layouts", "public", "static", "themes"]
     folders = ["archetypes", "config", "content", "data", "layouts", "static"]
   putStrLn "@[fullExploration] starting."
-  fTrees <- forM folders (\subDir -> Expl.loadFolderTree (rtOpts.baseDir <> "/" <> subDir))
-  displayFTrees rtOpts fTrees
-  countItems fTrees
+  fTrees <- forM folders (\subDir -> Fs.loadFolderTree (rtOpts.baseDir <> "/" <> subDir))
+  let
+    goodTrees = foldl (\accum eif -> case eif of Left _ -> accum ; Right f -> accum <> [f]) [] fTrees
+  displayFTrees rtOpts goodTrees
+  countItems goodTrees
   -- load markup files
   -- load templates
   -- load theme(s)
@@ -93,21 +100,22 @@ fullExploration rtOpts = do
   pure . Right $ ()
 
 
+displayFTrees :: RunOptions -> [ Seq.Seq (String, [Fs.FileItem]) ] -> IO ()
 displayFTrees rtOpts fTrees = do
   putStrLn $ "@[displayFTrees] folder count: " <> (show . length $ fTrees) <> "."
   forM_ fTrees (\fTree ->
-      forM_ fTree (\(r, items) -> do
-            putStrLn $ "In folder " <> r
+      forM_ fTree (\(folder, items) -> do
+            putStrLn $ "In folder " <> folder
             forM_ items (\item -> do
                 putStrLn $ "  | " <> show item
                 case item of
                   {-
-                  Expl.TomlFI filePath -> do
+                  Fs.TomlFI filePath -> do
                     rez <- Cfgp.parseToml (r <> "/" <> filePath)
                     pure ()
                   -}
-                  Expl.MarkupFI filePath -> do
-                    Mrkp.parseContent rtOpts (r <> "/" <> filePath)
+                  Fs.KnownFile Fs.Markup filePath -> do
+                    Mrkp.parseContent rtOpts (folder <> "/" <> filePath)
                     -- TMP:
                     pure $ Right ()
                   _ -> pure . Left . SimpleMsg . pack $ "@[displayFTrees] unknown item: " <> show item
@@ -118,8 +126,51 @@ displayFTrees rtOpts fTrees = do
 countItems fTrees =
   let
     totalItems =
-      foldl (\accum fTree ->
-          foldl (\accum (r, items) -> accum + length items) accum fTree
+      foldl (
+        -- outer foldl: counter & a fTree; inner foldl: counter & item pairs.
+        foldl (\accum (r, items) -> accum + length items)
       ) 0 fTrees
   in
   putStrLn $ "@[countItems] total: " <> show totalItems <> "."
+
+{- 2nd draft: uses WorkPlan -}
+
+runGen :: RunOptions -> [ WorkItem ] -> IO (Either GenError ())
+runGen rtOpts workPlan = do
+  mapM_ (\wi -> putStrLn $ "@[runGen] wi: " <> show wi) workPlan
+  pure $ Right ()
+
+buildWorkPlan :: RunOptions -> NewOptions -> ProjectTempl -> [ WorkItem ]
+buildWorkPlan rtOpts newOpts template =
+  let
+    structList = Fld.toList template.structure
+    newDirs = map NewDirIfNotExist $ extractDirs structList
+    newFiles = concatMap analyzeSources structList
+  in
+  newDirs <> newFiles
+
+extractDirs :: [ Fs.PathNode ] -> [ FilePath ]
+extractDirs = map fst . filter ((/= "") . fst)
+
+analyzeSources :: Fs.PathNode -> [ WorkItem ]
+analyzeSources (dir, srcs) =
+    foldl (\accum src ->
+      case workForSource dir src of
+        Nothing -> accum
+        Just workItem -> accum <> [ workItem ]
+    ) [] srcs
+
+
+workForSource :: FilePath -> Fs.FileItem -> Maybe WorkItem
+workForSource dir src =
+  case src of
+    Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
+    Fs.KnownFile Fs.DanTmpl path -> Just $ RunTemplate (buildPath dir path)
+    Fs.KnownFile _ path -> Just $ DupFromSource src (buildPath dir path) (buildPath dir path)
+
+
+buildPath :: FilePath -> FilePath -> FilePath
+buildPath dir src =
+  case dir of
+    "" -> src
+    _ -> dir <> "/" <> src

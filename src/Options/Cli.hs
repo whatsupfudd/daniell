@@ -2,9 +2,10 @@
 
 module Options.Cli where
 
-import Data.Text (Text)
+import Data.Text (Text, pack, splitOn)
 import Options.Applicative
 
+import Options.Types
 
 data Command =
   ConfigCmd
@@ -21,20 +22,15 @@ data Command =
   | VersionCmd
   -- Daniell specific:
   | PublishCmd
-  deriving stock (Show)
+  deriving stock Show
 
-data NewOptions = NewOptions {
-    rootDir :: Text
-    , template :: Maybe Text
-  }
-  deriving stock (Show)
 
 data CliOptions = CliOptions {
   debug :: Maybe Int
   , configFile :: Maybe FilePath
   , job :: Maybe Command
  }
- deriving stock (Show)
+ deriving stock Show
 
 
 parseCliOptions :: IO (Either String CliOptions)
@@ -44,12 +40,12 @@ parseCliOptions =
 parser :: ParserInfo CliOptions
 parser =
   info (argumentsP <**> helper) $
-    fullDesc <> progDesc "Simple and flexible Static Site generator." <> header "daniell"
+    fullDesc <> progDesc "Fast and flexible project creator and content generator." <> header "daniell"
 
 
 argumentsP :: Parser CliOptions
 argumentsP = do
-  buildOptions <$> globConfFileDef <*> (subparser commandsDef)
+  buildOptions <$> globConfFileDef <*> subparser commandsDef
   where
     buildOptions confPath cmd =
       let
@@ -63,14 +59,15 @@ argumentsP = do
         , job = Just cmd
       }
 
-globConfFileDef :: Parser (FilePath)
+
+globConfFileDef :: Parser FilePath
 globConfFileDef =
   strOption (
     long "danconf"
     <> metavar "DANIELLCONF"
     <> value ""
     <> showDefault
-    <> help "Global config file (default is ~/.daniell/config.yaml)."
+    <> help "Global config file (default is ~/fudd/.daniell/config.yaml)."
   )
 
 commandsDef :: Mod CommandFields Command
@@ -96,18 +93,43 @@ commandsDef =
   in
     foldl (\accum aCmd -> cmdBuilder aCmd <> accum) (cmdBuilder headArray) tailArray
   where
-    cmdBuilder (label, cmdDef, desc) =
-      command label (info cmdDef (progDesc desc))
+  cmdBuilder (label, cmdDef, desc) = command label (info cmdDef (progDesc desc))
 
 
 newOpts :: Parser NewOptions
 newOpts =
    NewOptions <$>
-      strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory.")
-    <*> optional (strOption (
+      subparser (sitePK <> webAppPK <> localAppPK)
+    <*> strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory.")
+    <*> many (strOption (
         long "template"
         <> short 't'
         <> help "Template to use for the new item."
       ))
+    <*> optional (strOption (
+        long "compat"
+        <> short 'c'
+        <> help "Project compatibility mode."
+      ))
+    <*> many (option paramParser (
+        long "param"
+        <> short 'p'
+        <> help "Parameter for the template."
+    ))
+  where
+  sitePK = command "site" (info (pure SitePK) (progDesc "Create a new site project."))
+  webAppPK = command "webapp" (info (pure WebAppPK) (progDesc "Create a new webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppPK) (progDesc "Create a new localapp project."))
 
-  
+
+paramParser :: ReadM ParameterTpl
+paramParser = eitherReader $ \s ->
+  let
+    tS = pack s
+  in
+  case splitOn "=" tS of
+    [k, v] -> Right $ AssignmentP (k, v)
+    _ -> case s of
+      "" -> Left "Invalid parameter format, expected <key>=<value>."
+      _ -> Right $ FlagP tS
+

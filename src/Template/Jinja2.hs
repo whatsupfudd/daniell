@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Template.Jinja2 where
 
 import qualified Data.Text as DT
@@ -37,8 +40,7 @@ parse rtOpts filePath = do
 loadFile fn = Sio.openFile fn Sio.ReadMode >>= Sio.hGetContents
 
 loadFileMay fn =
-  Serr.tryIOError (loadFile fn) >>= \e ->
-    case e of
+  Serr.tryIOError (loadFile fn) >>= \case
       Right contents ->
         return (Just contents)
       Left err -> do
