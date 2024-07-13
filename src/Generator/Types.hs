@@ -1,6 +1,6 @@
 module Generator.Types where
 
-import FileSystem.Types (FileItem (..))
+import FileSystem.Types (FileItem, FileKind)
 
 
 data WorkItem =
@@ -11,4 +11,5 @@ data WorkItem =
   | CloneSource FilePath FilePath
   -- run a 'logic' template, no implied result.AnonymousRoutes
   | RunTemplate FilePath
+  | RunTemplateToDest FileKind FileItem FilePath
   deriving Show

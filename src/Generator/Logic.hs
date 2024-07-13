@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Generator.Logic where
 
 import Control.Monad (foldM, forM, forM_)
@@ -140,6 +141,22 @@ runGen rtOpts workPlan = do
   mapM_ (\wi -> putStrLn $ "@[runGen] wi: " <> show wi) workPlan
   pure $ Right ()
 
+runItem :: RunOptions -> WorkItem -> IO (Either GenError ())
+runItem rtOpts = \case
+  CloneSource srcPath destPath -> do
+    putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> destPath
+    pure $ Right ()
+  DupFromSource fItem srcPath destPath -> do
+    putStrLn $ "@[runItem] DupFromSource: " <> srcPath <> " -> " <> destPath
+    pure $ Right ()
+  RunTemplate path -> do
+    putStrLn $ "@[runItem] RunTemplate: " <> path
+    pure $ Right ()
+  RunTemplateToDest tKind tPath destPath -> do
+    putStrLn $ "@[runItem] RunTemplateToDest: " <> show tKind <> ", src: " <> show tPath <> ", dst: " <> destPath
+    pure $ Right ()
+
+
 buildWorkPlan :: RunOptions -> NewOptions -> ProjectTempl -> [ WorkItem ]
 buildWorkPlan rtOpts newOpts template =
   let
@@ -166,6 +183,7 @@ workForSource dir src =
   case src of
     Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
     Fs.KnownFile Fs.DanTmpl path -> Just $ RunTemplate (buildPath dir path)
+    Fs.KnownFile Fs.Haskell path -> Just $ RunTemplateToDest Fs.Haskell src (buildPath dir path)
     Fs.KnownFile _ path -> Just $ DupFromSource src (buildPath dir path) (buildPath dir path)
 
 

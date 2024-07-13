@@ -34,7 +34,7 @@ loadTemplate rtOpts path = do
 loadProjectFile :: Rt.RunOptions -> FilePath -> IO (Either Text ProjectTempl)
 loadProjectFile rtOpts path =
   -- TODO: load the template file, and create a ProjectTempl from it.
-  pure . Right $ ProjectTempl path Nothing mempty mempty Noop
+  pure . Right $ ProjectTempl path Nothing Nothing mempty mempty Noop
 
 
 loadProjectDir :: Rt.RunOptions -> FilePath -> IO (Either Text ProjectTempl)
@@ -44,7 +44,7 @@ loadProjectDir rtOpts path = do
     Left err -> pure . Left $ pack err
     Right fTree -> do
       -- putStrLn $ "fTree: " <> show fTree
-      pure $ Right $ ProjectTempl path Nothing fTree mempty Noop
+      pure $ Right $ ProjectTempl path Nothing Nothing fTree mempty Noop
 
 
 mergeTemplates :: [ProjectTempl] -> ProjectTempl

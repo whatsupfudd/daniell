@@ -10,6 +10,7 @@ import FileSystem.Types (PathFiles)
 
 data ProjectTempl = ProjectTempl {
   path :: FilePath
+  , hasPrefix :: Maybe FilePath
   , description :: Maybe Text
   , structure :: PathFiles
   , parameters :: ParameterMap

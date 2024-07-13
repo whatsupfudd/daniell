@@ -51,13 +51,13 @@ newCmd options rtOpts = do
 parseProjectTempl :: RunOptions -> FilePath -> IO (Either Ccl.GenError ProjectTempl)
 parseProjectTempl rtOpts tPath =
   let
-    fullPath = case tPath of
-      '.' : rest -> tPath
-      '/' : rest -> tPath
-      _ -> rtOpts.templateDir <> "/" <> tPath
+    (fullPath, mbPrefix) = case tPath of
+      '.' : rest -> (tPath, Nothing)
+      '/' : rest -> (tPath, Nothing)
+      _ -> (rtOpts.templateDir <> "/" <> tPath, Just rtOpts.templateDir)
   in do
   rezA <- loadTemplate rtOpts fullPath
   case rezA of
     Left errMsg -> pure $ Left $ Ccl.SimpleMsg errMsg
-    Right aTempl -> pure $ Right aTempl
+    Right aTempl -> pure $ Right aTempl { hasPrefix = mbPrefix }
 
