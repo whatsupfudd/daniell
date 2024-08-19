@@ -13,7 +13,7 @@ import Template.Project (loadTemplate)
 import Template.Types (ProjectTempl (..))
 import Utils (splitResults)
 
-import Markup.Haskell (testTreeSitter)
+import Template.Haskell (testTreeSitter)
 
 
 newCmd :: NewOptions -> RunOptions -> IO Ccl.Conclusion

@@ -9,11 +9,11 @@ import Generator.Logic (buildWorkPlan, runGen)
 
 createProject :: RunOptions -> NewOptions -> [ProjectTempl] -> IO (Either Ccl.GenError ())
 createProject rtOpts newOpts templates = do
+  putStrLn "@[createProject] starting."
   -- move template(s) info into a work plan.
   let
     mergedTemplate = mergeTemplates templates
     workPlan = buildWorkPlan rtOpts newOpts mergedTemplate
   -- pass the work plan to the generator.
-  rezA <- runGen rtOpts workPlan
-  putStrLn "@[createProject] starting."
+  rezA <- runGen rtOpts mergedTemplate workPlan
   pure $ Right ()

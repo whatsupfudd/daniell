@@ -1,4 +1,4 @@
-module Markup.Haskell where
+module Template.Haskell where
 
 import TreeSitter.Parser ( ts_parser_new, ts_parser_parse_string, ts_parser_set_language )
 import TreeSitter.Tree ( ts_tree_root_node_p )
@@ -15,6 +15,8 @@ import Control.Monad ( forM_ )
 
 testTreeSitter :: FilePath -> IO ()
 testTreeSitter path = do
+  putStrLn $ "treeSitter File: " ++ path ++ " ------------"
+
   parser <- ts_parser_new
   ts_parser_set_language parser tree_sitter_haskell
 
@@ -26,17 +28,17 @@ testTreeSitter path = do
   mem <- malloc
   ts_tree_root_node_p tree mem
 
-  putStrLn "module (root) ------------"
   nodeA <- peek mem  -- header, imports, and declarations
   let childCount = fromIntegral nodeA.nodeChildCount
 
   children <- mallocArray childCount
-  tsNodeMem   <- malloc
+  tsNodeMem <- malloc
   poke tsNodeMem nodeA.nodeTSNode
   ts_node_copy_child_nodes tsNodeMem children
 
-  printChildren children childCount
+  -- printChildren children childCount 0
 
+{-
   putStrLn "declarations ------------"
   nodeB <- peekElemOff children 3
   let nextChildCount = fromIntegral nodeB.nodeChildCount
@@ -47,22 +49,35 @@ testTreeSitter path = do
   ts_node_copy_child_nodes nextTsNode nextChildren
 
   printChildren nextChildren nextChildCount
+-}
 
   putStrLn "---------"
 
-printChildren :: Ptr Node -> Int -> IO ()
-printChildren children count = forM_
+printChildren :: Ptr Node -> Int -> Int -> IO ()
+printChildren children count level = forM_
   [0 .. count - 1]
   (\n -> do
     child <- peekElemOff children n
-    printNode child
+    printNode level child
+    let subCount = fromIntegral child.nodeChildCount
+    if subCount > 0 then do
+      subChildren <- mallocArray subCount
+      tsNodeMem <- malloc
+      poke tsNodeMem child.nodeTSNode
+      ts_node_copy_child_nodes tsNodeMem subChildren
+
+      printChildren subChildren subCount (level + 1)
+      putStrLn $ replicate level ' ' ++ "==="
+    else
+      pure ()
+
   )
 
-printNode :: Node -> IO ()
-printNode n = do
+printNode :: Int -> Node -> IO ()
+printNode offset n = do
   theType <- peekCString n.nodeType
   let pA = nodeStartPoint n
-      start = "(" ++ show pA.pointRow ++ "," ++ show pA.pointColumn ++ ")"
+      start = " (" ++ show pA.pointRow ++ "," ++ show pA.pointColumn ++ ")"
   let pB = n.nodeEndPoint
       end = "(" ++ show pB.pointRow ++ "," ++ show pB.pointColumn ++ ")"
-  putStrLn $ theType ++ start ++ "-" ++ end
+  putStrLn $ replicate offset ' ' ++ theType ++ start ++ "-" ++ end

@@ -37,7 +37,6 @@ library
       Generator.Logic
       Generator.Types
       MainLogic
-      Markup.Haskell
       Markup.Markdown
       Markup.Page
       Markup.Types
@@ -55,9 +54,14 @@ library
       ProjectDefinition.NextJS
       ProjectDefinition.Types
       RunTime.Interpreter
+      RunTime.Interpreter.Context
+      RunTime.Interpreter.Engine
+      RunTime.Interpreter.Memory
+      RunTime.Interpreter.OpCodes
       RunTime.StaticSite
       Template.Golang.Ast
       Template.Golang.Parser
+      Template.Haskell
       Template.Jinja2
       Template.Parser
       Template.Project
@@ -76,6 +80,7 @@ library
       OverloadedRecordDot
   build-depends:
       aeson
+    , array
     , base >=4.7 && <5
     , base-compat
     , bytestring
@@ -134,6 +139,7 @@ executable daniell
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:
       aeson
+    , array
     , base
     , base-compat
     , bytestring

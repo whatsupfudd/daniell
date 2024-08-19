@@ -69,6 +69,8 @@ dependencies:
   # For parsing programming languages:
   - tree-sitter
   - tree-sitter-haskell
+  # For Interpreter VM:
+  - array
 
 default-extensions:
 - OverloadedStrings

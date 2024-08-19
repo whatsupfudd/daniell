@@ -11,5 +11,5 @@ data WorkItem =
   | CloneSource FilePath FilePath
   -- run a 'logic' template, no implied result.AnonymousRoutes
   | RunTemplate FilePath
-  | RunTemplateToDest FileKind FileItem FilePath
+  | RunTemplateToDest FileKind FilePath FileItem FilePath
   deriving Show

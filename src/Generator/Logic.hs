@@ -16,11 +16,13 @@ import qualified FileSystem.Explore as Fs
 import qualified RunTime.Interpreter as Rt
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
+import Template.Haskell (testTreeSitter)
 import qualified Template.Parser as Tmpl
 import Template.Types (ProjectTempl (..))
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..))
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
+import RunTime.Interpreter (createContext, execute)
 
 import Generator.Types
 
@@ -78,7 +80,7 @@ genOutput rtOpts siteDef execCtxt (tmplName, genList) = do
   case eiTemplate of
     Left err -> pure . Left . SimpleMsg $ err
     Right template ->
-      foldM (\eiCtxt item -> case eiCtxt of Left err -> pure $ Left err; Right aCtxt -> Rt.execute rtOpts siteDef template aCtxt item) (Right execCtxt) genList
+      foldM (\eiCtxt item -> case eiCtxt of Left err -> pure $ Left err; Right aCtxt -> Rt.execute rtOpts siteDef template aCtxt (Just item)) (Right execCtxt) genList
 
 
 -- Tests:
@@ -136,13 +138,20 @@ countItems fTrees =
 
 {- 2nd draft: uses WorkPlan -}
 
-runGen :: RunOptions -> [ WorkItem ] -> IO (Either GenError ())
-runGen rtOpts workPlan = do
-  mapM_ (\wi -> putStrLn $ "@[runGen] wi: " <> show wi) workPlan
+runGen :: RunOptions -> ProjectTempl -> [ WorkItem ] -> IO (Either GenError ())
+runGen rtOpts projTempl workPlan = do
+  mapM_ (\wi -> do
+      putStrLn $ "@[runGen] wi: " <> show wi
+      runItem rtOpts projTempl wi
+    ) workPlan
   pure $ Right ()
 
-runItem :: RunOptions -> WorkItem -> IO (Either GenError ())
-runItem rtOpts = \case
+
+runItem :: RunOptions -> ProjectTempl -> WorkItem -> IO (Either GenError ())
+runItem rtOpts projTempl = \case
+  NewDirIfNotExist dirPath -> do
+    putStrLn $ "@[runItem] NewDir: " <> dirPath
+    pure $ Right ()
   CloneSource srcPath destPath -> do
     putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> destPath
     pure $ Right ()
@@ -152,8 +161,22 @@ runItem rtOpts = \case
   RunTemplate path -> do
     putStrLn $ "@[runItem] RunTemplate: " <> path
     pure $ Right ()
-  RunTemplateToDest tKind tPath destPath -> do
-    putStrLn $ "@[runItem] RunTemplateToDest: " <> show tKind <> ", src: " <> show tPath <> ", dst: " <> destPath
+  RunTemplateToDest tKind dir tPath destPath -> do
+    case tPath of
+        Fs.KnownFile fType srcPath ->
+          let
+            fullPath = case projTempl.hasPrefix of
+              Nothing -> projTempl.path <> "/" <> dir <> "/" <> srcPath
+              Just prefix -> projTempl.path <> "/" <> dir <> "/" <> srcPath
+          in do
+            putStrLn $ "@[runItem] treeSitting: " <> show tPath
+            -- HERE: read the result of the code template parsing, and execute the VM on that + local context.
+            testTreeSitter fullPath
+            -- createContext
+            -- execute:: RunOptions -> ProjectDefinition -> Template -> ExecContext -> MarkupPage
+        Fs.MiscFile srcPath ->
+          putStrLn $ "@[runItem] RunTemplateToDest: " <> show tKind <> ", src: " <> show tPath <> ", dst: " <> destPath
+
     pure $ Right ()
 
 
@@ -162,12 +185,14 @@ buildWorkPlan rtOpts newOpts template =
   let
     structList = Fld.toList template.structure
     newDirs = map NewDirIfNotExist $ extractDirs structList
-    newFiles = concatMap analyzeSources structList
+    workItems = concatMap analyzeSources structList
   in
-  newDirs <> newFiles
+  newDirs <> workItems
+
 
 extractDirs :: [ Fs.PathNode ] -> [ FilePath ]
 extractDirs = map fst . filter ((/= "") . fst)
+
 
 analyzeSources :: Fs.PathNode -> [ WorkItem ]
 analyzeSources (dir, srcs) =
@@ -183,7 +208,7 @@ workForSource dir src =
   case src of
     Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
     Fs.KnownFile Fs.DanTmpl path -> Just $ RunTemplate (buildPath dir path)
-    Fs.KnownFile Fs.Haskell path -> Just $ RunTemplateToDest Fs.Haskell src (buildPath dir path)
+    Fs.KnownFile Fs.Haskell path -> Just $ RunTemplateToDest Fs.Haskell dir src (buildPath dir path)
     Fs.KnownFile _ path -> Just $ DupFromSource src (buildPath dir path) (buildPath dir path)
 
 

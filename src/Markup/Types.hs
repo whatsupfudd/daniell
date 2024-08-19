@@ -25,7 +25,7 @@ data FrontMatter = FrontMatter {
 type Content = Text
 
 data Encoding =
-  MarkdownEC
+  Markdown
 
 data Definition =
   ValueDF
@@ -33,5 +33,6 @@ data Definition =
   | ReferenceDF
 
 
+-- Content that fills in the template.
 data MarkupPage =
   MkPage Encoding FrontMatter Content
