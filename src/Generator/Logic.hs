@@ -8,15 +8,17 @@ import Data.Text (Text, pack)
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Fld
 
+import qualified System.Directory as SE
+
 import Conclusion (GenError (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions)
+import Options.Types (NewOptions (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import qualified RunTime.Interpreter as Rt
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
-import Template.Haskell (testTreeSitter)
+import Template.Haskell (treeSitterHS)
 import qualified Template.Parser as Tmpl
 import Template.Types (ProjectTempl (..))
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..))
@@ -138,22 +140,33 @@ countItems fTrees =
 
 {- 2nd draft: uses WorkPlan -}
 
-runGen :: RunOptions -> ProjectTempl -> [ WorkItem ] -> IO (Either GenError ())
+runGen :: RunOptions -> ProjectTempl -> WorkPlan -> IO (Either GenError ())
 runGen rtOpts projTempl workPlan = do
   mapM_ (\wi -> do
       putStrLn $ "@[runGen] wi: " <> show wi
-      runItem rtOpts projTempl wi
-    ) workPlan
+      runItem rtOpts workPlan.destDir projTempl wi
+    ) workPlan.workItems
   pure $ Right ()
 
 
-runItem :: RunOptions -> ProjectTempl -> WorkItem -> IO (Either GenError ())
-runItem rtOpts projTempl = \case
+runItem :: RunOptions -> FilePath -> ProjectTempl -> WorkItem -> IO (Either GenError ())
+runItem rtOpts destDir projTempl = \case
   NewDirIfNotExist dirPath -> do
-    putStrLn $ "@[runItem] NewDir: " <> dirPath
+    let fullDirPath = destDir <> "/" <> dirPath
+    alreadyDir <- SE.doesDirectoryExist fullDirPath
+    if alreadyDir then
+      putStrLn $ "@[runItem] skipping existing NewDir: " <> fullDirPath
+    else do
+      putStrLn $ "@[runItem] making NewDir: " <> fullDirPath
+      SE.createDirectory fullDirPath
     pure $ Right ()
   CloneSource srcPath destPath -> do
     putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> destPath
+    alreadyThere <- SE.doesFileExist destPath
+    if alreadyThere then
+      putStrLn $ "@[runItem] skipping existing CloneSource: " <> destPath
+    else
+      SE.copyFile srcPath destPath
     pure $ Right ()
   DupFromSource fItem srcPath destPath -> do
     putStrLn $ "@[runItem] DupFromSource: " <> srcPath <> " -> " <> destPath
@@ -168,26 +181,41 @@ runItem rtOpts projTempl = \case
             fullPath = case projTempl.hasPrefix of
               Nothing -> projTempl.path <> "/" <> dir <> "/" <> srcPath
               Just prefix -> projTempl.path <> "/" <> dir <> "/" <> srcPath
-          in do
-            putStrLn $ "@[runItem] treeSitting: " <> show tPath
-            -- HERE: read the result of the code template parsing, and execute the VM on that + local context.
-            testTreeSitter fullPath
-            -- createContext
-            -- execute:: RunOptions -> ProjectDefinition -> Template -> ExecContext -> MarkupPage
-        Fs.MiscFile srcPath ->
+          in
+            genFileFromTemplate rtOpts tKind fullPath (destDir <> "/" <> destPath)
+        Fs.MiscFile srcPath -> do
           putStrLn $ "@[runItem] RunTemplateToDest: " <> show tKind <> ", src: " <> show tPath <> ", dst: " <> destPath
+          pure $ Right ()
 
-    pure $ Right ()
+
+genFileFromTemplate :: RunOptions -> Fs.FileKind -> FilePath -> FilePath -> IO (Either GenError ())
+genFileFromTemplate rtOpts fType srcPath destPath = do
+  putStrLn $ "@[genFileFromTemplate] starting: " <> srcPath <> " -> " <> destPath
+  eiFTemplate <- case fType of
+    Fs.Haskell -> do
+      putStrLn $ "@[runItem] Haskell: " <> show srcPath
+      -- read/ts-parse the template file
+      rezA <- treeSitterHS srcPath
+      case rezA of
+        Left err -> pure $ Left err
+        Right fTemplate -> do
+          -- HERE: analyze the result of the code template parsing, and prepare local context.
+          -- createContext
+          pure $ Right ()
+  -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+  -- execute:: RunOptions -> ProjectDefinition -> Template -> ExecContext -> MarkupPage -> IO (Either GenError ExecContext)
+  pure $ Right ()
 
 
-buildWorkPlan :: RunOptions -> NewOptions -> ProjectTempl -> [ WorkItem ]
+
+buildWorkPlan :: RunOptions -> NewOptions -> ProjectTempl -> WorkPlan
 buildWorkPlan rtOpts newOpts template =
   let
     structList = Fld.toList template.structure
-    newDirs = map NewDirIfNotExist $ extractDirs structList
+    newDirs = map NewDirIfNotExist (extractDirs structList)
     workItems = concatMap analyzeSources structList
   in
-  newDirs <> workItems
+  WorkPlan newOpts.rootDir $ newDirs <> workItems
 
 
 extractDirs :: [ Fs.PathNode ] -> [ FilePath ]

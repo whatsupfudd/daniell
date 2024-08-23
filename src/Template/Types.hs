@@ -6,7 +6,12 @@ import Data.Text (Text)
 import qualified Data.Map as Mp
 import FileSystem.Types (PathFiles)
 
-{- Project Template -}
+{- Project Template
+ Defines how to assemble a project (currently, Haskell app) as a set of files and directories.
+ The files are typically Haskell code that can be extended with '{{' and '}}' blocks of templating logic
+ that is evaluated to produce different results based on the options & parameters provided upon launching the
+ project creation.
+-}
 
 data ProjectTempl = ProjectTempl {
   path :: FilePath
@@ -18,13 +23,24 @@ data ProjectTempl = ProjectTempl {
   }
   deriving Show
 
-{- File Template -}
+{- File Template
+  Defines a sequence of verbatim content and logic blocks. The verbatim content is simply concatenated toward the
+  output, while the logic blocks are evaluated and control the generation of additional output that is added in
+  the stream of output.
+  The following makes up the 'compiled module' information:
+   - *context* of the template is the global values that are part of the template and available to the logic blocks for
+  controlling the processing.
+   - *logic* is the sequence of functions defined in the template (the .text segment of an object file).
+   - *constants* are the literal values extracted from the functions and accumulated in a unique & global list (the equivalent
+  of a .data segment in an object file).
+-}
 
 data FileTempl = FileTempl {
   path :: FilePath
   , description :: Maybe Text
-  , parameters :: ParameterMap
-  , logic :: Function
+  , context :: ParameterMap
+  , logic :: [ Function ]
+  , constants :: [ Parameter ]
   }
   deriving Show
 

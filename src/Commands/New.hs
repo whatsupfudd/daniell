@@ -13,13 +13,9 @@ import Template.Project (loadTemplate)
 import Template.Types (ProjectTempl (..))
 import Utils (splitResults)
 
-import Template.Haskell (testTreeSitter)
-
 
 newCmd :: NewOptions -> RunOptions -> IO Ccl.Conclusion
 newCmd options rtOpts = do
-  testTreeSitter "/Users/lhugo/.fudd/daniell/templates/fuddapp/src/Options/Cli.hs"
-
   putStrLn $ "@[newCmd] Options: " <> show options
   rezTemplates <- mapM (parseProjectTempl rtOpts) options.templates
   let
@@ -29,8 +25,10 @@ newCmd options rtOpts = do
     [] -> do
       -- putStrLn $ "Parsed templates: " <> show userTemplates
       -- if there's no 'no-default template' instruction in the specified templates, load the default template.
-      -- Right . (<>) userTemplates . singleton <$> 
-      rezA <- if False then pure $ Right userTemplates else do
+      rezA <-
+        -- TODO: figure out when to not scan the defaultTemplate...
+        --  if False then pure $ Right userTemplates else
+        do
         rezB <- parseProjectTempl rtOpts (defaultTemplate rtOpts options.projKind)
         case rezB of
           Left errMsg -> pure . Left $ show errMsg

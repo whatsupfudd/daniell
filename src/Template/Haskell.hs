@@ -1,5 +1,9 @@
 module Template.Haskell where
 
+import Control.Monad ( forM_, when )
+
+import qualified Data.Map as Mp
+
 import TreeSitter.Parser ( ts_parser_new, ts_parser_parse_string, ts_parser_set_language )
 import TreeSitter.Tree ( ts_tree_root_node_p )
 import TreeSitter.Haskell ( tree_sitter_haskell )
@@ -10,11 +14,14 @@ import Foreign.Ptr ( Ptr, nullPtr )
 import Foreign.Marshal.Alloc ( malloc )
 import Foreign.Marshal.Array ( mallocArray )
 import Foreign.Storable ( peek, peekElemOff, poke )
-import Control.Monad ( forM_ )
+
+import Conclusion (GenError (..))
+import Template.Types
+import qualified Control.Lens.Internal.Zoom as Ccl
 
 
-testTreeSitter :: FilePath -> IO ()
-testTreeSitter path = do
+treeSitterHS :: FilePath -> IO (Either GenError FileTempl)
+treeSitterHS path = do
   putStrLn $ "treeSitter File: " ++ path ++ " ------------"
 
   parser <- ts_parser_new
@@ -37,21 +44,24 @@ testTreeSitter path = do
   ts_node_copy_child_nodes tsNodeMem children
 
   -- printChildren children childCount 0
+  rezA <- analyzeTree children childCount
+  case rezA of
+    Left err -> pure $ Left err
+    Right templTree -> pure . Right $ FileTempl path Nothing Mp.empty [] []
 
-{-
-  putStrLn "declarations ------------"
-  nodeB <- peekElemOff children 3
-  let nextChildCount = fromIntegral nodeB.nodeChildCount
 
-  nextChildren <- mallocArray nextChildCount
-  nextTsNode   <- malloc
-  poke nextTsNode nodeB.nodeTSNode
-  ts_node_copy_child_nodes nextTsNode nextChildren
+data TemplTsTree = TemplTsTree {
+  totalNodes :: Int
+  , verbatimBlocks :: [Node]
+  , logicBlocks :: [Node]
+  }
 
-  printChildren nextChildren nextChildCount
--}
 
-  putStrLn "---------"
+analyzeTree :: Ptr Node -> Int -> IO (Either GenError TemplTsTree)
+analyzeTree children count =
+  -- TODO: do the descent of ts nodes and extract into verbatim and logic blocks; parse the syntax of each logic block, reassemble into a tree of statements/expressions.
+  pure $ Right $ TemplTsTree count [] []
+
 
 printChildren :: Ptr Node -> Int -> Int -> IO ()
 printChildren children count level = forM_
@@ -60,7 +70,7 @@ printChildren children count level = forM_
     child <- peekElemOff children n
     printNode level child
     let subCount = fromIntegral child.nodeChildCount
-    if subCount > 0 then do
+    when (subCount > 0) $ do
       subChildren <- mallocArray subCount
       tsNodeMem <- malloc
       poke tsNodeMem child.nodeTSNode
@@ -68,8 +78,6 @@ printChildren children count level = forM_
 
       printChildren subChildren subCount (level + 1)
       putStrLn $ replicate level ' ' ++ "==="
-    else
-      pure ()
 
   )
 

@@ -2,6 +2,12 @@ module Generator.Types where
 
 import FileSystem.Types (FileItem, FileKind)
 
+data WorkPlan =
+  WorkPlan {
+    destDir :: FilePath
+    , workItems :: [ WorkItem ]
+  }
+  deriving Show
 
 data WorkItem =
   NewDirIfNotExist FilePath
