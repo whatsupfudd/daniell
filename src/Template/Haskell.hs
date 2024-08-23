@@ -11,7 +11,7 @@ import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
               , TSPoint(TSPoint, pointRow, pointColumn) )
 import Foreign.C.String ( newCStringLen, peekCString )
 import Foreign.Ptr ( Ptr, nullPtr )
-import Foreign.Marshal.Alloc ( malloc )
+import Foreign.Marshal.Alloc ( malloc, free )
 import Foreign.Marshal.Array ( mallocArray )
 import Foreign.Storable ( peek, peekElemOff, poke )
 
@@ -22,7 +22,7 @@ import qualified Control.Lens.Internal.Zoom as Ccl
 
 treeSitterHS :: FilePath -> IO (Either GenError FileTempl)
 treeSitterHS path = do
-  putStrLn $ "treeSitter File: " ++ path ++ " ------------"
+  putStrLn $ "@[treeSitterHS] parsing: " ++ path
 
   parser <- ts_parser_new
   ts_parser_set_language parser tree_sitter_haskell
@@ -38,13 +38,22 @@ treeSitterHS path = do
   nodeA <- peek mem  -- header, imports, and declarations
   let childCount = fromIntegral nodeA.nodeChildCount
 
-  children <- mallocArray childCount
   tsNodeMem <- malloc
   poke tsNodeMem nodeA.nodeTSNode
+
+  children <- mallocArray childCount
   ts_node_copy_child_nodes tsNodeMem children
 
-  -- printChildren children childCount 0
+  putStrLn $ "@[printChildren] >>>"
+  printChildren children childCount 0
+  putStrLn $ "@[printChildren] <<<"
+
   rezA <- analyzeTree children childCount
+
+  free children
+  free tsNodeMem
+  free codeStr
+
   case rezA of
     Left err -> pure $ Left err
     Right templTree -> pure . Right $ FileTempl path Nothing Mp.empty [] []
@@ -64,22 +73,26 @@ analyzeTree children count =
 
 
 printChildren :: Ptr Node -> Int -> Int -> IO ()
-printChildren children count level = forM_
-  [0 .. count - 1]
-  (\n -> do
-    child <- peekElemOff children n
-    printNode level child
-    let subCount = fromIntegral child.nodeChildCount
-    when (subCount > 0) $ do
-      subChildren <- mallocArray subCount
-      tsNodeMem <- malloc
-      poke tsNodeMem child.nodeTSNode
-      ts_node_copy_child_nodes tsNodeMem subChildren
+printChildren children count level = do
+  forM_
+    [0 .. count - 1]
+    (\n -> do
+      child <- peekElemOff children n
+      printNode level child
+      let subCount = fromIntegral child.nodeChildCount
+      when (subCount > 0) $ do
+        putStrLn $ replicate (level*2) ' ' ++ "|==="
+        subChildren <- mallocArray subCount
+        tsNodeMem <- malloc
+        poke tsNodeMem child.nodeTSNode
+        ts_node_copy_child_nodes tsNodeMem subChildren
 
-      printChildren subChildren subCount (level + 1)
-      putStrLn $ replicate level ' ' ++ "==="
+        printChildren subChildren subCount (level + 1)
 
-  )
+        free subChildren
+        free tsNodeMem
+        putStrLn $ replicate (level*2) ' ' ++ "<"
+    )
 
 printNode :: Int -> Node -> IO ()
 printNode offset n = do
@@ -88,4 +101,4 @@ printNode offset n = do
       start = " (" ++ show pA.pointRow ++ "," ++ show pA.pointColumn ++ ")"
   let pB = n.nodeEndPoint
       end = "(" ++ show pB.pointRow ++ "," ++ show pB.pointColumn ++ ")"
-  putStrLn $ replicate offset ' ' ++ theType ++ start ++ "-" ++ end
+  putStrLn $ replicate (offset*2) ' ' ++ theType ++ start ++ "-" ++ end
