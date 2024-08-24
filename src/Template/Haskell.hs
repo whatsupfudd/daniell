@@ -7,6 +7,7 @@ import qualified Data.ByteString as BS
 import qualified Data.Text.Encoding as TE
 import qualified Data.Map as Mp
 import Data.Text (pack)
+import qualified Data.Vector as Vc
 
 import Foreign.C.String ( newCStringLen, peekCString )
 import Foreign.Ptr ( Ptr, nullPtr )
@@ -50,11 +51,11 @@ treeSitterHS path = do
   children <- mallocArray childCount
   ts_node_copy_child_nodes tsNodeMem children
 
-  {-
-    putStrLn $ "@[printChildren] >>>"
-    printChildren children childCount 0
-    putStrLn $ "@[printChildren] <<<"
-  -}
+  
+  putStrLn $ "@[printChildren] >>>"
+  printChildren children childCount 0
+  putStrLn $ "@[printChildren] <<<"
+  
 
   rezA <- parseTsChildren children childCount
 
@@ -69,6 +70,8 @@ treeSitterHS path = do
           -- parse the blocks to create a VM code.
           let
             tmplText = TE.encodeUtf8 . pack $ tmplString
+            linesList = BS.split 10 tmplText
+            lines = Vc.fromList linesList
           in do
           mapM_ print tsTree.blocks
           pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
