@@ -20,7 +20,7 @@ import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import Template.Haskell (treeSitterHS)
 import qualified Template.Parser as Tmpl
-import Template.Types (ProjectTempl (..))
+import Template.Types (ProjectTempl (..), FileTempl (..), Function (..), Code (..))
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..))
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
@@ -199,6 +199,14 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
       case rezA of
         Left err -> pure $ Left err
         Right fTemplate -> do
+          -- TEST:
+          case fTemplate.logic of
+            [] -> pure $ Right ()
+            anOp : _ -> case anOp of
+              CloneVerbatim _ -> do
+                SE.copyFile srcPath destPath
+                pure $ Right ()
+              _ -> pure $ Right ()
           -- HERE: analyze the result of the code template parsing, and prepare local context.
           -- createContext
           pure $ Right ()

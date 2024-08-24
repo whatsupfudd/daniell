@@ -62,6 +62,7 @@ data Function =
   | Exec Code
   | Sequence [ Function ]
   | Noop
+  | CloneVerbatim FilePath
   deriving Show
 
 data NameBinding = NameBinding {

@@ -1,8 +1,12 @@
 module Template.Haskell where
 
 import Control.Monad ( forM_, when )
+import Control.Monad.Cont (foldM)
 
+import qualified Data.ByteString as BS
+import qualified Data.Text.Encoding as TE
 import qualified Data.Map as Mp
+import Data.Text (pack)
 
 import Foreign.C.String ( newCStringLen, peekCString )
 import Foreign.Ptr ( Ptr, nullPtr )
@@ -29,10 +33,10 @@ treeSitterHS path = do
   parser <- ts_parser_new
   ts_parser_set_language parser tree_sitter_haskell
 
-  source <- readFile path
+  tmplString <- readFile path
 
-  (codeStr, strLen) <- newCStringLen source
-  tree <- ts_parser_parse_string parser nullPtr codeStr strLen
+  (cStr, strLen) <- newCStringLen tmplString
+  tree <- ts_parser_parse_string parser nullPtr cStr strLen
 
   mem <- malloc
   ts_tree_root_node_p tree mem
@@ -46,65 +50,131 @@ treeSitterHS path = do
   children <- mallocArray childCount
   ts_node_copy_child_nodes tsNodeMem children
 
-  putStrLn $ "@[printChildren] >>>"
-  printChildren children childCount 0
-  putStrLn $ "@[printChildren] <<<"
+  {-
+    putStrLn $ "@[printChildren] >>>"
+    printChildren children childCount 0
+    putStrLn $ "@[printChildren] <<<"
+  -}
 
-  rezA <- analyzeChildren children childCount
+  rezA <- parseTsChildren children childCount
 
   free children
   free tsNodeMem
-  free codeStr
+  free cStr
 
   case rezA of
     Left err -> pure $ Left err
-    Right templTree -> pure . Right $ FileTempl path Nothing Mp.empty [] []
+    Right tsTree ->     
+      if tsTree.hasLogic then
+          -- parse the blocks to create a VM code.
+          let
+            tmplText = TE.encodeUtf8 . pack $ tmplString
+          in do
+          print tsTree.blocks
+          pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
+      else
+          pure . Right $ FileTempl path Nothing Mp.empty [ CloneVerbatim path ] []
 
 
 data TemplTsTree = TemplTsTree {
-  totalNodes :: Int
-  , verbatimBlocks :: [Node]
-  , logicBlocks :: [Node]
+  hasLogic :: Bool
+  , blocks :: [ParseBlock]
   }
 
 
-analyzeChildren :: Ptr Node -> Int -> IO (Either GenError TemplTsTree)
-analyzeChildren children count =
-  -- TODO: do the descent of ts nodes and extract into verbatim and logic blocks; parse the syntax of each logic block, reassemble into a tree of statements/expressions.
-  {-
-    -- but: une liste de verbatim/logic.
-    --   il faut descendre dans chaque enfant pour trouver s'il y a un bloc => descente en premier
-    --   en descente, on aggrege la pos de depart/courante quand ce n'est pas un bloc,
-    --     si c'est un bloc, on termine l'aggregation, ajoute le bloc a la liste,
-    --     et recommence le verbatim avec la pos suivante.
-    foldM (analyzeNode children) ([] :: [ParseBlock]) [0 .. count - 1]
-    data ParseBlock = Verbatim (TSPoint, TSPoint) | Logic (TSPoint, TSPoint)
-    analyzeNode :: Ptr Node -> [ParseBlock] -> Int -> IO [ParseBlock]
-    analyzeNode children pBlocks pos = do
-      child <- peekElemOff children pos
-      -- analyze child's children:
-      p2Blocks <- case fromIntegral child.nodeChildCount of
-        0 -> pBlocks
-        subCount -> do
-        subChildren <- mallocArray subCount
-        tsNodeMem <- malloc
-        poke tsNodeMem child.nodeTSNode
-        ts_node_copy_child_nodes tsNodeMem subChildren
-        childrenBlocks <- analyzeChildren subChildren subCount
-        free subChildren
-        free tsNodeMem
-        pure childrenBlocks
+data ParseBlock =
+    Verbatim (TSPoint, TSPoint)
+    | Logic (TSPoint, TSPoint)
+  deriving Show
 
-      let pA = nodeStartPoint child
-          pB = child.nodeEndPoint
-          blockType = fromTSSymbol child.nodeSymbol
-      
-      case blockType of
-        "dant" -> pure $ (verbatims, Logic (pA, pB) : logics)
-        _ -> pure $ (Verbatim (pA, pB) : verbatims, logics)
-        _ -> pure $ (verbatims, logics)
-  -}
-  pure $ Right $ TemplTsTree count [] []
+
+parseTsChildren :: Ptr Node -> Int -> IO (Either GenError TemplTsTree)
+parseTsChildren children count = do
+  -- algo: do the descent of ts nodes and extract into verbatim and logic blocks; parse the syntax of each logic block, reassemble into a tree of statements/expressions.
+  (blocks, hasLogic) <- analyzeChildren children count
+  -- TODO: consolidate the blocks.
+  condensedBlocks <-
+    if hasLogic then do
+      putStrLn $ "@[parseTsChildren] has logic blocks."
+      pure $ mergePBlocks blocks
+    else
+      let
+        (min, max) = foldl (\(minP, maxP) block ->
+          case block of
+            Verbatim (pA, pB) -> (minTsP minP pA, maxTsP maxP pB)
+            Logic (pA, pB) -> (minP, maxP)  -- this should never happen...
+          ) (TSPoint 0 0, TSPoint 0 0) blocks
+        in do
+          putStrLn $ "@[parseTsChildren] single verbatim, min: " ++ show min ++ ", max: " ++ show max
+          pure [Verbatim (min, max)]
+  -- putStrLn $ "@[parseTsChildren] blocks: " ++ show blocks
+  pure $ Right $ TemplTsTree hasLogic condensedBlocks
+
+
+minTsP :: TSPoint -> TSPoint -> TSPoint
+minTsP (TSPoint r1 c1) (TSPoint r2 c2)
+  | r1 < r2 = TSPoint r1 c1
+  | r1 == r2 = TSPoint r1 (min c1 c2)
+  | otherwise = TSPoint r2 c2
+maxTsP :: TSPoint -> TSPoint -> TSPoint
+maxTsP (TSPoint r1 c1) (TSPoint r2 c2)
+  | r1 > r2 = TSPoint r1 c1
+  | r1 == r2 = TSPoint r1 (max c1 c2)
+  | otherwise = TSPoint r2 c2
+
+
+mergePBlocks :: [ParseBlock] -> [ParseBlock]
+mergePBlocks =
+  reverse . foldl (\accum b ->
+      case b of
+        Logic (pA, pB) ->
+          case accum of
+            [] -> [ b ]
+            Logic (p1A, p1B) : rest -> b : Logic (p1A, p1B) : rest
+            Verbatim (p1A, p1B) : rest -> b : Verbatim (p1A, p1B) : rest
+        Verbatim (pA, pB) ->
+          case accum of
+            [] -> [ b ]
+            Verbatim (p1A, p1B) : rest -> Verbatim (minTsP p1A pA, maxTsP p1B pB) : rest
+            rest -> Verbatim (pA, pB) : rest
+    ) []
+
+-- but: une liste de verbatim/logic.
+--   il faut descendre dans chaque enfant pour trouver s'il y a un bloc => descente en premier
+--   en descente, on aggrege la pos de depart/courante quand ce n'est pas un bloc,
+--     si c'est un bloc, on termine l'aggregation, ajoute le bloc a la liste,
+--     et recommence le verbatim avec la pos suivante.
+analyzeChildren :: Ptr Node -> Int -> IO ([ParseBlock], Bool)
+analyzeChildren children count =
+  foldM (\(curBlocks, curLogicF) index -> do
+      (childBlocks, logicF) <- analyzChild children index
+      pure $ (curBlocks <> childBlocks, curLogicF || logicF)
+    ) ([] :: [ParseBlock], False) [0 .. count - 1]
+
+
+analyzChild :: Ptr Node -> Int -> IO ([ParseBlock], Bool)
+analyzChild children pos = do
+  child <- peekElemOff children pos
+  -- analyze child's children:
+  (childrenBlocks, childrenLogicF) <- case fromIntegral child.nodeChildCount of
+    0 -> pure ([], False)
+    subCount -> do
+      subChildren <- mallocArray subCount
+      tsNodeMem <- malloc
+      poke tsNodeMem child.nodeTSNode
+      ts_node_copy_child_nodes tsNodeMem subChildren
+      rezA <- analyzeChildren subChildren subCount
+      free subChildren
+      free tsNodeMem
+      pure rezA
+
+  blockName <- peekCString child.nodeType
+  let pA = nodeStartPoint child
+      pB = child.nodeEndPoint
+
+  case blockName of
+    "dantempl" -> pure $ (childrenBlocks <> [Logic (pA, pB)], True)
+    _ -> pure $ (childrenBlocks <> [ Verbatim (pA, pB) ], childrenLogicF)
 
 
 printChildren :: Ptr Node -> Int -> Int -> IO ()

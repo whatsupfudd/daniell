@@ -4,6 +4,7 @@ import Control.Applicative (asum, optional, many, (<|>), some)
 
 import Data.Text (Text, pack, cons)
 import Data.Void (Void)
+import Data.Maybe (fromMaybe)
 
 import qualified Text.Megaparsec as M
 import qualified Text.Megaparsec.Char as M
@@ -223,7 +224,7 @@ stringLiteral = do
   M.char '"'
   a <- pack <$> many M.alphaNumChar
   M.char '"'
-  pure $ a
+  pure a
 
 charValue :: Parser LiteralValue
 charValue = do
@@ -259,20 +260,20 @@ qualifiedVar :: Parser QualifiedVar
 qualifiedVar = do
   M.char '.'
   identList <- optional ( legalIdent `M.sepBy1` (M.char '.') )
-  pure $ QualifiedVar True (case identList of Nothing -> []; Just aList -> aList)
+  pure $ QualifiedVar True (fromMaybe [] identList)
 
 
 callExpr = do
   f <- legalIdent
   args <- optional ( do
       M.space1
-      argumentExpr `M.sepBy1` (M.char ' ')
+      argumentExpr `M.sepBy1` M.char ' '
     )
-  pure $ CallEX f (case args of Nothing -> []; Just aList -> aList)
+  pure $ CallEX f (fromMaybe [] args)
 
 
 argumentExpr = do
-  a <- asum [
+  asum [
       do
         M.char '('
         M.space
@@ -284,7 +285,6 @@ argumentExpr = do
       , literalExpr
       -- TODO: put other constructs
     ]
-  pure a
 
 
 legalIdent :: Parser Text
