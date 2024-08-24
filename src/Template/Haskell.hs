@@ -73,7 +73,27 @@ treeSitterHS path = do
             linesList = BS.split 10 tmplText
             lines = Vc.fromList linesList
           in do
-          mapM_ print tsTree.blocks
+          mapM_ (\b ->
+              let (TSPoint rA cA, TSPoint rB cB) = case b of
+                    Verbatim (pA, pB) -> (pA, pB)
+                    Logic (pA, pB) -> (pA, pB)
+                  nbrLines = fromIntegral $ rB - rA + 1
+                  eleLength = fromIntegral $ cB - cA + 1
+                  startPos = fromIntegral cA
+                  blockText = if nbrLines == 1 then
+                      BS.take eleLength . BS.drop startPos $ lines Vc.! fromIntegral rA
+                    else
+                      foldl (
+                          \accum (line, remainder) ->
+                            if remainder > 0 then
+                              accum <> line <> "\n"
+                            else
+                              accum <> (BS.take eleLength . BS.drop startPos $ line)
+                        ) "" [(lines Vc.! fromIntegral r, nbrLines - (r - rA) - 1) | r <- [rA .. rB]]
+              in do
+                putStrLn $ "@[treeSitterHS] block: " ++ show b
+                putStrLn $ "@[treeSitterHS] content: " ++ show blockText
+            ) tsTree.blocks
           pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
       else
           pure . Right $ FileTempl path Nothing Mp.empty [ CloneVerbatim path ] []
