@@ -70,7 +70,7 @@ treeSitterHS path = do
           let
             tmplText = TE.encodeUtf8 . pack $ tmplString
           in do
-          print tsTree.blocks
+          mapM_ print tsTree.blocks
           pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
       else
           pure . Right $ FileTempl path Nothing Mp.empty [ CloneVerbatim path ] []
@@ -85,7 +85,12 @@ data TemplTsTree = TemplTsTree {
 data ParseBlock =
     Verbatim (TSPoint, TSPoint)
     | Logic (TSPoint, TSPoint)
-  deriving Show
+
+instance Show ParseBlock where
+  show (Verbatim (pA, pB)) = "Verbatim (" <> show pA.pointRow <> ", "
+        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
+  show (Logic (pA, pB)) = "Logic (" <> show pA.pointRow <> ", "
+        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
 
 
 parseTsChildren :: Ptr Node -> Int -> IO (Either GenError TemplTsTree)
