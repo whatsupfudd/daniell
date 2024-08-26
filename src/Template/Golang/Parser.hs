@@ -44,6 +44,7 @@ reservedWords =
   [ "if", "with", "range", "else", "break", "continue", "template" ]
 
 
+run :: Text -> IO ()
 run = M.parseTest goStmt
 
 goStmt :: Parser GoStmt

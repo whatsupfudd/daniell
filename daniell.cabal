@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.36.0.
+-- This file has been generated from package.yaml by hpack version 0.37.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -59,6 +59,10 @@ library
       RunTime.Interpreter.Memory
       RunTime.Interpreter.OpCodes
       RunTime.StaticSite
+      Template.Fuddle.AAst
+      Template.Fuddle.AParser
+      Template.Fuddle.BAst
+      Template.Fuddle.BParser
       Template.Golang.Ast
       Template.Golang.Parser
       Template.Haskell
@@ -102,6 +106,7 @@ library
     , mmark
     , mtl
     , optparse-applicative
+    , parser-combinators
     , pathwalk
     , servant
     , servant-auth
@@ -162,6 +167,7 @@ executable daniell
     , mmark
     , mtl
     , optparse-applicative
+    , parser-combinators
     , pathwalk
     , servant
     , servant-auth

@@ -35,6 +35,7 @@ dependencies:
   - lens
   - lucid
   - megaparsec
+  - parser-combinators
   - mmark
   # For Ginger demo:
   - mtl

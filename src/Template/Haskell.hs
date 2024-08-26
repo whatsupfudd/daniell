@@ -24,7 +24,7 @@ import TreeSitter.Language (symbolToName, fromTSSymbol)
 
 import Conclusion (GenError (..))
 import Template.Types
-import qualified Control.Lens.Internal.Zoom as Ccl
+import qualified Template.Fuddle.BParser as Hp
 
 
 treeSitterHS :: FilePath -> IO (Either GenError FileTempl)
@@ -52,11 +52,6 @@ treeSitterHS path = do
   ts_node_copy_child_nodes tsNodeMem children
 
   
-  putStrLn $ "@[printChildren] >>>"
-  printChildren children childCount 0
-  putStrLn $ "@[printChildren] <<<"
-  
-
   rezA <- parseTsChildren children childCount
 
   free children
@@ -73,6 +68,11 @@ treeSitterHS path = do
             linesList = BS.split 10 tmplText
             lines = Vc.fromList linesList
           in do
+          {-
+          putStrLn $ "@[printChildren] >>>"
+          printChildren children childCount 0
+          putStrLn $ "@[printChildren] <<<"
+          -}
           mapM_ (\b ->
               let (TSPoint rA cA, TSPoint rB cB) = case b of
                     Verbatim (pA, pB) -> (pA, pB)
@@ -93,6 +93,18 @@ treeSitterHS path = do
               in do
                 putStrLn $ "@[treeSitterHS] block: " ++ show b
                 putStrLn $ "@[treeSitterHS] content: " ++ show blockText
+                case b of
+                  Logic _ ->
+                    let
+                      logicText = TE.decodeUtf8
+                            . BS.dropWhileEnd (\c -> c == 32 || c == 10) . BS.dropWhile (\c -> c == 32 || c == 10) 
+                            . BS.dropWhileEnd (== 125) . BS.dropWhile (== 123) $ blockText
+                      -- parseRez = Hp.run logicText
+                    in do
+                      putStrLn $ "@[treeSitterHS] parsing: " ++ show logicText
+                      Hp.runTest logicText
+                      -- putStrLn $ "@[treeSitterHS] logic: " ++ show parseRez
+                  _ -> pure ()
             ) tsTree.blocks
           pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
       else
@@ -222,8 +234,8 @@ printChildren children count level = do
 
         printChildren subChildren subCount (level + 1)
 
-        free subChildren
         free tsNodeMem
+        free subChildren
         putStrLn $ replicate (level*2) ' ' ++ "]"
     )
 
