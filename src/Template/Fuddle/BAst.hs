@@ -1,14 +1,15 @@
 module Template.Fuddle.BAst where
 
-
+import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Sequence (Seq)
 
+
 data StatementFd =
   SeqST [ StatementFd ]
-  | ElseIfShortST Bool Expression
+  | ElseIfShortST Bool Expression (Maybe [Text])
   | BlockEndST
-  | IfElseNilSS Expression
+  | IfElseNilSS Expression (Maybe [Text])
   | ImportST Bool QualifiedIdent (Maybe QualifiedIdent)
   | BindOneST IdentWithParam Expression        -- identWithParam = <expression>
   | LetST [ (IdentWithParam, Expression) ] Expression  -- let [ identWithParam = <expression> ] in <expression>
@@ -21,7 +22,7 @@ data Expression =
   | ParenExpr Expression
   | ArrayExpr [ Expression ]
   | UnaryExpr UnaryOp Expression
-  | BinOpExpr BinOp Expression Expression
+  | BinOpExpr BinaryOp Expression Expression
   | ReductionExpr QualifiedIdent [ Expression ]
   deriving Show
 
@@ -42,13 +43,14 @@ data UnaryOp =
   deriving Show
 
 
-data BinOp =
+data BinaryOp =
   -- Arithmetic
   AddOP
   | SubstractOP
   | MultiplyOP
   | DivideOP
   | ModuloOP
+  -- Bitwise
   | BitXorOP
   | BitOrOP
   | BitShiftLeftOP
@@ -71,3 +73,19 @@ data BinOp =
 
 type QualifiedIdent = (Seq Text)
 type IdentWithParam = (QualifiedIdent, [ QualifiedIdent ])
+
+data BlockAst = 
+  VerbatimBlock ByteString
+  | LogicBlock StatementFd
+  deriving Show
+
+data NodeAst =
+  CloneText ByteString
+  | AstLogic StmtAst
+  deriving Show
+
+data StmtAst = StmtAst {
+      statement :: StatementFd
+      , children :: [NodeAst]
+    }
+  deriving Show

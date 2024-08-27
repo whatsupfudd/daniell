@@ -2,21 +2,25 @@ module Template.Fuddle.BParser where
 
 import Control.Applicative (asum, optional, many, (<|>), some)
 
+import qualified Data.ByteString as BS
 import Data.Functor (($>))
-import Data.Text (Text, pack, cons)
-import Data.Void (Void)
 import Data.Maybe (fromMaybe, isJust)
 import Data.Sequence (Seq, fromList)
+import Data.Text (Text, pack, cons)
+import Data.Void (Void)
+{- TODO: transition parser from Text to ByteString -}
+import qualified Data.Text.Encoding as TE
 
 import qualified Control.Monad.Combinators.Expr as CE
 import qualified Text.Megaparsec as M
 import qualified Text.Megaparsec.Char as M
 import qualified Text.Megaparsec.Char.Lexer as ML
 import qualified Text.Megaparsec.Debug as MD
-import GHC.Real (reduce)
 
-
+import Conclusion (GenError (..))
 import Template.Fuddle.BAst
+import RunTime.Interpreter.Context (VerbatimBlock(blocks))
+
 
 type Parser = M.Parsec Void Text
 
@@ -24,8 +28,151 @@ reservedWords :: [Text]
 reservedWords =
   [ "if", "then", "else", "import", "True", "False" ]
 
+oDbg str p =
+  if False then MD.dbg str p else p
 
-run = M.parse fuddleStmt "test"
+
+{- TODO: when megaparsec logic is stable, change this from IO to pure (IO is for debugging with runTest...). -}
+parseLogicBlock :: (Int, Int) -> String -> BS.ByteString -> IO (Either GenError BlockAst)
+parseLogicBlock startOffset codeName blockText = do
+  let
+    logicText = TE.decodeUtf8
+          . BS.dropWhileEnd (\c -> c == 32 || c == 10) . BS.dropWhile (\c -> c == 32 || c == 10)
+          . BS.dropWhileEnd (== 125) . BS.dropWhile (== 123) $ blockText
+    eiParseRez = run codeName logicText
+  -- runTest logicText
+  case eiParseRez of
+    Left err ->
+      -- putStrLn $ "@[parseLogicBlock] run err: " ++ show err
+      -- "@[parseLogicBlock] parse err: " <>
+      pure . Left . SimpleMsg $ displayError startOffset err
+    Right parseRez ->
+      -- putStrLn $ "@[parseLogicBlock] parseRez: " ++ show parseRez
+      pure . Right $ LogicBlock parseRez
+
+{-
+  - create a root node that is the global context, push on stack, then for each pBlock:
+    - if it is logic:
+      - create an AST node from the block's content,
+        - if it is ending with a block-start, push the node on the stack
+        - if it is ending with a block-end, pop the node from the stack
+        - otherwise, add as child of current top node of stack. 
+    - if it is a Verbatim:
+      - create an AST node that is a 'call spit function' with the pBlock address in the constant region,
+-}
+
+astBlocksToTree :: [BlockAst] -> Either GenError NodeAst
+astBlocksToTree aBlocks =
+  let
+    rootNode = AstLogic $ StmtAst (SeqST []) []
+    tree = foldl treeMaker (rootNode, [], Right ()) aBlocks
+  in
+    case tree of
+      (top, _, Right _) -> Right top
+      (_, _, Left err) -> Left err
+  where
+    treeMaker :: (NodeAst, [NodeAst], Either GenError ()) -> BlockAst -> (NodeAst, [NodeAst], Either GenError ())
+    treeMaker (topStack, stack, result) aBlock =
+      case aBlock of
+        VerbatimBlock vText ->
+          let
+            (AstLogic topStmt) = topStack
+            updTop = AstLogic $ topStmt { children = topStmt.children <> [ CloneText vText ] }
+          in
+          (updTop, stack, result)
+        LogicBlock stmtFd ->
+          case stmtFd of
+            IfElseNilSS cond args ->
+              let
+                newRoot = AstLogic $ StmtAst stmtFd []
+              in
+              (newRoot, topStack : stack, result)
+
+            ElseIfShortST isElse cond args ->
+              let
+                newRoot = AstLogic $ StmtAst stmtFd []
+                (ncTop, ncStack, ncResult) =
+                  if isElse then
+                    -- make sure the top of stack is a else-if stmt, ie we close the previous and start a new one.
+                    -- Any other block should have been closed with a matching end-block.
+                    case topStack of
+                      AstLogic {}  ->
+                        case stack of
+                          [] ->
+                            (topStack, stack, Left $ SimpleMsg "@[treeMaker] ran out of stack for else-if stmt!")
+                          parent : rest ->
+                            let
+                              (AstLogic curParent) = topStack
+                              updParent = AstLogic $ curParent { children = curParent.children <> [ topStack ] }
+                            in
+                            (updParent, rest, result)
+                      _ -> (topStack, stack, Left $ SimpleMsg "@[treeMaker] else-if stmt not matching a previous if/else-if block!")
+                  else
+                    (topStack, stack, result)
+              in
+              case ncResult of
+                Left err -> (ncTop, ncStack, Left err)
+                Right _ -> (newRoot, ncTop : ncStack, ncResult)
+
+            SeqST subStmts ->
+              let
+                subTree = astBlocksToTree (map LogicBlock subStmts)
+              in
+                case subTree of
+                  Left err ->
+                    (topStack, stack, Left err)
+                  Right subTreeRoot ->
+                    let
+                      (AstLogic curTop) = topStack
+                      updTop = AstLogic $ curTop { children = curTop.children <> [ subTreeRoot ] }
+                    in
+                    (updTop, stack, result)
+
+            BlockEndST -> case stack of
+              [] ->
+                (topStack, stack, Left . SimpleMsg $ "@[treeMaker] ran out of stack for end-block!" <> pack (show topStack))
+              parent : rest ->
+                let
+                  (AstLogic curParent) = parent
+                  updParent = AstLogic $ curParent { children = curParent.children <> [ topStack ] }
+                in
+                (updParent, rest, result)
+
+            _ ->
+              let
+                (AstLogic curTop) = topStack
+                updTop = AstLogic $ curTop { children = curTop.children <> [ AstLogic $ StmtAst stmtFd [] ] }
+              in
+              (updTop, stack, result)
+
+
+displayError :: (Int, Int) -> M.ParseErrorBundle Text Void -> Text
+displayError lOffset err =
+  let
+    nErr = adjustLineOffset lOffset err
+  in
+  pack $ M.errorBundlePretty nErr
+
+
+adjustLineOffset :: (Int, Int) -> M.ParseErrorBundle s e -> M.ParseErrorBundle s e
+adjustLineOffset (rowOffset, colOffset) peBundle =
+  let
+    nSourceLine = M.unPos peBundle.bundlePosState.pstateSourcePos.sourceLine + rowOffset
+    nSourceColumn = M.unPos peBundle.bundlePosState.pstateSourcePos.sourceColumn + colOffset
+    nSourcePos = peBundle.bundlePosState.pstateSourcePos { M.sourceLine = M.mkPos nSourceLine, M.sourceColumn = M.mkPos nSourceColumn }
+    nPosState = peBundle.bundlePosState { M.pstateSourcePos = nSourcePos }
+  in
+  peBundle { M.bundlePosState = nPosState }
+
+
+parseVerbatimBlock :: BS.ByteString -> Either GenError BlockAst
+parseVerbatimBlock vBlock = Right $ VerbatimBlock vBlock
+
+
+run :: String -> Text -> Either (M.ParseErrorBundle Text Void) StatementFd
+run = M.parse fuddleStmt
+
+runTest :: Text -> IO ()
 runTest = M.parseTest fuddleStmt
 
 
@@ -45,13 +192,13 @@ stmtSequence = stmtFilter <$> M.sepBy1 fuddleStmt' endOfStmt
 {- Statement parsers: -}
 fuddleStmt' :: Parser StatementFd
 fuddleStmt' =
-  MD.dbg "stmt" $ asum [
-      MD.dbg "bind-stmt" $ M.try bindStmt      -- <qual-ident> = <expr>
-      , MD.dbg "val-stmt" valueStmt     -- <expr>
-      , MD.dbg "short-stmt" shortStmt     -- @? <expr> @[
-      , MD.dbg "blck-stmt" blockEnd      -- @]
-      , MD.dbg "elif-stmt" elseIfStmt    -- else if <expr> @[
-      , MD.dbg "imp-stmt" importStmt    -- import [qualified] <qual-ident> [ as <alias> ]
+  oDbg "stmt" $ asum [
+      oDbg "bind-stmt" $ M.try bindStmt      -- <qual-ident> = <expr>
+      , oDbg "val-stmt" valueStmt     -- <expr>
+      , oDbg "short-stmt" shortStmt     -- @? <expr> @[
+      , oDbg "blck-stmt" blockEnd      -- @]
+      , oDbg "elif-stmt" elseIfStmt    -- else if <expr> @[
+      , oDbg "imp-stmt" importStmt    -- import [qualified] <qual-ident> [ as <alias> ]
     ]
 
 blockEnd :: Parser StatementFd
@@ -66,7 +213,8 @@ elseIfStmt = do
   pReservedWord "if"
   cond <- expressionFd
   symbol "@["
-  pure $ ElseIfShortST (isJust a) cond
+  args <- optional (symbol "\\" *> some identifier)
+  pure $ ElseIfShortST (isJust a) cond args
 
 shortStmt :: Parser StatementFd
 shortStmt =
@@ -77,7 +225,8 @@ ifElseNilSS = do
   pReservedWord "@?"
   cond <- expressionFd
   symbol "@["
-  pure $ IfElseNilSS cond
+  args <- optional (symbol "\\" *> some identifier)
+  pure $ IfElseNilSS cond args
 
 importStmt :: Parser StatementFd
 importStmt = do
@@ -92,8 +241,8 @@ importStmt = do
 
 bindStmt :: Parser StatementFd
 bindStmt = do
-  a <- MD.dbg "bind-ident" qualifiedIdent
-  b <- MD.dbg "bind-args" $ many qualifiedIdent
+  a <- oDbg "bind-ident" qualifiedIdent
+  b <- oDbg "bind-args" $ many qualifiedIdent
   symbol "="
   BindOneST (a, b) <$> expressionFd
 
@@ -103,28 +252,28 @@ valueStmt = ExpressionST <$> expressionFd
 
 
 expressionFd =
-  MD.dbg "expr" $ asum [
-      MD.dbg "pars-expr" parensExpr
-      , MD.dbg "oper-expr" $ M.try operatorExpr
-      , MD.dbg "redu-expr" reductionExpr
-      , MD.dbg "lit-expr" literalExpr
-      , MD.dbg "array-expr" arrayExpr
+  oDbg "expr" $ asum [
+      oDbg "pars-expr" parensExpr
+      , oDbg "oper-expr" $ M.try operatorExpr
+      , oDbg "redu-expr" reductionExpr
+      , oDbg "lit-expr" literalExpr
+      , oDbg "array-expr" arrayExpr
     ]
 
 nonOperExpr :: Parser Expression
 nonOperExpr =
-  MD.dbg "no-expr" $ asum [
-    MD.dbg "pars-no-expr" parensExpr
-    , MD.dbg "redu-no-expr" reductionExpr
-    , MD.dbg "lit-no-expr" literalExpr
-    , MD.dbg "array-no-expr" arrayExpr
+  oDbg "no-expr" $ asum [
+    oDbg "pars-no-expr" parensExpr
+    , oDbg "redu-no-expr" reductionExpr
+    , oDbg "lit-no-expr" literalExpr
+    , oDbg "array-no-expr" arrayExpr
   ]
 
 
 parensExpr :: Parser Expression
 parensExpr = do
     symbol "("
-    a <- MD.dbg "expr-pars" expressionFd
+    a <- oDbg "expr-pars" expressionFd
     symbol ")"
     pure $ ParenExpr a
 
@@ -140,10 +289,10 @@ parensExpr = do
 literalExpr :: Parser Expression
 literalExpr =
   LiteralExpr <$> asum [
-      MD.dbg "arit-lit" $ ArithValue <$> integer
-      , MD.dbg "bool-lit" boolValue
-      , MD.dbg "char-lit" $ CharValue <$> M.between (M.char '\'') (M.char '\'') ML.charLiteral <* M.space
-      , MD.dbg "str-lit" $ StringValue <$> stringLiteral
+      oDbg "arit-lit" $ ArithValue <$> integer
+      , oDbg "bool-lit" boolValue
+      , oDbg "char-lit" $ CharValue <$> M.between (M.char '\'') (M.char '\'') ML.charLiteral <* M.space
+      , oDbg "str-lit" $ StringValue <$> stringLiteral
     ]
 
 
@@ -164,13 +313,13 @@ arrayExpr = do
 {- Terms for operators: -}
 
 operatorExpr :: Parser Expression
-operatorExpr = MD.dbg "operatorExpr" $ CE.makeExprParser nonOperExpr precOperators  -- expressionFd
+operatorExpr = oDbg "operatorExpr" $ CE.makeExprParser nonOperExpr precOperators  -- expressionFd
 
 {- Operators: -}
 
 precOperators :: [[CE.Operator Parser Expression]]
 precOperators = [
-    [ 
+    [
       CE.Prefix (UnaryExpr NegateOP <$ symbol "-")
     , CE.Prefix (UnaryExpr NotOP <$ symbol "!")
     , CE.Prefix (UnaryExpr BitNotOP <$ symbol "~")
@@ -218,8 +367,8 @@ precOperators = [
 
 reductionExpr :: Parser Expression
 reductionExpr = do
-  a <- MD.dbg "redu-ident" qualifiedIdent
-  b <- MD.dbg "redu-args" $ M.optional $ M.try (many expressionFd)
+  a <- oDbg "redu-ident" qualifiedIdent
+  b <- oDbg "redu-args" $ M.optional $ M.try (many expressionFd)
   pure $ ReductionExpr a (fromMaybe [] b)
 
 

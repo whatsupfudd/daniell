@@ -63,6 +63,7 @@ library
       Template.Fuddle.AParser
       Template.Fuddle.BAst
       Template.Fuddle.BParser
+      Template.Fuddle.Compiler
       Template.Golang.Ast
       Template.Golang.Parser
       Template.Haskell

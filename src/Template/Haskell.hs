@@ -1,9 +1,11 @@
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Template.Haskell where
 
 import Control.Monad ( forM_, when )
 import Control.Monad.Cont (foldM)
 
 import qualified Data.ByteString as BS
+import Data.Either (fromLeft, fromRight)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Map as Mp
 import Data.Text (pack)
@@ -24,7 +26,9 @@ import TreeSitter.Language (symbolToName, fromTSSymbol)
 
 import Conclusion (GenError (..))
 import Template.Types
-import qualified Template.Fuddle.BParser as Hp
+import qualified Template.Fuddle.BParser as Fp
+import qualified Template.Fuddle.Compiler as Fc
+
 
 
 treeSitterHS :: FilePath -> IO (Either GenError FileTempl)
@@ -61,54 +65,110 @@ treeSitterHS path = do
   case rezA of
     Left err -> pure $ Left err
     Right tsTree ->     
-      if tsTree.hasLogic then
+      if tsTree.hasLogic then do
           -- parse the blocks to create a VM code.
-          let
-            tmplText = TE.encodeUtf8 . pack $ tmplString
-            linesList = BS.split 10 tmplText
-            lines = Vc.fromList linesList
-          in do
           {-
           putStrLn $ "@[printChildren] >>>"
           printChildren children childCount 0
           putStrLn $ "@[printChildren] <<<"
           -}
-          mapM_ (\b ->
-              let (TSPoint rA cA, TSPoint rB cB) = case b of
-                    Verbatim (pA, pB) -> (pA, pB)
-                    Logic (pA, pB) -> (pA, pB)
-                  nbrLines = fromIntegral $ rB - rA + 1
-                  eleLength = fromIntegral $ cB - cA + 1
-                  startPos = fromIntegral cA
-                  blockText = if nbrLines == 1 then
-                      BS.take eleLength . BS.drop startPos $ lines Vc.! fromIntegral rA
-                    else
-                      foldl (
-                          \accum (line, remainder) ->
-                            if remainder > 0 then
-                              accum <> line <> "\n"
-                            else
-                              accum <> (BS.take eleLength . BS.drop startPos $ line)
-                        ) "" [(lines Vc.! fromIntegral r, nbrLines - (r - rA) - 1) | r <- [rA .. rB]]
-              in do
-                putStrLn $ "@[treeSitterHS] block: " ++ show b
-                putStrLn $ "@[treeSitterHS] content: " ++ show blockText
-                case b of
-                  Logic _ ->
-                    let
-                      logicText = TE.decodeUtf8
-                            . BS.dropWhileEnd (\c -> c == 32 || c == 10) . BS.dropWhile (\c -> c == 32 || c == 10) 
-                            . BS.dropWhileEnd (== 125) . BS.dropWhile (== 123) $ blockText
-                      -- parseRez = Hp.run logicText
-                    in do
-                      putStrLn $ "@[treeSitterHS] parsing: " ++ show logicText
-                      Hp.runTest logicText
-                      -- putStrLn $ "@[treeSitterHS] logic: " ++ show parseRez
-                  _ -> pure ()
-            ) tsTree.blocks
-          pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
+          eicompiRez <- compileParseBlocks path tmplString tsTree
+          case eicompiRez of
+            Left err -> do
+              putStrLn "@[treeSitterHS] compileParseBlocks err: "
+              print err
+              pure $ Left err
+            Right vmCode -> do
+              putStrLn $ "@[treeSitterHS] vmCode: " ++ show vmCode
+              {- serialize that info to the cache file for the template (same path minus name ext + .dtch) -}
+              pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
       else
           pure . Right $ FileTempl path Nothing Mp.empty [ CloneVerbatim path ] []
+
+
+compileParseBlocks :: String -> String -> TemplTsTree -> IO (Either GenError Fc.VMCode)
+compileParseBlocks codeName fileContent tsTree =
+  let
+    tmplText = TE.encodeUtf8 . pack $ fileContent
+    linesList = BS.split 10 tmplText
+    lines = Vc.fromList linesList
+  in do
+  rezA <- mapM (\b ->
+    let
+      blockText = getBlockContent lines b
+    in do
+      -- putStrLn $ "@[compileParseBlocks] block: " ++ show b
+      -- putStrLn $ "@[compileParseBlocks] content: " ++ show blockText
+      case b of
+        Logic _ -> do
+          parseRez <- Fp.parseLogicBlock (startPos b) codeName blockText
+          case parseRez of
+            Left err -> pure $ Left err
+            Right stmts -> pure $ Right stmts
+        Verbatim _ ->
+          let
+            parseRez = Fp.parseVerbatimBlock blockText
+          in
+          pure $ parseRez
+    ) tsTree.blocks
+  let
+    (lefts, rights) = foldl eiSplit ([], []) rezA
+  if null lefts then
+    case Fp.astBlocksToTree (fromRight [] $ sequence rights) of
+      Left err -> pure . Left $ err
+      Right astTree -> do
+        -- putStrLn $ "@[compileParseBlocks] ast blocks: " ++ show (sequence rights)
+        -- putStrLn $ "@[compileParseBlocks] ast tree: " ++ show astTree
+        case Fc.compileAstTree astTree of
+          Left err -> pure $ Left err
+          Right vmCode -> pure $ Right vmCode
+  else
+    let
+      combinedMsg = foldl (\accum lErr ->
+          case lErr of
+            Left err ->
+              case err of
+                SimpleMsg aMsg -> accum <> "\n" <> aMsg
+                _ -> accum <> "\nunknown err: " <> (pack . show $ err)
+          ) "" lefts
+    in
+    pure . Left . SimpleMsg $ combinedMsg
+  where
+    eiSplit :: ([Either a b], [Either a b]) -> Either a b -> ([Either a b], [Either a b])
+    eiSplit (lefts, rights) eiItem =
+      case eiItem of
+        Left err -> (lefts <> [eiItem], rights)
+        Right aCode -> (lefts, rights <> [eiItem])
+
+
+startPos :: ParseBlock -> (Int, Int)
+startPos pBlock =
+  case pBlock of
+    Verbatim (pA, _) -> (fromIntegral pA.pointRow, fromIntegral pA.pointColumn)
+    Logic (pA, _) -> (fromIntegral pA.pointRow, fromIntegral pA.pointColumn)
+
+
+getBlockContent :: Vc.Vector BS.ByteString -> ParseBlock -> BS.ByteString
+getBlockContent lines pBlock =
+  let
+    (TSPoint rA cA, TSPoint rB cB) = case pBlock of
+        Verbatim (pA, pB) -> (pA, pB)
+        Logic (pA, pB) -> (pA, pB)
+    eleLength = fromIntegral $ cB - cA + 1
+    startPos = fromIntegral cA
+  in
+  if rA == rB then
+    BS.take eleLength . BS.drop startPos $ lines Vc.! fromIntegral rA
+  else
+    mergeLines lines rA rB eleLength startPos
+  where
+  mergeLines lines rA rB eleLength startPos =
+    foldl (\accum (line, remainder) ->
+        if remainder > 0 then
+          accum <> line <> "\n"
+        else
+          accum <> (BS.take eleLength . BS.drop startPos $ line)
+      ) "" [(lines Vc.! fromIntegral r, rB - r) | r <- [rA .. rB]]
 
 
 data TemplTsTree = TemplTsTree {

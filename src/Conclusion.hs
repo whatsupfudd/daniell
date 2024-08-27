@@ -1,11 +1,13 @@
 module Conclusion where
 
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 
 newtype GenError =
     SimpleMsg Text
-  deriving Show
+
+instance Show GenError where
+  show (SimpleMsg msg) = "Error: " <> unpack msg
 
 
 data Conclusion = 
