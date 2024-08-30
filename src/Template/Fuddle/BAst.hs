@@ -9,7 +9,7 @@ data StatementFd =
   SeqST [ StatementFd ]
   | ElseIfShortST Bool Expression (Maybe [Text])
   | BlockEndST
-  | IfElseNilSS Expression (Maybe [Text])
+  | IfElseNilSS Expression (Maybe [Text])     -- @? <bool expr> @] (args)
   | ImportST Bool QualifiedIdent (Maybe QualifiedIdent)
   | BindOneST IdentWithParam Expression        -- identWithParam = <expression>
   | LetST [ (IdentWithParam, Expression) ] Expression  -- let [ identWithParam = <expression> ] in <expression>
@@ -28,7 +28,7 @@ data Expression =
 
 
 data LiteralValue =
-  ArithValue Int
+  NumeralValue Int
   | BoolValue Bool
   | CharValue Char
   | StringValue Text
@@ -45,29 +45,15 @@ data UnaryOp =
 
 data BinaryOp =
   -- Arithmetic
-  AddOP
-  | SubstractOP
-  | MultiplyOP
-  | DivideOP
-  | ModuloOP
+  AddOP | SubstractOP | MultiplyOP | DivideOP | ModuloOP
   -- Bitwise
-  | BitXorOP
-  | BitOrOP
-  | BitShiftLeftOP
-  | BitShiftRightOP
+  | BitXorOP | BitOrOP | BitShiftLeftOP | BitShiftRightOP
   -- Logical
-  | OrOP
-  | AndOP
+  | OrOP | AndOP
   -- Comparison
-  | EqOP
-  | NeOP
-  | LtOP
-  | LeOP
-  | GeOP
-  | GtOP
+  | EqOP | NeOP | LtOP | LeOP | GeOP | GtOP
   -- Array
-  | ConcatOP
-  | CarAddOP
+  | ConcatOP | CarAddOP
   deriving Show
 
 

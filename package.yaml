@@ -70,7 +70,8 @@ dependencies:
   # For parsing programming languages:
   - tree-sitter
   - tree-sitter-haskell
-  # For Interpreter VM:
+  # For Compiler/Interpreter VM:
+  - cryptohash-md5
   - array
 
 default-extensions:

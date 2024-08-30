@@ -118,7 +118,9 @@ compileParseBlocks codeName fileContent tsTree =
       Left err -> pure . Left $ err
       Right astTree -> do
         -- putStrLn $ "@[compileParseBlocks] ast blocks: " ++ show (sequence rights)
-        -- putStrLn $ "@[compileParseBlocks] ast tree: " ++ show astTree
+        putStrLn $ "@[compileParseBlocks] ast tree: " ++ show astTree
+        -- TODO: load prelude modules and pass to compileAstTree.
+        -- TODO: scan the AST for qualifed identifiers, load the module & term definitions, and also pass to compileAstTree.
         case Fc.compileAstTree astTree of
           Left err -> pure $ Left err
           Right vmCode -> pure $ Right vmCode

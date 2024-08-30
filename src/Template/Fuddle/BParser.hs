@@ -289,7 +289,7 @@ parensExpr = do
 literalExpr :: Parser Expression
 literalExpr =
   LiteralExpr <$> asum [
-      oDbg "arit-lit" $ ArithValue <$> integer
+      oDbg "arit-lit" $ NumeralValue <$> integer
       , oDbg "bool-lit" boolValue
       , oDbg "char-lit" $ CharValue <$> M.between (M.char '\'') (M.char '\'') ML.charLiteral <* M.space
       , oDbg "str-lit" $ StringValue <$> stringLiteral

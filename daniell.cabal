@@ -91,6 +91,7 @@ library
     , bytestring
     , case-insensitive
     , containers
+    , cryptohash-md5
     , directory
     , either
     , exceptions
@@ -151,6 +152,7 @@ executable daniell
     , bytestring
     , case-insensitive
     , containers
+    , cryptohash-md5
     , daniell
     , directory
     , either

@@ -98,7 +98,6 @@ doOpcode heap stack opcode =
     PUSH_BOOL_IMM boolVal -> pure . Left $ UnimplementedOpCode opcode
     PUSH_CHAR regID -> pure . Left $ UnimplementedOpCode opcode
     PUSH_CHAR_IMM charVal -> pure . Left $ UnimplementedOpCode opcode
-    PUSH_INT regID -> pure . Left $ UnimplementedOpCode opcode
     PUSH_INT_IMM intVal -> pure . Left $ UnimplementedOpCode opcode
     PUSH_FLOAT regID -> pure . Left $ UnimplementedOpCode opcode
     PUSH_FLOAT_IMM floatVal -> pure . Left $ UnimplementedOpCode opcode
@@ -115,7 +114,7 @@ doOpcode heap stack opcode =
     POP_FLOAT_VOID -> pure . Left $ UnimplementedOpCode opcode
     POP_DOUBLE_VOID -> pure . Left $ UnimplementedOpCode opcode
     -- Invoke:
-    EVAL -> pure . Left $ UnimplementedOpCode opcode
+    REDUCE _ _-> pure . Left $ UnimplementedOpCode opcode
     -- Heap management (save new heap ID to register):
     ALLOC_ABS intVal regID -> pure . Left $ UnimplementedOpCode opcode
     ALLOC_REL regA regB -> pure . Left $ UnimplementedOpCode opcode
