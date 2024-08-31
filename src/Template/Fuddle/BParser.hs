@@ -4,10 +4,11 @@ import Control.Applicative (asum, optional, many, (<|>), some)
 
 import qualified Data.ByteString as BS
 import Data.Functor (($>))
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, fromMaybe)
 import Data.Sequence (Seq, fromList)
 import Data.Text (Text, pack, cons)
 import Data.Void (Void)
+import qualified Data.List.NonEmpty as Ne
 {- TODO: transition parser from Text to ByteString -}
 import qualified Data.Text.Encoding as TE
 
@@ -19,7 +20,6 @@ import qualified Text.Megaparsec.Debug as MD
 
 import Conclusion (GenError (..))
 import Template.Fuddle.BAst
-import RunTime.Interpreter.Context (VerbatimBlock(blocks))
 
 
 type Parser = M.Parsec Void Text
@@ -236,7 +236,12 @@ importStmt = do
   c <- optional $ do
     pReservedWord "as"
     qualifiedIdent
-  pure $ ImportST (isJust a) b c
+  d <- optional (
+      symbol "("
+      *> M.sepBy identifier (symbol ",")
+      <* symbol ")"
+    )
+  pure $ ImportST (isJust a) b c (fromMaybe [] d)
 
 
 bindStmt :: Parser StatementFd
@@ -376,8 +381,8 @@ reductionExpr = do
 spaceF :: Parser ()
 spaceF = ML.space M.space1 lineCmnt blockCmnt
   where
-    lineCmnt  = ML.skipLineComment "//"
-    blockCmnt = ML.skipBlockComment "/*" "*/"
+    lineCmnt  = ML.skipLineComment "--"
+    blockCmnt = ML.skipBlockComment "{-" "-}"
 
 
 lexeme :: Parser a -> Parser a
@@ -419,7 +424,7 @@ identifier :: Parser Text
 identifier = (lexeme . M.try) (pChars >>= check)
   where
     pChars :: Parser Text
-    pChars = cons <$> M.lowerChar <*> (pack <$> many M.alphaNumChar)
+    pChars = cons <$> M.letterChar <*> (pack <$> many M.alphaNumChar)
     check :: Text -> Parser Text
     check w = if w `elem` reservedWords then
                 fail $ "keyword " ++ show w ++ " cannot be an identifier"
@@ -430,4 +435,4 @@ qualifiedIdent :: Parser QualifiedIdent
 qualifiedIdent = do
   a <- identifier
   b <- many (symbol "." *> identifier)
-  pure $ fromList (a : b)
+  pure $ a Ne.:| b

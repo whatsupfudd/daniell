@@ -2,7 +2,7 @@ module Template.Fuddle.BAst where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import Data.Sequence (Seq)
+import Data.List.NonEmpty (NonEmpty)
 
 
 data StatementFd =
@@ -10,7 +10,7 @@ data StatementFd =
   | ElseIfShortST Bool Expression (Maybe [Text])
   | BlockEndST
   | IfElseNilSS Expression (Maybe [Text])     -- @? <bool expr> @] (args)
-  | ImportST Bool QualifiedIdent (Maybe QualifiedIdent)
+  | ImportST Bool QualifiedIdent (Maybe QualifiedIdent) [ Text ]
   | BindOneST IdentWithParam Expression        -- identWithParam = <expression>
   | LetST [ (IdentWithParam, Expression) ] Expression  -- let [ identWithParam = <expression> ] in <expression>
   | ExpressionST Expression
@@ -58,7 +58,7 @@ data BinaryOp =
   deriving Show
 
 
-type QualifiedIdent = (Seq Text)
+type QualifiedIdent = (NonEmpty Text)
 type IdentWithParam = (QualifiedIdent, [ QualifiedIdent ])
 
 data BlockAst = 

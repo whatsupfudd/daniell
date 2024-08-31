@@ -18,13 +18,15 @@ import qualified FileSystem.Explore as Fs
 import qualified RunTime.Interpreter as Rt
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
-import Template.Haskell (treeSitterHS)
+import Template.Haskell (tsParseHaskell)
 import qualified Template.Parser as Tmpl
 import Template.Types (ProjectTempl (..), FileTempl (..), Function (..), Code (..))
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..))
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
 import RunTime.Interpreter (createContext, execute)
+import qualified RunTime.Interpreter.Context as Vm
+import qualified RunTime.Interpreter.Engine as Vm
 
 import Generator.Types
 
@@ -144,7 +146,14 @@ runGen :: RunOptions -> ProjectTempl -> WorkPlan -> IO (Either GenError ())
 runGen rtOpts projTempl workPlan = do
   mapM_ (\wi -> do
       putStrLn $ "@[runGen] wi: " <> show wi
-      runItem rtOpts workPlan.destDir projTempl wi
+      runRez <- runItem rtOpts workPlan.destDir projTempl wi
+      case runRez of
+        Left err -> do
+          let
+            errMsg = "@[runGen] runItem err: " <> show err
+          putStrLn errMsg
+          pure $ Left err
+        Right _ -> pure $ Right ()
     ) workPlan.workItems
   pure $ Right ()
 
@@ -188,32 +197,63 @@ runItem rtOpts destDir projTempl = \case
           pure $ Right ()
 
 
+data ExecTemplate =
+  FuddleVM Vm.VMModule
+  | Jinja String
+  | EndExec
+  deriving Show
+
+
 genFileFromTemplate :: RunOptions -> Fs.FileKind -> FilePath -> FilePath -> IO (Either GenError ())
 genFileFromTemplate rtOpts fType srcPath destPath = do
   putStrLn $ "@[genFileFromTemplate] starting: " <> srcPath <> " -> " <> destPath
+  -- TODO: figure out a common interface amongst all template files for the VM execution.
   eiFTemplate <- case fType of
     Fs.Haskell -> do
       putStrLn $ "@[runItem] Haskell: " <> show srcPath
       -- read/ts-parse the template file
-      rezA <- treeSitterHS srcPath
+      rezA <- tsParseHaskell srcPath
       case rezA of
         Left err -> pure $ Left err
         Right fTemplate -> do
           -- TEST:
           case fTemplate.logic of
-            [] -> pure $ Right ()
+            [] -> pure $ Right EndExec
             anOp : _ -> case anOp of
               CloneVerbatim _ -> do
                 SE.copyFile srcPath destPath
-                pure $ Right ()
-              _ -> pure $ Right ()
-          -- HERE: analyze the result of the code template parsing, and prepare local context.
-          -- createContext
-          pure $ Right ()
-  -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
-  -- execute:: RunOptions -> ProjectDefinition -> Template -> ExecContext -> MarkupPage -> IO (Either GenError ExecContext)
+                pure $ Right EndExec
+              Exec vmModule -> do
+                pure . Right $ FuddleVM vmModule
+              _ -> pure . Left . SimpleMsg . pack $ "@[genFileFromTemplate] logic " <> show anOp <> " not implemented."
+    Fs.Markup -> do
+      putStrLn $ "@[genFileFromTemplate] no engine for: " <> show srcPath
+      pure . Left $ SimpleMsg "@[genFileFromTemplate] no engine for markup template."
+  case eiFTemplate of
+    Left err -> do
+      putStrLn $ "@[genFileFromTemplate] eiFtemplate error: " <> show err
+      pure $ Left err
+    Right aVM -> case aVM of
+      FuddleVM vmModule -> do
+        putStrLn $ "@[genFileFromTemplate] Haskell templ, executing VM module: " <> show vmModule
+        -- TODO: create a runtime context, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+        eiRez <- Vm.execModule vmModule
+        case eiRez of
+          Left errMsg -> pure $ Left $ SimpleMsg (pack errMsg)
+          Right _ ->
+            pure $ Right ()
+      Jinja _ -> do
+        putStrLn $ "@[genFileFromTemplate] Jinja templ: " <> show srcPath
+        -- TMP: execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+        pure $ Right ()
+      _ -> do
+        let
+          errMsg = "@[genFileFromTemplate] unimplemented case " <> show aVM <> "."
+        putStrLn errMsg
+        pure . Left . SimpleMsg . pack $ errMsg
+      -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+  -- with a Right template parsing, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
   pure $ Right ()
-
 
 
 buildWorkPlan :: RunOptions -> NewOptions -> ProjectTempl -> WorkPlan

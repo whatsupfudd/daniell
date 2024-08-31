@@ -2,12 +2,14 @@
 {-# HLINT ignore "Use record patterns" #-}
 module Template.Fuddle.Compiler where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Control.Monad.State (State, get, put, runState, modify)
 
 import Data.Int (Int32)
 import Data.Text (Text, pack)
 import Data.ByteString (ByteString)
+import Data.List (sortBy)
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Vector as Vc
 import qualified Data.Map as Mp
 import qualified Crypto.Hash.MD5 as Cr
@@ -15,27 +17,8 @@ import qualified Data.Text.Encoding as TE
 
 import Conclusion (GenError (..))
 import RunTime.Interpreter.OpCodes (OpCode (..), toInstr, opParCount)
+import RunTime.Interpreter.Context (VMModule (..), FunctionDef (..), ConstantValue (..), ModuledDefinition (..), FunctionCode (..))
 import Template.Fuddle.BAst
-
-
-type VMCode = Vc.Vector Int32
-
-data FunctionDef = FunctionDef {
-    funcName :: Text
-    , funcArgs :: [ Text ]
-    , funcBody :: FunctionCode
-  }
-
-
-data FunctionCode =
-  NativeCode
-  | ByteCode VMCode
-
-
-data ModuledDefinition = ModuledDefinition {
-    modName :: Text
-    , modBody :: Mp.Map Text FunctionDef
-  }
 
 
 data ReferenceDetails =
@@ -81,20 +64,13 @@ data CompileUnit = CompileUnit {
     , bcode :: [ OpCode ]
   }
 
-data ConstantValue =
-  StringCte ByteString
-  | IntCte Int
-  | FloatCte Float
-  | DoubleCte Double
-  | ArrayCte [ ConstantValue ]
-
 
 initContext preludeMods = CompContext {
   idents = Mp.empty
   , imports = []
   , constants = Mp.empty
   , constantMap = Mp.empty
-  , bindings = Mp.fromList [ ("main", FunctionDef "main" [] (ByteCode Vc.empty)) ]
+  , bindings = Mp.fromList [ ("$main", FunctionDef "$main" [] 0 (ByteCode Vc.empty)) ]
   , referredIdentifiers = Mp.empty
   , modules = preludeMods
   , hasFailed = Nothing
@@ -136,7 +112,10 @@ type CompileResult = State CompContext ()
 -}
 
 -- TODO: add a parameter for passing the pre-loaded prelude modules.
-compileAstTree :: NodeAst -> Either GenError VMCode
+{-
+  - result: VMModule, with the bytecode, the constants, the function definitions, the required modules/functions.
+-}
+compileAstTree :: NodeAst -> Either GenError VMModule
 compileAstTree nTree =
   -- putStrLn $ "@[compileAst] ast: " ++ show ast
   case nTree of
@@ -144,12 +123,20 @@ compileAstTree nTree =
       let
         -- TODO: pass the pre-loaded prelude modules.
         context = initContext Mp.empty
-        (retValue, rezContext) = runState (compileNode nTree) context
+        (retValue, rezContext) = runState (compileTree nTree) context
       in
       case rezContext.hasFailed of
         Just err -> Left err
         Nothing ->
-          Right . Vc.fromList $ concatMap toInstr rezContext.bytecode
+          let
+            tmpMain = FunctionDef "$main" [] 0 (ByteCode $ Vc.fromList $ concatMap toInstr rezContext.bytecode)
+            keyVals = sortBy (\(ak, av) (bk, bv) -> if av == bv then EQ else if av < bv then LT else GT ) $ Mp.toList rezContext.constantMap
+          in
+          Right $ VMModule {
+              functions = [ tmpMain ]
+              , constants = Vc.fromList $ map (\(k, v) -> rezContext.constants Mp.! k) keyVals
+              , externModules = modules rezContext
+            }
     _ -> Left $ SimpleMsg "Unexpected root AST node for compilation."
 
 
@@ -203,6 +190,12 @@ addStringConstant newConst = do
         pure index
 
 
+compileTree :: NodeAst -> CompileResult
+compileTree node = do
+  compileNode node
+  emitOp HALT
+
+
 compileNode :: NodeAst -> CompileResult
 compileNode node=
   case node of
@@ -211,7 +204,7 @@ compileNode node=
     CloneText someText -> do
       s <- get
       newIndex <- addStringConstant someText
-      emitOp $ PUSH_CONST_IMM newIndex
+      emitOp $ PUSH_CONST newIndex
       emitOp $ REDUCE s.spitFunction 1
       pure ()
 
@@ -371,15 +364,19 @@ compileBinOper oper exprA exprB = do
 {- Reduction: an identifier that is the main definition, and additional expressions that are the parameters to apply to the identifier -}
 compileReduction :: QualifiedIdent -> [ Expression ] -> CompileResult
 compileReduction qualIdent exprArray = do
-    {-
-    - find the identifier in the context,
-      - if not found, put it in the unresolved list,
-    - compile each expressions, putting the result on the stack,
-    - insert a function call op to the identifier address: it's a pointer to the function list (both identified and unindentified).
-    !! inline functions with arity 0 -> variable access.
-    -}
-  let
-    functionID = 0  -- get the function ID from the context.
+  {- TODO:
+  - find the identifier in the context,
+    - if not found, put it in the unresolved list,
+  - compile each expressions, putting the result on the stack,
+  - insert a function call op to the identifier address: it's a pointer to the function list (both identified and unindentified).
+  !! inline functions with arity 0 -> variable access.
+  -}
+  s <- get
+  functionID <- case qualIdent of
+      "$spit" :| [] -> pure s.spitFunction
+      _ -> do
+        -- TODO: find the function in the context
+        pure 1
   mapM_ compileExpr exprArray
   emitOp $ REDUCE functionID (fromIntegral . length $ exprArray)
 

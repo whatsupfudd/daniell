@@ -6,6 +6,10 @@ import Data.Text (Text)
 import qualified Data.Map as Mp
 import FileSystem.Types (PathFiles)
 
+import qualified RunTime.Interpreter.Context as Vm
+
+{- Project Template -}
+
 {- Project Template
  Defines how to assemble a project (currently, Haskell app) as a set of files and directories.
  The files are typically Haskell code that can be extended with '{{' and '}}' blocks of templating logic
@@ -59,7 +63,7 @@ data Parameter =
 {- Logic: move to the Generator section? -}
 data Function =
   Concat Text
-  | Exec Code
+  | Exec Vm.VMModule
   | Sequence [ Function ]
   | Noop
   | CloneVerbatim FilePath

@@ -58,7 +58,7 @@ data OpCode =
   | PUSH_INT_IMM IntM
   | PUSH_FLOAT_IMM FloatM
   | PUSH_DOUBLE_IMM DoubleM
-  | PUSH_CONST_IMM Int32
+  | PUSH_CONST_IMM Int32    -- TODO: what is the difference between PUSH_CONST and PUSH_CONST_IMM?
   | POP_BOOL RegID
   | POP_CHAR RegID
   | POP_INT RegID
@@ -195,57 +195,57 @@ instance Enum OpCode where
 
   toEnum :: Int -> OpCode
   toEnum 0 = NOP
-  toEnum 1 = SET_VAR undefined
-  toEnum 2 = GET_VAR undefined
-  toEnum 3 = GET_FIELD undefined
-  toEnum 4 = SET_FIELD undefined
-  toEnum 5 = SET_REG_BOOL undefined undefined
-  toEnum 6 = SET_REG_CHAR undefined undefined
-  toEnum 7 = SET_REG_INT undefined undefined
-  toEnum 8 = SET_REG_FLOAT undefined undefined
-  toEnum 9 = SET_REG_DOUBLE undefined undefined
-  toEnum 10 = SET_REG_CONST undefined undefined
-  toEnum 11 = CMP_BOOL undefined undefined
-  toEnum 12 = CMP_CHAR undefined undefined
-  toEnum 13 = CMP_INT undefined undefined
-  toEnum 14 = CMP_FLOAT undefined undefined
-  toEnum 15 = CMP_DOUBLE undefined undefined
+  toEnum 1 = SET_VAR 0
+  toEnum 2 = GET_VAR 0
+  toEnum 3 = GET_FIELD 0
+  toEnum 4 = SET_FIELD 0
+  toEnum 5 = SET_REG_BOOL 0 False
+  toEnum 6 = SET_REG_CHAR 0 ' '
+  toEnum 7 = SET_REG_INT 0 0
+  toEnum 8 = SET_REG_FLOAT 0 0
+  toEnum 9 = SET_REG_DOUBLE 0 0
+  toEnum 10 = SET_REG_CONST 0 0
+  toEnum 11 = CMP_BOOL 0 0
+  toEnum 12 = CMP_CHAR 0 0
+  toEnum 13 = CMP_INT 0 0
+  toEnum 14 = CMP_FLOAT 0 0
+  toEnum 15 = CMP_DOUBLE 0 0
   toEnum 16 = CMP_BOOL_IMM
   toEnum 17 = CMP_CHAR_IMM
   toEnum 18 = CMP_INT_IMM
   toEnum 19 = CMP_FLOAT_IMM
   toEnum 20 = CMP_DOUBLE_IMM
-  toEnum 21 = JUMP_ABS undefined
-  toEnum 22 = JUMP_REL undefined
-  toEnum 23 = JUMP_INDEX undefined
-  toEnum 24 = JUMP_TRUE undefined
-  toEnum 25 = JUMP_FALSE undefined
-  toEnum 26 = PUSH_BOOL undefined
-  toEnum 27 = PUSH_CHAR undefined
-  toEnum 28 = PUSH_FLOAT undefined
-  toEnum 29 = PUSH_DOUBLE undefined
-  toEnum 30 = PUSH_CONST undefined
-  toEnum 31 = PUSH_BOOL_IMM undefined
-  toEnum 32 = PUSH_CHAR_IMM undefined
-  toEnum 33 = PUSH_INT_IMM undefined
-  toEnum 34 = PUSH_FLOAT_IMM undefined
-  toEnum 35 = PUSH_DOUBLE_IMM undefined
-  toEnum 36 = PUSH_CONST_IMM undefined
-  toEnum 37 = POP_BOOL undefined
-  toEnum 38 = POP_CHAR undefined
-  toEnum 39 = POP_INT undefined
-  toEnum 40 = POP_FLOAT undefined
-  toEnum 41 = POP_DOUBLE undefined
-  toEnum 42 = POP_CONST undefined
+  toEnum 21 = JUMP_ABS 0
+  toEnum 22 = JUMP_REL 0
+  toEnum 23 = JUMP_INDEX 0
+  toEnum 24 = JUMP_TRUE 0
+  toEnum 25 = JUMP_FALSE 0
+  toEnum 26 = PUSH_BOOL 0
+  toEnum 27 = PUSH_CHAR 0
+  toEnum 28 = PUSH_FLOAT 0
+  toEnum 29 = PUSH_DOUBLE 0
+  toEnum 30 = PUSH_CONST 0
+  toEnum 31 = PUSH_BOOL_IMM False
+  toEnum 32 = PUSH_CHAR_IMM ' '
+  toEnum 33 = PUSH_INT_IMM 0
+  toEnum 34 = PUSH_FLOAT_IMM 0
+  toEnum 35 = PUSH_DOUBLE_IMM 0
+  toEnum 36 = PUSH_CONST_IMM 0
+  toEnum 37 = POP_BOOL 0
+  toEnum 38 = POP_CHAR 0
+  toEnum 39 = POP_INT 0
+  toEnum 40 = POP_FLOAT 0
+  toEnum 41 = POP_DOUBLE 0
+  toEnum 42 = POP_CONST 0
   toEnum 43 = POP_BOOL_VOID
   toEnum 44 = POP_CHAR_VOID
   toEnum 45 = POP_INT_VOID
   toEnum 46 = POP_FLOAT_VOID
   toEnum 47 = POP_DOUBLE_VOID
   toEnum 48 = POP_CONST_VOID
-  toEnum 49 = REDUCE undefined undefined
-  toEnum 50 = ALLOC_ABS undefined undefined
-  toEnum 51 = ALLOC_REL undefined undefined
+  toEnum 49 = REDUCE 0 0
+  toEnum 50 = ALLOC_ABS 0 0
+  toEnum 51 = ALLOC_REL 0 0
   toEnum 52 = IADD
   toEnum 53 = ISUB
   toEnum 54 = IMUL

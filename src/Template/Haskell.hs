@@ -28,12 +28,13 @@ import Conclusion (GenError (..))
 import Template.Types
 import qualified Template.Fuddle.BParser as Fp
 import qualified Template.Fuddle.Compiler as Fc
+import qualified RunTime.Interpreter.Context as Vm
 
 
 
-treeSitterHS :: FilePath -> IO (Either GenError FileTempl)
-treeSitterHS path = do
-  putStrLn $ "@[treeSitterHS] parsing: " ++ path
+tsParseHaskell :: FilePath -> IO (Either GenError FileTempl)
+tsParseHaskell path = do
+  putStrLn $ "@[tsParseHaskell] parsing: " ++ path
 
   parser <- ts_parser_new
   ts_parser_set_language parser tree_sitter_haskell
@@ -75,18 +76,18 @@ treeSitterHS path = do
           eicompiRez <- compileParseBlocks path tmplString tsTree
           case eicompiRez of
             Left err -> do
-              putStrLn "@[treeSitterHS] compileParseBlocks err: "
+              putStrLn "@[tsParseHaskell] compileParseBlocks err: "
               print err
               pure $ Left err
-            Right vmCode -> do
-              putStrLn $ "@[treeSitterHS] vmCode: " ++ show vmCode
+            Right vmModule -> do
+              -- putStrLn $ "@[tsParseHaskell] vmCode: " ++ show vmModule
               {- serialize that info to the cache file for the template (same path minus name ext + .dtch) -}
-              pure . Right $ FileTempl path Nothing Mp.empty [ Noop ] []
+              pure . Right $ FileTempl path Nothing Mp.empty [ Exec vmModule ] []
       else
           pure . Right $ FileTempl path Nothing Mp.empty [ CloneVerbatim path ] []
 
 
-compileParseBlocks :: String -> String -> TemplTsTree -> IO (Either GenError Fc.VMCode)
+compileParseBlocks :: String -> String -> TemplTsTree -> IO (Either GenError Vm.VMModule)
 compileParseBlocks codeName fileContent tsTree =
   let
     tmplText = TE.encodeUtf8 . pack $ fileContent
