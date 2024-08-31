@@ -1,116 +1,3 @@
-{-# LANGUAGE InstanceSigs #-}
-{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-module RunTime.Interpreter.OpCodes
-where
-
-import Data.Char (ord)
-import Data.Int (Int32, Int64)
-import Data.Text (Text)
-
-import RunTime.Interpreter.Memory
-import Template.Golang.Parser (callExpr)
-
-
-type VarID = Int32
-type FieldID = Int32
-type RegID = Int32
-
-
-data OpCode =
-  NOP
-  -- Heap access:
-  | SET_VAR VarID
-  | GET_VAR VarID
-  | GET_FIELD FieldID
-  | SET_FIELD FieldID
-  -- Register access:
-  | SET_REG_BOOL RegID BoolM
-  | SET_REG_CHAR RegID CharM
-  | SET_REG_INT RegID IntM
-  | SET_REG_FLOAT RegID FloatM
-  | SET_REG_DOUBLE RegID DoubleM
-  | SET_REG_CONST RegID Int32
-  -- Comparisons:
-  | CMP_BOOL RegID RegID
-  | CMP_CHAR RegID RegID
-  | CMP_INT RegID RegID
-  | CMP_FLOAT RegID RegID
-  | CMP_DOUBLE RegID RegID
-  | CMP_BOOL_IMM
-  | CMP_CHAR_IMM
-  | CMP_INT_IMM
-  | CMP_FLOAT_IMM
-  | CMP_DOUBLE_IMM
-  -- PC ops:
-  | JUMP_ABS PcPtrM
-  | JUMP_REL Int32
-  | JUMP_INDEX RegID
-  | JUMP_TRUE PcPtrM
-  | JUMP_FALSE PcPtrM
-  -- Stack Access:
-  | PUSH_BOOL RegID
-  | PUSH_CHAR RegID
-  | PUSH_FLOAT RegID
-  | PUSH_DOUBLE RegID
-  | PUSH_CONST RegID
-  | PUSH_BOOL_IMM BoolM
-  | PUSH_CHAR_IMM CharM
-  | PUSH_INT_IMM IntM
-  | PUSH_FLOAT_IMM FloatM
-  | PUSH_DOUBLE_IMM DoubleM
-  | PUSH_CONST_IMM Int32
-  | POP_BOOL RegID
-  | POP_CHAR RegID
-  | POP_INT RegID
-  | POP_FLOAT RegID
-  | POP_DOUBLE RegID
-  | POP_CONST RegID
-  | POP_BOOL_VOID
-  | POP_CHAR_VOID
-  | POP_INT_VOID
-  | POP_FLOAT_VOID
-  | POP_DOUBLE_VOID
-  | POP_CONST_VOID
-  -- Invoke:
-  | REDUCE Int32 Int32    -- function ID + number of arguments pushed on stack.
-  -- Heap management (save new heap ID to register):
-  | ALLOC_ABS IntM RegID
-  | ALLOC_REL RegID RegID
-  -- Integer math:
-  | IADD
-  | ISUB
-  | IMUL
-  | IDIV
-  | IMOD
-  | ISHL
-  | ISHR
-  | INEGATE
-  -- Float math:
-  | FADD
-  | FSUB
-  | FMUL
-  | FDIV
-  | FNEGATE
-  -- Double math:
-  | DADD
-  | DSUB
-  | DMUL
-  | DDIV
-  | DNEGATE
-  -- Bool arth:
-  | BAND
-  | BOR
-  | BXOR
-  | BNOT
-  -- Array ops:
-  | ARR_CONCAT
-  | ARR_ADD
-  -- Control flow:
-  | RETURN
-  | HALT
-  deriving (Show)
-
-
 instance Enum OpCode where
   fromEnum :: OpCode -> Int
   fromEnum NOP = 0
@@ -137,8 +24,8 @@ instance Enum OpCode where
   fromEnum (JUMP_ABS _) = 21
   fromEnum (JUMP_REL _) = 22
   fromEnum (JUMP_INDEX _) = 23
-  fromEnum (JUMP_TRUE _) = 24
-  fromEnum (JUMP_FALSE _) = 25
+  fromEnum (TEST_TRUE _) = 24
+  fromEnum (TEST_FALSE _) = 25
   fromEnum (PUSH_BOOL _) = 26
   fromEnum (PUSH_CHAR _) = 27
   fromEnum (PUSH_FLOAT _) = 28
@@ -218,8 +105,8 @@ instance Enum OpCode where
   toEnum 21 = JUMP_ABS undefined
   toEnum 22 = JUMP_REL undefined
   toEnum 23 = JUMP_INDEX undefined
-  toEnum 24 = JUMP_TRUE undefined
-  toEnum 25 = JUMP_FALSE undefined
+  toEnum 24 = TEST_TRUE undefined
+  toEnum 25 = TEST_FALSE undefined
   toEnum 26 = PUSH_BOOL undefined
   toEnum 27 = PUSH_CHAR undefined
   toEnum 28 = PUSH_FLOAT undefined
@@ -299,8 +186,8 @@ opParCount CMP_DOUBLE_IMM = 0
 opParCount (JUMP_ABS _) = 1
 opParCount (JUMP_REL _) = 1
 opParCount (JUMP_INDEX _) = 1
-opParCount (JUMP_TRUE _) = 1
-opParCount (JUMP_FALSE _) = 1
+opParCount (TEST_TRUE _) = 1
+opParCount (TEST_FALSE _) = 1
 opParCount (PUSH_BOOL _) = 1
 opParCount (PUSH_CHAR _) = 1
 opParCount (PUSH_FLOAT _) = 1
@@ -354,83 +241,86 @@ opParCount ARR_ADD = 0
 opParCount RETURN = 0
 opParCount HALT = 0
 
+
 toInstr :: OpCode -> [Int32]
-toInstr NOP = [0]
-toInstr (SET_VAR a1) = [1, a1]
-toInstr (GET_VAR a1) = [2, a1]
-toInstr (GET_FIELD a1) = [3, a1]
-toInstr (SET_FIELD a1) = [4, a1]
-toInstr (SET_REG_BOOL a1 a2) = [5, a1, if a2 then 1 else 0]
-toInstr (SET_REG_CHAR a1 a2) = [6, a1, fromIntegral . ord $ a2]
-toInstr (SET_REG_INT a1 a2) = [7, a1, a2]
-toInstr (SET_REG_FLOAT a1 a2) = [8, a1, round a2]
-toInstr (SET_REG_DOUBLE a1 a2) = [9, a1, round a2]
-toInstr (SET_REG_CONST a1 a2) = [10, a1, a2]
-toInstr (CMP_BOOL a1 a2) = [11, a1, a2]
-toInstr (CMP_CHAR a1 a2) = [12, a1, a2]
-toInstr (CMP_INT a1 a2) = [13, a1, a2]
-toInstr (CMP_FLOAT a1 a2) = [14, a1, a2]
-toInstr (CMP_DOUBLE a1 a2) = [15, a1, a2]
-toInstr CMP_BOOL_IMM = [16]
-toInstr CMP_CHAR_IMM = [17]
-toInstr CMP_INT_IMM = [18]
-toInstr CMP_FLOAT_IMM = [19]
-toInstr CMP_DOUBLE_IMM = [20]
-toInstr (JUMP_ABS a1) = [21, a1]
-toInstr (JUMP_REL a1) = [22, a1]
-toInstr (JUMP_INDEX a1) = [23, a1]
-toInstr (JUMP_TRUE a1) = [24, a1]
-toInstr (JUMP_FALSE a1) = [25, a1]
-toInstr (PUSH_BOOL a1) = [26, a1]
-toInstr (PUSH_CHAR a1) = [27, a1]
-toInstr (PUSH_FLOAT a1) = [28, a1]
-toInstr (PUSH_DOUBLE a1) = [29, a1]
-toInstr (PUSH_CONST a1) = [30, a1]
-toInstr (PUSH_BOOL_IMM a1) = [31, if a1 then 1 else 0]
-toInstr (PUSH_CHAR_IMM a1) = [32, fromIntegral . ord $ a1]
-toInstr (PUSH_INT_IMM a1) = [33, a1]
-toInstr (PUSH_FLOAT_IMM a1) = [34, round a1]
-toInstr (PUSH_DOUBLE_IMM a1) = [35, round a1]
-toInstr (PUSH_CONST_IMM a1) = [36, a1]
-toInstr (POP_BOOL a1) = [37, a1]
-toInstr (POP_CHAR a1) = [38, a1]
-toInstr (POP_INT a1) = [39, a1]
-toInstr (POP_FLOAT a1) = [40, a1]
-toInstr (POP_DOUBLE a1) = [41, a1]
-toInstr (POP_CONST a1) = [42, a1]
-toInstr POP_BOOL_VOID = [43]
-toInstr POP_CHAR_VOID = [44]
-toInstr POP_INT_VOID = [45]
-toInstr POP_FLOAT_VOID = [46]
-toInstr POP_DOUBLE_VOID = [47]
-toInstr POP_CONST_VOID = [48]
-toInstr (REDUCE a1 a2) = [49, a1, a2]
-toInstr (ALLOC_ABS a1 a2) = [50, a1, a2]
-toInstr (ALLOC_REL a1 a2) = [51, a1, a2]
-toInstr IADD = [52]
-toInstr ISUB = [53]
-toInstr IMUL = [54]
-toInstr IDIV = [55]
-toInstr IMOD = [56]
-toInstr ISHL = [57]
-toInstr ISHR = [58]
-toInstr INEGATE = [59]
-toInstr FADD = [60]
-toInstr FSUB = [61]
-toInstr FMUL = [62]
-toInstr FDIV = [63]
-toInstr FNEGATE = [64]
-toInstr DADD = [65]
-toInstr DSUB = [66]
-toInstr DMUL = [67]
-toInstr DDIV = [68]
-toInstr DNEGATE = [69]
-toInstr BAND = [70]
-toInstr BOR = [71]
-toInstr BXOR = [72]
-toInstr BNOT = [73]
-toInstr ARR_CONCAT = [74]
-toInstr ARR_ADD = [75]
-toInstr RETURN = [76]
-toInstr HALT = [77]
-toInstr a = error $ "fromEnum: bad argument" <> show a
+  toInstr NOP = [0]
+  toInstr (SET_VAR a1) = [1, a1]
+  toInstr (GET_VAR a1) = [2, a1]
+  toInstr (GET_FIELD a1) = [3, a1]
+  toInstr (SET_FIELD a1) = [4, a1]
+  toInstr (SET_REG_BOOL a1 a2) = [5, a1, a2]
+  toInstr (SET_REG_CHAR a1 a2) = [6, a1, a2]
+  toInstr (SET_REG_INT a1 a2) = [7, a1, a2]
+  toInstr (SET_REG_FLOAT a1 a2) = [8, a1, a2]
+  toInstr (SET_REG_DOUBLE a1 a2) = [9, a1, a2]
+  toInstr (SET_REG_CONST a1 a2) = [10, a1, a2]
+  toInstr (CMP_BOOL a1 a2) = [11, a1, a2]
+  toInstr (CMP_CHAR a1 a2) = [12, a1, a2]
+  toInstr (CMP_INT a1 a2) = [13, a1, a2]
+  toInstr (CMP_FLOAT a1 a2) = [14, a1, a2]
+  toInstr (CMP_DOUBLE a1 a2) = [15, a1, a2]
+  toInstr CMP_BOOL_IMM = [16]
+  toInstr CMP_CHAR_IMM = [17]
+  toInstr CMP_INT_IMM = [18]
+  toInstr CMP_FLOAT_IMM = [19]
+  toInstr CMP_DOUBLE_IMM = [20]
+  toInstr (JUMP_ABS a1) = [21, a1]
+  toInstr (JUMP_REL a1) = [22, a1]
+  toInstr (JUMP_INDEX a1) = [23, a1]
+  toInstr (TEST_TRUE a1) = [24, a1]
+  toInstr (TEST_FALSE a1) = [25, a1]
+  toInstr (PUSH_BOOL a1) = [26, a1]
+  toInstr (PUSH_CHAR a1) = [27, a1]
+  toInstr (PUSH_FLOAT a1) = [28, a1]
+  toInstr (PUSH_DOUBLE a1) = [29, a1]
+  toInstr (PUSH_CONST a1) = [30, a1]
+  toInstr (PUSH_BOOL_IMM a1) = [31, a1]
+  toInstr (PUSH_CHAR_IMM a1) = [32, a1]
+  toInstr (PUSH_INT_IMM a1) = [33, a1]
+  toInstr (PUSH_FLOAT_IMM a1) = [34, a1]
+  toInstr (PUSH_DOUBLE_IMM a1) = [35, a1]
+  toInstr (PUSH_CONST_IMM a1) = [36, a1]
+  toInstr (POP_BOOL a1) = [37, a1]
+  toInstr (POP_CHAR a1) = [38, a1]
+  toInstr (POP_INT a1) = [39, a1]
+  toInstr (POP_FLOAT a1) = [40, a1]
+  toInstr (POP_DOUBLE a1) = [41, a1]
+  toInstr (POP_CONST a1) = [42, a1]
+  toInstr POP_BOOL_VOID = [43]
+  toInstr POP_CHAR_VOID = [44]
+  toInstr POP_INT_VOID = [45]
+  toInstr POP_FLOAT_VOID = [46]
+  toInstr POP_DOUBLE_VOID = [47]
+  toInstr POP_CONST_VOID = [48]
+  toInstr (REDUCE a1 a2) = [49, a1, a2]
+  toInstr (ALLOC_ABS a1 a2) = [50, a1, a2]
+  toInstr (ALLOC_REL a1 a2) = [51, a1, a2]
+  toInstr IADD = [52]
+  toInstr ISUB = [53]
+  toInstr IMUL = [54]
+  toInstr IDIV = [55]
+  toInstr IMOD = [56]
+  toInstr ISHL = [57]
+  toInstr ISHR = [58]
+  toInstr INEGATE = [59]
+  toInstr FADD = [60]
+  toInstr FSUB = [61]
+  toInstr FMUL = [62]
+  toInstr FDIV = [63]
+  toInstr FNEGATE = [64]
+  toInstr DADD = [65]
+  toInstr DSUB = [66]
+  toInstr DMUL = [67]
+  toInstr DDIV = [68]
+  toInstr DNEGATE = [69]
+  toInstr BAND = [70]
+  toInstr BOR = [71]
+  toInstr BXOR = [72]
+  toInstr BNOT = [73]
+  toInstr ARR_CONCAT = [74]
+  toInstr ARR_ADD = [75]
+  toInstr RETURN = [76]
+  toInstr HALT = [77]
+  toInstr a = error $ "fromEnum: bad argument" <> show a
+
+  toEnum :: Int -> OpCode

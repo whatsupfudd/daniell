@@ -14,11 +14,11 @@ import qualified Crypto.Hash.MD5 as Cr
 import qualified Data.Text.Encoding as TE
 
 import Conclusion (GenError (..))
-import RunTime.Interpreter.OpCodes (OpCode (..))
+import RunTime.Interpreter.OpCodes (OpCode (..), toInstr, opParCount)
 import Template.Fuddle.BAst
 
 
-type VMCode = Vc.Vector Int
+type VMCode = Vc.Vector Int32
 
 data FunctionDef = FunctionDef {
     funcName :: Text
@@ -53,12 +53,33 @@ data CompContext = CompContext {
     , referredIdentifiers :: Mp.Map Text ReferenceDetails
     , modules :: Mp.Map Text ModuledDefinition
     , hasFailed :: Maybe GenError
-    , labelID :: Int
+    , labels :: Mp.Map Int32 Int32
     , bytecode :: [ OpCode ]
+    , unitCounter :: Int32
+    , unitStack :: [ CompileUnit]
     -- Shortcut to the all-omnipresent spit function.
     , spitFunction :: Int32
   }
 
+data BindDefinition = BindDefinition QualifiedIdent FuddleType
+
+data FuddleType =
+  BoolFT | CharFT | IntFT | FloatFT | DoubleFT | StringFT
+  | ArrayFT FuddleType
+  | TupleFT [ FuddleType ]
+  -- a record with named fields:
+  | StructureFT (Mp.Map Text FuddleType)
+  -- array of parameters, return type:
+  | FunctionFT [ FuddleType ] FuddleType
+
+
+data CompileUnit = CompileUnit {
+    name :: Text
+    , unitID :: Int
+    , arguments :: [ BindDefinition ]
+    , localVars :: [ BindDefinition ]
+    , bcode :: [ OpCode ]
+  }
 
 data ConstantValue =
   StringCte ByteString
@@ -77,8 +98,10 @@ initContext preludeMods = CompContext {
   , referredIdentifiers = Mp.empty
   , modules = preludeMods
   , hasFailed = Nothing
-  , labelID = 0
+  , labels = Mp.empty
   , bytecode = []
+  , unitCounter = 0
+  , unitStack = []
   , spitFunction = 0
 }
 
@@ -117,7 +140,7 @@ compileAstTree :: NodeAst -> Either GenError VMCode
 compileAstTree nTree =
   -- putStrLn $ "@[compileAst] ast: " ++ show ast
   case nTree of
-    AstLogic (StmtAst (SeqST []) children) ->     
+    AstLogic (StmtAst (SeqST []) children) ->
       let
         -- TODO: pass the pre-loaded prelude modules.
         context = initContext Mp.empty
@@ -126,26 +149,33 @@ compileAstTree nTree =
       case rezContext.hasFailed of
         Just err -> Left err
         Nothing ->
-          Right . Vc.fromList $ map fromEnum rezContext.bytecode
+          Right . Vc.fromList $ concatMap toInstr rezContext.bytecode
     _ -> Left $ SimpleMsg "Unexpected root AST node for compilation."
 
 
 emitOp :: OpCode -> CompileResult
 emitOp instr = modify $ \s -> s { bytecode = s.bytecode <> [instr] }
 
-newLabel :: State CompContext Int
+newLabel :: State CompContext Int32
 newLabel = do
     s <- get
-    put s { labelID = s.labelID + 1 }
-    return s.labelID
+    let
+      labelID = fromIntegral $ Mp.size s.labels
+    put s { labels = Mp.insert labelID (fromIntegral $ length s.bytecode) s.labels }
+    return labelID
 
 
 resolveLabel :: Int32 -> CompileResult
-resolveLabel label = modify $ \s ->
-    let
-      (before, after) = splitAt (fromIntegral label) s.bytecode
-    in
-    s { bytecode = before ++ [JUMP_ABS (fromIntegral . length $ after)] ++ after }
+resolveLabel label = do
+  s <- get
+  case Mp.lookup label s.labels of
+    Nothing -> modify $ \s -> s { hasFailed = Just . SimpleMsg . pack $ "Label " <> show label <> "not found." }
+    Just aPos -> modify $ \s ->
+      let
+        (before, after) = splitAt (fromIntegral aPos) s.bytecode
+        afterSize = sum . map (\i -> 1 + opParCount i) $ after
+      in
+      s { bytecode = before <> [JUMP_ABS $ fromIntegral afterSize] <> after }
 
 
 addStringConstant :: ByteString -> State CompContext Int32
@@ -176,32 +206,73 @@ addStringConstant newConst = do
 compileNode :: NodeAst -> CompileResult
 compileNode node=
   case node of
-    AstLogic (StmtAst stmt children) -> do
-      compileStmt stmt
-      s <- get
-      case s.hasFailed of
-        Just _ -> pure ()
-        Nothing -> mapM_ compileNode children
+    AstLogic (StmtAst stmt children) ->
+      compileStmt stmt children
     CloneText someText -> do
       s <- get
       newIndex <- addStringConstant someText
-      emitOp $ PUSH_INT_IMM $ fromIntegral newIndex
+      emitOp $ PUSH_CONST_IMM newIndex
       emitOp $ REDUCE s.spitFunction 1
       pure ()
 
 
-compileStmt :: StatementFd -> CompileResult
-compileStmt ast =
+compileStmt :: StatementFd -> [NodeAst] -> CompileResult
+compileStmt ast children =
   case ast of
-    SeqST stmts -> mapM_ compileStmt stmts
-    ElseIfShortST isElse cond args -> pure ()
-    BlockEndST -> pure ()
-    IfElseNilSS cond args -> pure ()
-    ImportST isQualified qualIdent mbQualIdents ->
-      {- Inject referred modules in local space. -}
+    SeqST stmts -> do
+      mapM_ (`compileStmt` []) stmts
+      mapM_ compileNode children
+    ElseIfShortST isElse cond args ->
+      {- TODO:
+        - if isElse, the not-true branch label resolution should lead to this bytecode position,
+          the NodeAst parser should have made sure that the previous if is well-formed. 
+        - compile the condition expression,
+        - create a new label for the not-true branch,
+        - create a frame for the local children compilation with the arguments as local variables,
+        - compile the children,
+        - resolve the label for the not-true branch.        
+      -}
+      if null children then
+        pure ()
+      else do
+        compileExpr cond
+        emitOp CMP_BOOL_IMM
+        emitOp $ JUMP_TRUE 2
+        nextLabel <- newLabel
+        mapM_ compileNode children
+        resolveLabel nextLabel
+    BlockEndST ->
+      --TODO.
       pure ()
-    BindOneST identParams expr -> pure ()
-    ExpressionST expr -> compileExpr expr
+    IfElseNilSS cond args ->
+      if null children then
+        pure ()
+      else do
+        compileExpr cond
+        -- TODO: manage the label system so it can take a type-of-jump and later do the distance resolution using that
+        -- instead of the double-jump approach proposed by Copilot.
+        -- Also take care of args and children compilation block.
+        emitOp CMP_BOOL_IMM
+        emitOp $ JUMP_TRUE 2    -- move PC over the jump+distance if false, ie execute the block.
+        nextLabel <- newLabel   -- skip the block.
+        mapM_ compileNode children
+        resolveLabel nextLabel  -- resolve the distance and insert the jump instruction at label position.
+    BindOneST (ident, params) expr ->
+      {- TODO:
+        - create a new function context, set the name as ident, check for clash,
+          set the parameter arity + add the param names to the local variable list,
+        - push the function context to the function stack,
+        - compile the expression,
+        - pop the function context from the function stack, add the function to the parent context.
+        !! if arity == 0, it's equivalent to a variable definition... handle the same way?
+      -}
+      pure ()
+    ExpressionST expr -> do
+      s <- get
+      compileExpr expr
+      emitOp $ REDUCE s.spitFunction 1
+    -- ImportST isQualified qualIdent mbQualIdents: should not happen here, it's used before to build reference for modules in local space.
+    _ -> pure ()
 
 
 {- Expressions: -}
@@ -245,7 +316,7 @@ compileString lit = do
   emitOp $ PUSH_CONST strID
 
 compileLitArray :: [ LiteralValue ] -> CompileResult
-compileLitArray lit = 
+compileLitArray lit =
   -- TODO: how to store an array of literals ?
   pure ()
 
@@ -299,12 +370,16 @@ compileBinOper oper exprA exprB = do
 
 {- Reduction: an identifier that is the main definition, and additional expressions that are the parameters to apply to the identifier -}
 compileReduction :: QualifiedIdent -> [ Expression ] -> CompileResult
-compileReduction qualIdent exprArray =
-  {-
+compileReduction qualIdent exprArray = do
+    {-
     - find the identifier in the context,
       - if not found, put it in the unresolved list,
     - compile each expressions, putting the result on the stack,
     - insert a function call op to the identifier address: it's a pointer to the function list (both identified and unindentified).
-  -}
-  pure ()
+    !! inline functions with arity 0 -> variable access.
+    -}
+  let
+    functionID = 0  -- get the function ID from the context.
+  mapM_ compileExpr exprArray
+  emitOp $ REDUCE functionID (fromIntegral . length $ exprArray)
 

@@ -32,6 +32,7 @@ data LiteralValue =
   | BoolValue Bool
   | CharValue Char
   | StringValue Text
+  | TupleValue [ LiteralValue ]
   | ArrayValue [ LiteralValue ]
   deriving Show
 

@@ -1,0 +1,91 @@
+  NOP
+
+  | SET_VAR VarID
+  | GET_VAR VarID
+  | GET_FIELD FieldID
+  | SET_FIELD FieldID
+
+  | SET_REG_BOOL RegID BoolM
+  | SET_REG_CHAR RegID CharM
+  | SET_REG_INT RegID IntM
+  | SET_REG_FLOAT RegID FloatM
+  | SET_REG_DOUBLE RegID DoubleM
+  | SET_REG_CONST RegID Int32
+
+  | CMP_BOOL RegID RegID
+  | CMP_CHAR RegID RegID
+  | CMP_INT RegID RegID
+  | CMP_FLOAT RegID RegID
+  | CMP_DOUBLE RegID RegID
+  | CMP_BOOL_IMM
+  | CMP_CHAR_IMM
+  | CMP_INT_IMM
+  | CMP_FLOAT_IMM
+  | CMP_DOUBLE_IMM
+
+  | JUMP_ABS PcPtrM
+  | JUMP_REL Int32
+  | JUMP_INDEX RegID
+  | TEST_TRUE PcPtrM
+  | TEST_FALSE PcPtrM
+
+  | PUSH_BOOL RegID
+  | PUSH_CHAR RegID
+  | PUSH_FLOAT RegID
+  | PUSH_DOUBLE RegID
+  | PUSH_CONST RegID
+  | PUSH_BOOL_IMM BoolM
+  | PUSH_CHAR_IMM CharM
+  | PUSH_INT_IMM IntM
+  | PUSH_FLOAT_IMM FloatM
+  | PUSH_DOUBLE_IMM DoubleM
+  | PUSH_CONST_IMM Int32
+  | POP_BOOL RegID
+  | POP_CHAR RegID
+  | POP_INT RegID
+  | POP_FLOAT RegID
+  | POP_DOUBLE RegID
+  | POP_CONST RegID
+  | POP_BOOL_VOID
+  | POP_CHAR_VOID
+  | POP_INT_VOID
+  | POP_FLOAT_VOID
+  | POP_DOUBLE_VOID
+  | POP_CONST_VOID
+
+  | REDUCE Int32 Int32
+
+  | ALLOC_ABS IntM RegID
+  | ALLOC_REL RegID RegID
+
+  | IADD
+  | ISUB
+  | IMUL
+  | IDIV
+  | IMOD
+  | ISHL
+  | ISHR
+  | INEGATE
+
+  | FADD
+  | FSUB
+  | FMUL
+  | FDIV
+  | FNEGATE
+
+  | DADD
+  | DSUB
+  | DMUL
+  | DDIV
+  | DNEGATE
+
+  | BAND
+  | BOR
+  | BXOR
+  | BNOT
+
+  | ARR_CONCAT
+  | ARR_ADD
+
+  | RETURN
+  | HALT
