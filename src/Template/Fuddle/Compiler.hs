@@ -133,7 +133,7 @@ compileAstTree nTree =
             keyVals = sortBy (\(ak, av) (bk, bv) -> if av == bv then EQ else if av < bv then LT else GT ) $ Mp.toList rezContext.constantMap
           in
           Right $ VMModule {
-              functions = [ tmpMain ]
+              functions = Vc.singleton tmpMain
               , constants = Vc.fromList $ map (\(k, v) -> rezContext.constants Mp.! k) keyVals
               , externModules = modules rezContext
             }
@@ -166,10 +166,18 @@ resolveLabel label = do
 
 
 addStringConstant :: ByteString -> State CompContext Int32
-addStringConstant newConst = do
+addStringConstant newConst =
+  addTypedConstant (StringCte newConst) $ Cr.hash newConst
+
+addVerbatimConstant :: ByteString -> State CompContext Int32
+addVerbatimConstant newConst =
+  addTypedConstant (VerbatimCte newConst) $ Cr.hash newConst
+
+
+addTypedConstant :: ConstantValue -> ByteString -> State CompContext Int32
+addTypedConstant newConst md5Hash = do
     s <- get
     let
-      md5Hash = Cr.hash newConst
       existing = Mp.lookup md5Hash s.constants
     case existing of
       Just _ ->
@@ -186,7 +194,7 @@ addStringConstant newConst = do
         let
           index = fromIntegral $ Mp.size s.constantMap
         in do
-        put s { constantMap = Mp.insert md5Hash index s.constantMap, constants = Mp.insert md5Hash (StringCte newConst) s.constants }
+        put s { constantMap = Mp.insert md5Hash index s.constantMap, constants = Mp.insert md5Hash newConst s.constants }
         pure index
 
 
@@ -203,7 +211,7 @@ compileNode node=
       compileStmt stmt children
     CloneText someText -> do
       s <- get
-      newIndex <- addStringConstant someText
+      newIndex <- addVerbatimConstant someText
       emitOp $ PUSH_CONST newIndex
       emitOp $ REDUCE s.spitFunction 1
       pure ()
@@ -372,11 +380,19 @@ compileReduction qualIdent exprArray = do
   !! inline functions with arity 0 -> variable access.
   -}
   s <- get
-  functionID <- case qualIdent of
-      "$spit" :| [] -> pure s.spitFunction
-      _ -> do
-        -- TODO: find the function in the context
-        pure 1
+  let
+    functionID = case qualIdent of
+      "$spit" :| [] -> s.spitFunction
+      "C" :| rest -> 
+        case rest of
+          [] -> 1
+          a : bRest -> case a of
+            "jwkDefaultLocation" -> 2 :: Int32
+            "serverPortDefault" -> 3
+            "hasWebServer" -> 4
+            "appName" -> 5
+            "appConfEnvVar" -> 6
+      _ -> 1
   mapM_ compileExpr exprArray
   emitOp $ REDUCE functionID (fromIntegral . length $ exprArray)
 

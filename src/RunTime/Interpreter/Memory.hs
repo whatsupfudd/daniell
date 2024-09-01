@@ -16,6 +16,7 @@ type DoubleM = Double
 type PcPtrM = Int32
 
 
+{-
 data MemType =
   BoolV
   | CharV
@@ -29,10 +30,6 @@ data MemType =
   | HeapRefV Int32
 
 
-type Stack = [ (MemType, Int32) ]
-
-type Heap = Vector (MemType, HeapValue)
-
 data HeapValue =
   ArrayHV (Vector HeapValue)
   | TupleHV Int32 (Vector HeapValue)
@@ -42,5 +39,5 @@ data HeapValue =
   | DoubleHV Double
   | IntHV Int32
   | LongHV Int64
-
+-}
 

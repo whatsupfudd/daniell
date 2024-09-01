@@ -5,11 +5,13 @@ where
 import Data.Array (Array)
 import Data.Int (Int32, Int64)
 import Data.Text (Text)
-import qualified Data.Vector as Vc
+import qualified Data.Vector as V
 import qualified Data.ByteString as BS
 import qualified Data.Map as Mp
 
 import RunTime.Interpreter.OpCodes (OpCode (..))
+import RunTime.Interpreter.Memory (IntM)
+
 
 data Variable = Variable
   deriving Show
@@ -21,7 +23,7 @@ data CodeBlock = CodeBlock {
   }
 
 
-data VerbatimBlock = VerbatimBlock {
+newtype VerbatimBlock = VerbatimBlock {
     blocks :: Array Int32 (Int32, Int32)
   }
 
@@ -33,19 +35,65 @@ data StatusVM =
 
 
 data VmContext = VmContext {
-    globalVars :: [ Variable ]
+    status :: StatusVM
+    , frame :: Frame
+    , frameStack :: [ Frame ]
     , outStream :: BS.ByteString
-    , status :: StatusVM
+    , modules :: V.Vector VMModule
+    -- TODO: decide if this is useful given each module has a constants vector.
+    , constants :: V.Vector ConstantValue
   }
   deriving Show
 
+type StackValue = (TypeSV, IntM)
+type HeapValue = ConstantValue
+type Stack = [ StackValue ]
+type Heap = V.Vector HeapValue
 
-defaultVM = VmContext [] BS.empty Init
+data TypeSV =
+  BoolSV
+  | CharSV
+  | IntSV
+  | FloatSV
+  | HighLongSV
+  | LowLongSV
+  | HighDoubleSV
+  | LowDoubleSV
+  | StringSV
+  | ArraySV
+  | TupleSV
+  | ConstantRefSV
+  | HeapRefSV
+  deriving Show
+
+
+data Frame = Frame {
+    stack :: Stack
+    , heap :: Heap
+    , function :: FunctionDef
+    , pc :: Int
+    , flags :: CompareFlags
+    , returnValue :: (Maybe Int, Maybe StackValue)
+  }
+  deriving Show
+
+data CompareFlags =
+  NoFlag
+  | EqFlag
+  | NeFlag
+  | LtFlag
+  | LeFlag
+  | GeFlag
+  | GtFlag
+  | TrueFlag
+  | FalseFlag
+  deriving (Eq, Show)
+
 
 -- representation of a runtime module:
 data VMModule = VMModule {
-    functions :: [ FunctionDef ]
-    , constants :: Vc.Vector ConstantValue
+    functions :: V.Vector FunctionDef
+    , constants :: V.Vector ConstantValue
     , externModules :: Mp.Map Text ModuledDefinition
   }
   deriving Show
@@ -62,7 +110,7 @@ data FunctionDef = FunctionDef {
 
 data FunctionCode =
   NativeCode
-  | ByteCode (Vc.Vector Int32)
+  | ByteCode (V.Vector Int32)
   deriving Show
 
 
@@ -74,11 +122,11 @@ data ModuledDefinition = ModuledDefinition {
 
 data ConstantValue =
   StringCte BS.ByteString
+  | VerbatimCte BS.ByteString
   | IntCte Int
   | FloatCte Float
   | DoubleCte Double
   | ArrayCte [ ConstantValue ]
   | TupleCte [ ConstantValue ]
   deriving Show
-
 

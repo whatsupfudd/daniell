@@ -4,7 +4,8 @@ module Generator.Logic where
 import Control.Monad (foldM, forM, forM_)
 
 import qualified Data.Map as Mp
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
+import qualified Data.Text.Encoding as TE
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Fld
 
@@ -239,18 +240,19 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
         -- TODO: create a runtime context, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
         eiRez <- Vm.execModule vmModule
         case eiRez of
-          Left errMsg -> pure $ Left $ SimpleMsg (pack errMsg)
-          Right _ ->
+          Left errMsg -> do
+            putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg
+            pure $ Left $ SimpleMsg (pack errMsg)
+          Right (Vm.ExecResult vmContext) -> do
+            putStrLn $ "@[genFileFromTemplate] result: " <> unpack (TE.decodeUtf8 vmContext.outStream)
             pure $ Right ()
       Jinja _ -> do
         putStrLn $ "@[genFileFromTemplate] Jinja templ: " <> show srcPath
         -- TMP: execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
         pure $ Right ()
-      _ -> do
-        let
-          errMsg = "@[genFileFromTemplate] unimplemented case " <> show aVM <> "."
-        putStrLn errMsg
-        pure . Left . SimpleMsg . pack $ errMsg
+      EndExec -> do
+        putStrLn $ "@[genFileFromTemplate] EndExec: " <> show srcPath
+        pure $ Right ()
       -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
   -- with a Right template parsing, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
   pure $ Right ()
