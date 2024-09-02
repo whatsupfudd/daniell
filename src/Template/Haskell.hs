@@ -26,7 +26,7 @@ import TreeSitter.Language (symbolToName, fromTSSymbol)
 
 import Conclusion (GenError (..))
 import Template.Types
-import qualified Template.Fuddle.BParser as Fp
+import qualified Template.Fuddle.Parser as Fp
 import qualified Template.Fuddle.Compiler as Fc
 import qualified RunTime.Interpreter.Context as Vm
 
@@ -56,7 +56,7 @@ tsParseHaskell path = do
   children <- mallocArray childCount
   ts_node_copy_child_nodes tsNodeMem children
 
-  
+
   rezA <- parseTsChildren children childCount
 
   free children
@@ -65,7 +65,7 @@ tsParseHaskell path = do
 
   case rezA of
     Left err -> pure $ Left err
-    Right tsTree ->     
+    Right tsTree ->
       if tsTree.hasLogic then do
           -- parse the blocks to create a VM code.
           {-
@@ -159,19 +159,26 @@ getBlockContent lines pBlock =
         Logic (pA, pB) -> (pA, pB)
     eleLength = fromIntegral $ cB - cA + 1
     startPos = fromIntegral cA
+    endPos = fromIntegral cB
   in
   if rA == rB then
     BS.take eleLength . BS.drop startPos $ lines Vc.! fromIntegral rA
   else
-    mergeLines lines rA rB eleLength startPos
+    mergeLines lines (fromIntegral rA) (fromIntegral rB) (fromIntegral cA) (fromIntegral cB)
   where
-  mergeLines lines rA rB eleLength startPos =
-    foldl (\accum (line, remainder) ->
-        if remainder > 0 then
-          accum <> line <> "\n"
+  mergeLines lines rA rB cA cB =
+    let
+      prefix =
+        if cA == 0 then
+          lines Vc.! fromIntegral rA
         else
-          accum <> (BS.take eleLength . BS.drop startPos $ line)
-      ) "" [(lines Vc.! fromIntegral r, rB - r) | r <- [rA .. rB]]
+          BS.drop cA $ lines Vc.! fromIntegral rA
+      postfix = if cB == 0 then "" else BS.take (succ cB) $ lines Vc.! fromIntegral rB
+      middle = if rB - rA > 1 then
+          (BS.intercalate "\n" . Vc.toList $ Vc.slice (succ rA ) (pred rB - rA) lines) <> "\n"
+        else ""
+    in
+      prefix <> "\n" <> middle <> postfix
 
 
 data TemplTsTree = TemplTsTree {
@@ -198,7 +205,7 @@ parseTsChildren children count = do
   -- TODO: consolidate the blocks.
   condensedBlocks <-
     if hasLogic then do
-      putStrLn $ "@[parseTsChildren] has logic blocks."
+      -- putStrLn $ "@[parseTsChildren] has logic blocks."
       pure $ mergePBlocks blocks
     else
       let
@@ -208,9 +215,11 @@ parseTsChildren children count = do
             Logic (pA, pB) -> (minP, maxP)  -- this should never happen...
           ) (TSPoint 0 0, TSPoint 0 0) blocks
         in do
-          putStrLn $ "@[parseTsChildren] single verbatim, min: " ++ show min ++ ", max: " ++ show max
+          -- putStrLn $ "@[parseTsChildren] single verbatim, min: " ++ show min ++ ", max: " ++ show max
           pure [Verbatim (min, max)]
-  -- putStrLn $ "@[parseTsChildren] blocks: " ++ show blocks
+  when hasLogic $ do
+    putStrLn $ "@[parseTsChildren] blocks: " ++ show blocks
+    putStrLn $ "@[parseTsChildren] condensed: " ++ show condensedBlocks
   pure $ Right $ TemplTsTree hasLogic condensedBlocks
 
 
@@ -232,14 +241,35 @@ mergePBlocks =
       case b of
         Logic (pA, pB) ->
           case accum of
-            [] -> [ b ]
-            Logic (p1A, p1B) : rest -> b : Logic (p1A, p1B) : rest
-            Verbatim (p1A, p1B) : rest -> b : Verbatim (p1A, p1B) : rest
+            [] -> if pA == TSPoint 0 0 then
+                    [ b ]
+                  else
+                    [ Logic (TSPoint 0 0, pB) ]
+            Verbatim (p1A, p1B) : rest ->
+              if p1B.pointRow < pred pB.pointRow then
+                b : Verbatim (p1A, TSPoint (pred pB.pointRow) 0) : rest
+              else
+                b : accum
+            _ -> b : accum
         Verbatim (pA, pB) ->
           case accum of
-            [] -> [ b ]
-            Verbatim (p1A, p1B) : rest -> Verbatim (minTsP p1A pA, maxTsP p1B pB) : rest
-            rest -> Verbatim (pA, pB) : rest
+            [] -> if pA == TSPoint 0 0 then
+                    [ b ]
+                  else
+                    [ Verbatim (TSPoint 0 0, pB) ]
+            Verbatim (p1A, p1B) : rest -> 
+              case rest of
+                Logic (p2A, p2B) : _ ->
+                  if pA.pointRow > p2A.pointRow || (pA.pointRow == p2A.pointRow && pA.pointColumn > p2A.pointColumn) then
+                    Verbatim (minTsP p1A pA, maxTsP p1B pB) : rest
+                  else
+                    Verbatim (p1A, maxTsP p1B pB) : rest
+                _ -> Verbatim (minTsP p1A pA, maxTsP p1B pB) : rest
+            Logic (p1A, p1B) : rest ->
+              if pA.pointRow == p1A.pointRow && pA.pointColumn > p1B.pointColumn then
+                Verbatim (pA, pB) : accum
+              else
+                Verbatim (TSPoint p1B.pointRow p1B.pointColumn, pB) : accum
     ) []
 
 -- but: une liste de verbatim/logic.
@@ -267,6 +297,7 @@ analyzChild children pos = do
       poke tsNodeMem child.nodeTSNode
       ts_node_copy_child_nodes tsNodeMem subChildren
       rezA <- analyzeChildren subChildren subCount
+      -- TODO: verify if the subChildren entries need to be freed before the array holder itself is freed.
       free subChildren
       free tsNodeMem
       pure rezA

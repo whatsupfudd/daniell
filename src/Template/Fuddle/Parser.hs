@@ -1,4 +1,4 @@
-module Template.Fuddle.BParser where
+module Template.Fuddle.Parser where
 
 import Control.Applicative (asum, optional, many, (<|>), some)
 
@@ -19,7 +19,7 @@ import qualified Text.Megaparsec.Char.Lexer as ML
 import qualified Text.Megaparsec.Debug as MD
 
 import Conclusion (GenError (..))
-import Template.Fuddle.BAst
+import Template.Fuddle.Ast
 
 
 type Parser = M.Parsec Void Text

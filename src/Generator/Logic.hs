@@ -3,11 +3,12 @@ module Generator.Logic where
 
 import Control.Monad (foldM, forM, forM_)
 
+import qualified Data.ByteString as BS
+import qualified Data.Foldable as Fld
 import qualified Data.Map as Mp
+import qualified Data.Sequence as Seq
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text.Encoding as TE
-import qualified Data.Sequence as Seq
-import qualified Data.Foldable as Fld
 
 import qualified System.Directory as SE
 
@@ -244,7 +245,8 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
             putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg
             pure $ Left $ SimpleMsg (pack errMsg)
           Right (Vm.ExecResult vmContext) -> do
-            putStrLn $ "@[genFileFromTemplate] result: " <> unpack (TE.decodeUtf8 vmContext.outStream)
+            -- putStrLn $ "@[genFileFromTemplate] result: " <> unpack (TE.decodeUtf8 vmContext.outStream)
+            BS.writeFile destPath vmContext.outStream
             pure $ Right ()
       Jinja _ -> do
         putStrLn $ "@[genFileFromTemplate] Jinja templ: " <> show srcPath

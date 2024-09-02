@@ -217,7 +217,7 @@ doOpcode context frame opWithArgs =
                   -- putStrLn $ "@[doOpcode] spit: " <> unpack (TE.decodeUtf8 aStr)
                   -- TODO: quote a string value vs a verbatim-block.
                   let
-                    newStr = if isQuoted then aStr else "\"" <> aStr <> "\""
+                    newStr = if isQuoted then "\"" <> aStr <> "\"" else aStr
                     newStream = context.outStream <> newStr
                   in
                   pure $ Right (context { outStream = newStream }, newFrame, True)

@@ -18,7 +18,7 @@ import qualified Data.Text.Encoding as TE
 import Conclusion (GenError (..))
 import RunTime.Interpreter.OpCodes (OpCode (..), toInstr, opParCount)
 import RunTime.Interpreter.Context (VMModule (..), FunctionDef (..), ConstantValue (..), ModuledDefinition (..), FunctionCode (..))
-import Template.Fuddle.BAst
+import Template.Fuddle.Ast
 
 
 data ReferenceDetails =
@@ -243,7 +243,7 @@ compileStmt ast children =
         mapM_ compileNode children
         resolveLabel nextLabel
     BlockEndST ->
-      --TODO.
+      --TODO: error checking on the validity of the block end at this point in the AST.
       pure ()
     IfElseNilSS cond args ->
       if null children then

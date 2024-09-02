@@ -1,4 +1,4 @@
-module Template.Fuddle.BAst where
+module Template.Fuddle.Ast where
 
 import Data.ByteString (ByteString)
 import Data.Text (Text)

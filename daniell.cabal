@@ -59,11 +59,9 @@ library
       RunTime.Interpreter.Memory
       RunTime.Interpreter.OpCodes
       RunTime.StaticSite
-      Template.Fuddle.AAst
-      Template.Fuddle.AParser
-      Template.Fuddle.BAst
-      Template.Fuddle.BParser
+      Template.Fuddle.Ast
       Template.Fuddle.Compiler
+      Template.Fuddle.Parser
       Template.Golang.Ast
       Template.Golang.Parser
       Template.Haskell
