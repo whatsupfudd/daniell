@@ -171,16 +171,27 @@ runItem rtOpts destDir projTempl = \case
       putStrLn $ "@[runItem] making NewDir: " <> fullDirPath
       SE.createDirectory fullDirPath
     pure $ Right ()
-  CloneSource srcPath destPath -> do
-    putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> destPath
-    alreadyThere <- SE.doesFileExist destPath
+  CloneSource srcPath destPath ->
+    let
+      fullDestPath = destDir <> "/" <> destPath
+    in do
+    putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> fullDestPath
+    alreadyThere <- SE.doesFileExist fullDestPath
     if alreadyThere then
-      putStrLn $ "@[runItem] skipping existing CloneSource: " <> destPath
+      putStrLn $ "@[runItem] skipping existing CloneSource: " <> fullDestPath
     else
-      SE.copyFile srcPath destPath
+      SE.copyFile srcPath fullDestPath
     pure $ Right ()
-  DupFromSource fItem srcPath destPath -> do
-    putStrLn $ "@[runItem] DupFromSource: " <> srcPath <> " -> " <> destPath
+  DupFromSource fItem srcPath destPath ->
+    let
+      fullDestPath = destDir <> "/" <> destPath
+    in do
+    putStrLn $ "@[runItem] DupFromSource: " <> srcPath <> " -> " <> fullDestPath
+    alreadyThere <- SE.doesFileExist fullDestPath
+    if alreadyThere then
+      putStrLn $ "@[runItem] skipping existing CloneSource: " <> fullDestPath
+    else
+      SE.copyFile srcPath fullDestPath
     pure $ Right ()
   RunTemplate path -> do
     putStrLn $ "@[runItem] RunTemplate: " <> path

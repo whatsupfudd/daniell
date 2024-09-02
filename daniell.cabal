@@ -68,6 +68,7 @@ library
       Template.Jinja2
       Template.Parser
       Template.Project
+      Template.TsParser
       Template.Types
       Utils
       WebServer.CorsPolicy
