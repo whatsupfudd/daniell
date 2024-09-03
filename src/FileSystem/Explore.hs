@@ -53,6 +53,8 @@ itemMaker fileName
   | ".hs" `isSuffixOf` fileName = Just $ KnownFile Haskell fileName
   | ".elm" `isSuffixOf` fileName = Just $ KnownFile Elm fileName
   | ".dant" `isSuffixOf` fileName = Just $ KnownFile DanTmpl fileName
+  | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
+  | ".jsx" `isSuffixOf` fileName = Just $ KnownFile JsReact fileName
   | otherwise = Just $ MiscFile fileName
 
 

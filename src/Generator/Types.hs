@@ -5,7 +5,7 @@ import FileSystem.Types (FileItem, FileKind)
 data WorkPlan =
   WorkPlan {
     destDir :: FilePath
-    , workItems :: [ WorkItem ]
+    , items :: [ WorkItem ]
   }
   deriving Show
 

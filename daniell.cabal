@@ -18,6 +18,7 @@ extra-source-files:
 library
   exposed-modules:
       Commands
+      Commands.Build
       Commands.Config
       Commands.Convert
       Commands.Deploy
@@ -36,6 +37,7 @@ library
       FileSystem.Types
       Generator.Logic
       Generator.Types
+      Generator.Work
       MainLogic
       Markup.Markdown
       Markup.Page
@@ -50,8 +52,8 @@ library
       ProjectDefinition.AssocRules
       ProjectDefinition.Defaults
       ProjectDefinition.Hugo
-      ProjectDefinition.Logic
       ProjectDefinition.NextJS
+      ProjectDefinition.Scaffholding
       ProjectDefinition.Types
       RunTime.Interpreter
       RunTime.Interpreter.Context
@@ -59,6 +61,7 @@ library
       RunTime.Interpreter.Memory
       RunTime.Interpreter.OpCodes
       RunTime.StaticSite
+      Template.FileTree
       Template.Fuddle.Ast
       Template.Fuddle.Compiler
       Template.Fuddle.Parser
@@ -67,7 +70,6 @@ library
       Template.Haskell
       Template.Jinja2
       Template.Parser
-      Template.Project
       Template.TsParser
       Template.Types
       Utils

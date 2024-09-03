@@ -2,11 +2,11 @@ module ProjectDefinition.Defaults where
 
 import Options.Runtime (RunOptions (..))
 -- import ProjectDefinition.Types (ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
-import Options.Types (NewProjectKind (..))
+import Options.Types (ProjectKind (..))
 
 -- TODO: Use the RunOptions to determine the sub-kind of project to create from the NewProjectKind one.
-defaultTemplate :: RunOptions -> NewProjectKind -> FilePath
-defaultTemplate rtOpts pType =
+defaultLocations :: RunOptions -> ProjectKind -> FilePath
+defaultLocations rtOpts pType =
   let
     templateName = case pType of
       SitePK -> "hugo"

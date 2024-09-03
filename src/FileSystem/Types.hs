@@ -18,7 +18,9 @@ data FileKind =
   | Haskell
   | Elm
   | DanTmpl
-  deriving Show
+  | TsReact
+  | JsReact
+  deriving (Eq, Show)
 
 
 getItemPath :: FileItem -> FilePath

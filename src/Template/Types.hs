@@ -8,16 +8,15 @@ import FileSystem.Types (PathFiles)
 
 import qualified RunTime.Interpreter.Context as Vm
 
-{- Project Template -}
 
-{- Project Template
+{- Scaffhold Template
  Defines how to assemble a project (currently, Haskell app) as a set of files and directories.
  The files are typically Haskell code that can be extended with '{{' and '}}' blocks of templating logic
  that is evaluated to produce different results based on the options & parameters provided upon launching the
  project creation.
 -}
 
-data ProjectTempl = ProjectTempl {
+data ScaffholdTempl = ScaffholdTempl {
   path :: FilePath
   , hasPrefix :: Maybe FilePath
   , description :: Maybe Text

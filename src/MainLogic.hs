@@ -33,6 +33,7 @@ runWithOptions cliOptions fileOptions = do
       let
         cmdExecutor =
           case aJob of
+            Opt.BuildCmd opts -> Cmd.buildCmd opts
             Opt.ConfigCmd -> Cmd.configHu
             Opt.ConvertCmd -> Cmd.convertHu
             Opt.DeployCmd -> Cmd.deployHu

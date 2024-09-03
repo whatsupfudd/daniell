@@ -8,7 +8,8 @@ import Options.Applicative
 import Options.Types
 
 data Command =
-  ConfigCmd
+  BuildCmd BuildOptions
+  | ConfigCmd
   | ConvertCmd
   | DeployCmd
   | EnvCmd
@@ -74,7 +75,8 @@ commandsDef :: Mod CommandFields Command
 commandsDef =
   let
     cmdArray = [
-        ("config", pure ConfigCmd, "Print the site configuration.")
+        ("build", BuildCmd <$> buildOpts, "Print the site configuration.")
+      , ("config", pure ConfigCmd, "Print the site configuration.")
       , ("convert", pure ConvertCmd, "Convert your content to different formats.")
       , ("deploy", pure DeployCmd, "Deploy your site to a Cloud provider.")
       , ("env", pure EnvCmd, "Print Hugo version and environment info.")
@@ -121,6 +123,28 @@ newOpts =
   webAppPK = command "webapp" (info (pure WebAppPK) (progDesc "Create a new webapp project."))
   localAppPK = command "localapp" (info (pure LocalAppPK) (progDesc "Create a new localapp project."))
 
+
+buildOpts :: Parser BuildOptions
+buildOpts =
+  BuildOptions <$>
+    subparser (sitePK <> webAppPK <> localAppPK)
+    <*> optional (strOption (
+        long "type"
+        <> short 't'
+        <> help "technology type (fuddle, hugo, nextjs)."
+      ))
+    <*> optional (strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory."))
+  -- (subparser (hugoSP <> nextSP <> fuddleSP <> gatsbySP)
+  where
+  sitePK = command "site" (info (pure SitePK) (progDesc "Create a new site project."))
+  webAppPK = command "webapp" (info (pure WebAppPK) (progDesc "Create a new webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppPK) (progDesc "Create a new localapp project."))
+  {- TODO: get the parser to only accept these keywoards:
+  hugoSP = command "hugo" (info (pure HugoSP) (progDesc "Build a Hugo project."))
+  nextSP = command "next" (info (pure NextSP) (progDesc "Build a Next project."))
+  fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Build a Fuddle project."))
+  gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Build a Gatsby project."))
+  -}
 
 paramParser :: ReadM ParameterTpl
 paramParser = eitherReader $ \s ->

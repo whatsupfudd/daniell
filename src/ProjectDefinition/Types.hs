@@ -4,7 +4,7 @@ module ProjectDefinition.Types where
 
 import Data.Text (Text)
 import Data.Type.Coercion (TestCoercion)
-import Template.Types (ProjectTempl, FileTempl)
+import Template.Types (ScaffholdTempl, FileTempl)
 import FileSystem.Types (PathFiles)
 
 
@@ -23,7 +23,7 @@ Note:
 data ProjectDefinition = ProjectDefinition {
     baseDir :: FilePath
     , pType :: ProjectType
-    , templates :: [ ProjectTempl ]
+    , templates :: [ ScaffholdTempl ]
     , sourceContent :: PathFiles
   }
 
