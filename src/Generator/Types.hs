@@ -18,4 +18,5 @@ data WorkItem =
   -- run a 'logic' template, no implied result.AnonymousRoutes
   | RunTemplate FilePath
   | RunTemplateToDest FileKind FilePath FileItem FilePath
+  | ConfigWith FileItem
   deriving Show

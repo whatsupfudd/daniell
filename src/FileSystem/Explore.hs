@@ -55,6 +55,8 @@ itemMaker fileName
   | ".dant" `isSuffixOf` fileName = Just $ KnownFile DanTmpl fileName
   | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
   | ".jsx" `isSuffixOf` fileName = Just $ KnownFile JsReact fileName
+  | ".ts" `isSuffixOf` fileName = Just $ KnownFile Typescript fileName
+  | ".js" `isSuffixOf` fileName = Just $ KnownFile Javascript fileName
   | otherwise = Just $ MiscFile fileName
 
 

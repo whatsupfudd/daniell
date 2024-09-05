@@ -24,7 +24,6 @@ import qualified ProjectDefinition.NextJS as Nx
 import qualified ProjectDefinition.Scaffholding as Scf
 import ProjectDefinition.Defaults (defaultLocations)
 import Template.Haskell (tsParseHaskell)
-import Template.FileTree (loadTree)
 import qualified Template.Parser as Tmpl
 import Template.Types (ScaffholdTempl (..), FileTempl (..), Function (..), Code (..))
 import qualified Markup.Page as Mrkp
@@ -169,7 +168,8 @@ buildSite rtOpts subKind = do
           HugoSP -> Hu.analyseHugoProject rtOpts dirTree
           NextSP -> Nx.analyseNextJsProject rtOpts True dirTree
           _ -> Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show subKind
-      in case eiWorkPlan of
+      in
+      case eiWorkPlan of
         Left err -> pure $ Left err
         Right workPlan -> do
           pure $ Right ()
@@ -218,7 +218,7 @@ createProject rtOpts newOpts =
 
 createScaffholding :: RunOptions -> NewOptions -> IO Conclusion
 createScaffholding rtOpts newOpts = do
-  rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
+  rezTemplates <- mapM (Scf.parseFileTree rtOpts) newOpts.templates
   let
     (errTemplates, userTemplates) = splitResults rezTemplates
   case errTemplates of
@@ -230,7 +230,7 @@ createScaffholding rtOpts newOpts = do
         -- TODO: figure out when to not scan the defaultLocations...
         --  if False then pure $ Right userTemplates else
         do
-        rezB <- parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
+        rezB <- Scf.parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
         case rezB of
           Left errMsg -> pure . Left $ show errMsg
           Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
@@ -246,17 +246,4 @@ createScaffholding rtOpts newOpts = do
       putStrLn $ "@[newCmd] Template loading error: " <> show errTemplates
       pure $ ErrorCcl $ "@[newCmd] error loading templates: " <> show errTemplates
 
-
-parseFileTree :: RunOptions -> FilePath -> IO (Either GenError ScaffholdTempl)
-parseFileTree rtOpts tPath =
-  let
-    (fullPath, mbPrefix) = case tPath of
-      '.' : rest -> (tPath, Nothing)
-      '/' : rest -> (tPath, Nothing)
-      _ -> (rtOpts.templateDir <> "/" <> tPath, Just rtOpts.templateDir)
-  in do
-  rezA <- loadTree rtOpts fullPath
-  case rezA of
-    Left errMsg -> pure $ Left $ SimpleMsg errMsg
-    Right aTempl -> pure $ Right aTempl { hasPrefix = mbPrefix }
 

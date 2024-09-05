@@ -20,7 +20,9 @@ data FileKind =
   | DanTmpl
   | TsReact
   | JsReact
-  deriving (Eq, Show)
+  | Typescript
+  | Javascript
+  deriving (Eq, Ord, Show)
 
 
 getItemPath :: FileItem -> FilePath

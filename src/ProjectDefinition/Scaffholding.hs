@@ -12,7 +12,22 @@ import qualified FileSystem.Types as Fs
 import Generator.Types (WorkPlan (..), WorkItem (..))
 import Generator.Work (runGen)
 import Template.Types (ScaffholdTempl (..))
-import Template.FileTree (mergeTemplates)
+import Template.FileTree (mergeTemplates, loadTree)
+
+
+parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffholdTempl)
+parseFileTree rtOpts tPath =
+  let
+    (fullPath, mbPrefix) = case tPath of
+      '.' : rest -> (tPath, Nothing)
+      '/' : rest -> (tPath, Nothing)
+      _ -> (rtOpts.templateDir <> "/" <> tPath, Just rtOpts.templateDir)
+  in do
+  rezA <- loadTree rtOpts fullPath
+  case rezA of
+    Left errMsg -> pure $ Left $ SimpleMsg errMsg
+    Right aTempl -> pure $ Right aTempl { hasPrefix = mbPrefix }
+
 
 createFileTree :: Op.RunOptions -> Op.NewOptions -> [ScaffholdTempl] -> IO (Either GenError ())
 createFileTree rtOpts newOpts templates = do

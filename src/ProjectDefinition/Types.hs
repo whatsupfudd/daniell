@@ -5,7 +5,7 @@ module ProjectDefinition.Types where
 import Data.Text (Text)
 import Data.Type.Coercion (TestCoercion)
 import Template.Types (ScaffholdTempl, FileTempl)
-import FileSystem.Types (PathFiles)
+import FileSystem.Types (PathFiles, FileItem)
 
 
 {-
@@ -43,6 +43,7 @@ data ProjectType =
 
 data SiteType =
   Hugo HugoComponents
+  | NextStatic NextJSComponents
   | WordPress WordPressComponents
 
 data WebAppType =
@@ -92,30 +93,35 @@ data DbConfig = DbConfig {
   }
 
 {- NextJS -}
+type FileWithPath = (FilePath, FileItem)
+
 data NextJSComponents = NextJSComponents {
       config :: NextJSConfig
-      , components :: [ TemplItem ]
-      , pages :: [ TemplItem ]
-      , api :: [ TemplItem ]
-      , lib :: [ TemplItem ]
-      , styles :: [ TemplItem ]
-      , utils :: [ TemplItem ]
-      , hooks :: [ TemplItem ]
-      , services :: [ TemplItem ]
-      , types :: [ TemplItem ]
-      , tests :: [ TemplItem ]
-      , stories :: [ TemplItem ]
-      , public :: [ TemplItem ]
-      , build :: [ TemplItem ]
-      , deploy :: [ TemplItem ]
+      , components :: [ FileWithPath ]
+      , pages :: [ FileWithPath ]
+      , api :: [ FileWithPath ]
+      , lib :: [ FileWithPath ]
+      , styles :: [ FileWithPath ]
+      , utils :: [ FileWithPath ]
+      , hooks :: [ FileWithPath ]
+      , services :: [ FileWithPath ]
+      , types :: [ FileWithPath ]
+      , tests :: [ FileWithPath ]
+      , stories :: [ FileWithPath ]
+      , public :: [ FileWithPath ]
+      , build :: [ FileWithPath ]
+      , deploy :: [ FileWithPath ]
+      , miscs :: [ FileWithPath ]
     }
+    deriving Show
 
 data NextJSConfig = NextJSConfig {
-    envConfig :: [ String ]
-    , nextConfig :: [ String ]
-    , packageConfig :: [ String ]
-    , tsConfig :: [ String ]
+    envConfig :: [ FileItem ]
+    , nextConfig :: [ FileItem ]
+    , packageConfig :: [ FileItem ]
+    , tsConfig :: [ FileItem ]
   }
+  deriving Show
 
 {- TODO: Figure out what goes in the components of each project definition. -}
 data TemplItem
