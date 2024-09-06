@@ -4,6 +4,8 @@ import FileSystem.Types (FileItem, FileKind)
 
 data WorkPlan =
   WorkPlan {
+    -- TODO: add a 'project' field to hold the project definition -> context for execution with params for
+    -- driving the logic and supplying data in VM exec context.
     destDir :: FilePath
     , items :: [ WorkItem ]
   }

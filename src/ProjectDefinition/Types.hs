@@ -2,10 +2,11 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 module ProjectDefinition.Types where
 
+import qualified Data.Map.Strict as Mp
 import Data.Text (Text)
 import Data.Type.Coercion (TestCoercion)
 import Template.Types (ScaffholdTempl, FileTempl)
-import FileSystem.Types (PathFiles, FileItem)
+import FileSystem.Types (PathFiles, FileItem, FileKind)
 
 
 {-
@@ -57,26 +58,39 @@ data LocalAppType =
 {- FUDDAPP -}
 data LocalAppComponents = LocalAppComponents {
     config :: String
-    , components :: [ TemplItem ]
+    , components :: [ TmpItem ]
   }
 
 {- FUDDLE -}
 data FuddleComponents = FuddleComponents {
     config :: String
-    , components :: [ TemplItem ]
+    , components :: [ TmpItem ]
   }
 
 {- HUGO -}
 data HugoComponents = HugoComponents {
-    markupContent :: [ TemplItem ]
-    , themes :: [ TemplItem ]
-    , templates :: [ ProjEntry ]
-    , assets :: [ ProjEntry ]
-    , dataSources :: [ ProjEntry ]
-    , resources :: [ ProjEntry ]
-    , configs :: [ TemplItem ]
+    templCore :: HugoTemplCore
+    , config :: [ FileWithPath ]
+    , content :: [ FileWithPath ]
+    , public :: [ FileWithPath ]
+    , themes :: ThemeMap
     , staticDest :: FilePath
-}
+  }
+  deriving Show
+
+data HugoTemplCore = HugoTemplCore {
+    archetypes :: [ FileWithPath ]
+    , assets :: [ FileWithPath ]
+    , dataSet :: [ FileWithPath ]
+    , i18n :: [ FileWithPath ]
+    , layouts :: [ FileWithPath ]
+    , resource :: [ FileWithPath ]
+    , static :: [ FileWithPath ]
+    , projConfig :: [ FileWithPath ]
+    , miscs :: [ FileWithPath ]
+  }
+  deriving Show
+
 
 {- WORDPRESS -}
 data WordPressComponents = WordPressComponents {
@@ -92,8 +106,12 @@ data DbConfig = DbConfig {
     , dbPass :: String
   }
 
-{- NextJS -}
 type FileWithPath = (FilePath, FileItem)
+type FileSet = (Mp.Map FileKind [FileWithPath], [FileWithPath])
+type OrgMap = Mp.Map String [FileWithPath]
+type ThemeMap = Mp.Map String HugoTemplCore
+
+{- NextJS -}
 
 data NextJSComponents = NextJSComponents {
       config :: NextJSConfig
@@ -124,7 +142,7 @@ data NextJSConfig = NextJSConfig {
   deriving Show
 
 {- TODO: Figure out what goes in the components of each project definition. -}
-data TemplItem
+data TmpItem
 
 {- Old Stuff -}
 

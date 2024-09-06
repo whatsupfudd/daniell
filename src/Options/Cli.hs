@@ -145,6 +145,10 @@ buildOpts =
   fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Build a Fuddle project."))
   gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Build a Gatsby project."))
   -}
+  {-
+   Hugo options:
+     --config <filename>[, <filename>]*   config file(s, with left-to-right priority), default is path/{hugo|config}.{yaml|json|toml}.
+  -}
 
 paramParser :: ReadM ParameterTpl
 paramParser = eitherReader $ \s ->

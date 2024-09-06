@@ -1,8 +1,9 @@
 module ProjectDefinition.NextJS where
 
+import Data.List (isPrefixOf)
 import qualified Data.Map.Strict as Mp
-import Data.Text (pack)
 import Data.Maybe (fromMaybe)
+import Data.Text (pack)
 
 import qualified FileSystem.Types as Fs
 
@@ -10,7 +11,6 @@ import Options.Runtime (RunOptions (..))
 import Conclusion (GenError (..))
 import Generator.Types (WorkPlan (..))
 import ProjectDefinition.Types
-import Data.List (isPrefixOf)
 
 
 
@@ -57,14 +57,6 @@ analyseNextJsProject rtOpts isStatic pathFiles =
   else
     analyseWebAppProject rtOpts $ ProjectDefinition rtOpts.baseDir (WebApp (NextJS content)) [] pathFiles
 
-
-{-
-type PathNode = (FilePath, [FileItem])
-type PathFiles = Seq.Seq PathNode
--}
-
-type FileSet = (Mp.Map Fs.FileKind [FileWithPath], [FileWithPath])
-type OrgMap = Mp.Map String [FileWithPath]
 
 classifyContent :: RunOptions -> Fs.PathFiles -> NextJSComponents
 classifyContent rtOpts pathFiles =

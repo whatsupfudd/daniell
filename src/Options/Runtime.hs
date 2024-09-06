@@ -1,5 +1,6 @@
 module Options.Runtime where
 
+import Data.Text (Text)
 import Options.SiteConfig as Scfg
 import WebServer.CorsPolicy (CORSConfig, defaultCorsPolicy)
 
@@ -11,8 +12,25 @@ data RunOptions = RunOptions {
     , serverPort :: Int
     , corsPolicy :: Maybe CORSConfig
     , templateDir :: FilePath
+    , techOpts :: TechOptions
   }
 
+data TechOptions =
+  HugoOptions HugoRunOptions
+  | NextOptions
+  | FuddleOptions
+  | GatsbyOptions
+  | NoTech
+  deriving Show
+
+data HugoRunOptions = HugoRunOptions {
+    configFiles :: String
+    , environment :: String
+  }
+  deriving Show
+
+
+defaultRun :: FilePath -> Text -> RunOptions
 defaultRun appHome baseURL =
   RunOptions {
     debug = 0
@@ -22,4 +40,5 @@ defaultRun appHome baseURL =
     , serverPort = 7885
     , corsPolicy = Just defaultCorsPolicy
     , templateDir = appHome <> "/templates"
+    , techOpts = NoTech
   }
