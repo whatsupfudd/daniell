@@ -1,9 +1,16 @@
+{-# LANGUAGE LambdaCase #-}
 module ProjectDefinition.Hugo where
 
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Mp
 import Data.Text (pack)
+import System.FilePath ((</>))
+import qualified Data.Text.IO as T
+
+import qualified Toml as Tm
+import qualified Data.Yaml as Ym
+import qualified Data.Aeson as Ae
 
 import qualified FileSystem.Types as Fs
 import Options.Runtime (RunOptions (..), TechOptions (..), HugoRunOptions (..))
@@ -11,6 +18,8 @@ import Conclusion (GenError (..))
 import Generator.Types (WorkPlan (..))
 
 import ProjectDefinition.Types
+import Data.Either (fromRight)
+import Control.Monad (foldM)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -63,7 +72,7 @@ defaultComponents = HugoComponents {
   }
 
 
-analyseHugoProject :: RunOptions -> Fs.PathFiles -> Either GenError WorkPlan
+analyseHugoProject :: RunOptions -> Fs.PathFiles -> IO (Either GenError WorkPlan)
 analyseHugoProject rtOpts pathFiles =
     let
     content = classifyContent rtOpts pathFiles
@@ -96,7 +105,7 @@ organizeFiles (knownFiles, miscFiles) =
   in
   HugoComponents {
     templCore = defineTemplCore orgSet
-    
+
     , config = Mp.findWithDefault [] "config" orgSet
     , content = Mp.findWithDefault [] "content" orgSet
     , public = Mp.findWithDefault [] "public" orgSet
@@ -154,13 +163,28 @@ organizeFiles (knownFiles, miscFiles) =
     Mp.insert themeName newTemplCore themeMap
 
 
-analyseContent :: RunOptions -> ProjectDefinition -> Either GenError WorkPlan
-analyseContent rtOpts (ProjectDefinition baseDir (Site (Hugo content)) [] pathFiles) =
+analyseContent :: RunOptions -> ProjectDefinition -> IO (Either GenError WorkPlan)
+analyseContent rtOpts (ProjectDefinition baseDir (Site (Hugo components)) [] pathFiles) =
   let
-    globConfig = scanForGlobConfig (getHugoEnvironment rtOpts) content.config
-    dbgContent = "NextJS Site project definition: " <> pack (show content)
-  in
-  Left $ SimpleMsg dbgContent
+    globConfig = scanForGlobConfig (getHugoEnvironment rtOpts) components.config
+    markupFiles = extractMarkup components.content
+    dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
+  in do
+  runConfigs <- analyzeConfig rtOpts globConfig
+  pure . Left $ SimpleMsg dbgContent
+
+
+extractMarkup :: [ FileWithPath ] -> Mp.Map String [ FileWithPath ]
+extractMarkup = foldl (\accum (dirPath, aFile) ->
+    case aFile of
+      Fs.KnownFile kind aPath ->
+        if kind == Fs.Markup then
+          Mp.insertWith (<>) dirPath [(dirPath, aFile)] accum
+        else
+          accum
+      _ -> accum
+  ) Mp.empty
+
 
 scanForGlobConfig :: Maybe String -> [ FileWithPath ] -> (Maybe FileWithPath, Maybe FileWithPath, [ FileWithPath ])
 scanForGlobConfig mbEnvironment = foldl (\accum@(topConfig, defaultConfig, otherConfigs) aFile ->
@@ -185,3 +209,80 @@ getHugoEnvironment rtOpts =
   case rtOpts.techOpts of
     HugoOptions opts -> Just opts.environment
     _ -> Nothing
+
+data AnalyzeContext = AnalyzeContext
+
+
+analyzeConfig :: RunOptions -> (Maybe FileWithPath, Maybe FileWithPath, [ FileWithPath ]) -> IO (Either GenError AnalyzeContext)
+analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
+  maybe (pure $ Right AnalyzeContext) (parseTopConfig AnalyzeContext rtOpts.baseDir) topConfig
+    >>= (\case
+        Left err -> pure $ Left err
+        Right ctxt -> maybe (pure $ Right ctxt) (parseDefaultConfig ctxt rtOpts.baseDir) defaultConfig
+      )
+    >>= (\case
+      Left err -> pure $ Left err
+      Right ctxt -> parseOtherConfigs ctxt rtOpts.baseDir otherConfigs
+      )
+  where
+  parseTopConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
+  parseTopConfig context rootDir aFile = do
+    putStrLn "Parsing top config..."
+    parseConfigFile context rootDir aFile
+
+  parseDefaultConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
+  parseDefaultConfig context rootDir aFile = do
+    putStrLn "Parsing default config..."
+    parseConfigFile context rootDir aFile
+
+  parseOtherConfigs :: AnalyzeContext -> FilePath -> [ FileWithPath ] -> IO (Either GenError AnalyzeContext)
+  parseOtherConfigs context rootDir otherConfigs = do
+    putStrLn "Parsing other configs..."
+    parseRez <- foldM (\accum aFile -> case accum of
+          Left err -> pure $ Left err
+          Right aCtxt -> parseConfigFile aCtxt rootDir aFile
+        ) (Right context) otherConfigs
+    pure $ case parseRez of
+      Left err -> Left err
+      Right _ -> Right context
+
+
+parseConfigFile :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
+parseConfigFile context rootDir (dirPath, Fs.KnownFile kind filePath) = do
+  let
+    fullPath = rootDir </> "config" </> dirPath </> filePath
+  putStrLn $ "@[parseDefaultConfig] reading: " <> fullPath
+  putStrLn $ "@[parseDefaultConfig] analyzing: " <> fullPath
+  case kind of
+    Fs.Toml -> do
+      srcText <- T.readFile fullPath
+      case Tm.parse srcText of
+        Left err -> do
+          putStrLn $ "@[parseDefaultConfig] error parsing TOML: " <> show err
+          pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
+        Right tomlVal -> do
+          putStrLn $ "@[parseDefaultConfig] parsed TOML: " <> show tomlVal
+          pure $ Right AnalyzeContext
+    Fs.Yaml -> do
+      eiYamlRez <- Ym.decodeFileEither fullPath :: IO (Either Ym.ParseException Ae.Value)
+      case eiYamlRez of
+        Left err -> do
+          putStrLn $ "@[parseDefaultConfig] error parsing Yaml: " <> show err
+          pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
+        Right yamlVal -> do
+          putStrLn $ "@[parseDefaultConfig] parsed Yaml: " <> show yamlVal
+          pure $ Right AnalyzeContext
+    Fs.Json -> do
+      putStrLn $ "@[parseDefaultConfig] parsing JSON..."
+      eiJsonRez <- Ae.eitherDecodeFileStrict' fullPath :: IO (Either String Ae.Object)
+      case eiJsonRez of
+        Left err -> do
+          putStrLn $ "@[parseDefaultConfig] error parsing JSON: " <> err
+          pure . Left $ SimpleMsg ("JSON err: " <> pack err)
+        Right jsonVal -> do
+          putStrLn $ "@[parseDefaultConfig] parsed JSON: " <> show jsonVal
+          pure $ Right AnalyzeContext
+
+parseConfigFile context rootDir (dirPath, Fs.MiscFile aPath) = do
+  putStrLn "@[parseConfigFile] misc file!"
+  pure . Left . SimpleMsg $ "@[parseConfigFile] error, trying to parse misc file " <> pack aPath

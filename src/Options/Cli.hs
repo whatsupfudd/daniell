@@ -147,7 +147,20 @@ buildOpts =
   -}
   {-
    Hugo options:
-     --config <filename>[, <filename>]*   config file(s, with left-to-right priority), default is path/{hugo|config}.{yaml|json|toml}.
+    --config <filename>[, <filename>]*   config file(s, with left-to-right priority), default is path/{hugo|config}.{yaml|json|toml}.
+    --environment <env>                 build environment (development, staging, production, ...), default is 'development'.
+    -b / --baseURL <url>                     hostname (and path) to the root, default is taken from baseURL in config file.
+    -D / --buildDrafts                    include content marked as draft.
+    -E / --buildExpired                   include expired content.
+    -F / --buildFuture                    include content with publishdate in the future.
+    --cacheDir <directory>            filesystem path to cache directory.
+    --cleanDestinationDir            remove files from destination not found in source.
+    --clock <string>                  set the clock used by generator, default is the machine's local time, e.g. --clock 2021-11-06T22:30:00.00+09:00
+    --contentDir <directory>          filesystem path to content directory, default is path/content.
+    --configDir <directory>           filesystem path to configuration directory, default is path/config.
+    -c / --contentDir <directory>          filesystem path to content directory, default is path/content.
+    --debug                          debug output.
+    --destination <directory>         filesystem path to write files to, default is path/public.
   -}
 
 paramParser :: ReadM ParameterTpl

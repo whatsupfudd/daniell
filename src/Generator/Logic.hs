@@ -159,16 +159,15 @@ buildSite rtOpts subKind = do
   -- extract the content pages, turn them into with Markup.parseContent to [ MarkupPage ]
   case eiSiteDef of
     Left err -> pure . Left $ SimpleMsg (pack . show $ err)
-    Right dirTree ->
-      let
-        -- TODO: move the dirTree analysis in ProjectDefinition.Logic.
-        eiWorkPlan = case subKind of
-          FuddleSP -> analyseFuddleProject rtOpts True dirTree
-          GatsbySP -> analyseGatsbyProject rtOpts dirTree
+    Right dirTree -> do
+      -- TODO: move the dirTree analysis in ProjectDefinition.Logic.
+      eiWorkPlan <-
+         case subKind of
+          FuddleSP -> pure $ analyseFuddleProject rtOpts True dirTree
+          GatsbySP -> pure $ analyseGatsbyProject rtOpts dirTree
           HugoSP -> Hu.analyseHugoProject rtOpts dirTree
-          NextSP -> Nx.analyseNextJsProject rtOpts True dirTree
-          _ -> Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show subKind
-      in
+          NextSP -> pure $ Nx.analyseNextJsProject rtOpts True dirTree
+          _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show subKind
       case eiWorkPlan of
         Left err -> pure $ Left err
         Right workPlan -> do
