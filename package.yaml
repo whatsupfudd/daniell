@@ -43,7 +43,7 @@ dependencies:
   - servant
   - servant-auth
   - servant-auth-server
-  # FOr WebServer.Servant mkErrors:
+  # For WebServer.Servant mkErrors:
   # - servant-errors
   - servant-multipart
   - servant-server
@@ -73,6 +73,8 @@ dependencies:
   # For Compiler/Interpreter VM:
   - cryptohash-md5
   - array
+  # For parsing TOML:
+  - hashmap
 
 default-extensions:
 - OverloadedStrings

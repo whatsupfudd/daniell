@@ -1,14 +1,20 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 module ProjectDefinition.Hugo where
 
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Mp
-import Data.Text (pack)
-import System.FilePath ((</>))
+import Data.Text (Text, pack, unpack)
+import System.FilePath ((</>), dropExtension)
 import qualified Data.Text.IO as T
 
+import Control.Monad (foldM)
+
 import qualified Toml as Tm
+import qualified Toml.Type.PrefixTree as Tpt
+import qualified Data.HashMap.Strict as Hm
+import qualified Data.List.NonEmpty as Nem
 import qualified Data.Yaml as Ym
 import qualified Data.Aeson as Ae
 
@@ -18,8 +24,7 @@ import Conclusion (GenError (..))
 import Generator.Types (WorkPlan (..))
 
 import ProjectDefinition.Types
-import Data.Either (fromRight)
-import Control.Monad (foldM)
+
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -50,6 +55,37 @@ import Control.Monad (foldM)
   Using the 'server' command sets the default environment to 'development'; the 'build' command (just 'hugo' in gohugo) set the default
   environment to 'production'.
 -}
+
+-- Analysis context for a Hugo project (configurations, etc) that will be used to drive generation.
+data AnalyzeContext = AnalyzeContext {
+    globalVars :: Mp.Map Text DictEntry
+    , defaultVars :: Mp.Map Text DictEntry
+    , otherVars :: Mp.Map Text (Mp.Map Text DictEntry)
+  }
+  deriving Show
+
+defaultContext :: AnalyzeContext
+defaultContext = AnalyzeContext {
+    globalVars = Mp.empty
+    , defaultVars = Mp.empty
+    , otherVars = Mp.empty
+  }
+
+
+data DictEntry =
+  ValueDE DictValue
+  | DictDE (Mp.Map Text DictEntry)
+  | ListDE [ Mp.Map Text DictEntry ]
+  deriving Show
+
+data DictValue =
+  StringDV Text
+  | IntDV Integer
+  | DoubleDV Double
+  | BoolDV Bool
+  | ListDV [ DictValue ]
+  deriving Show
+
 
 defaultComponents :: HugoComponents
 defaultComponents = HugoComponents {
@@ -168,10 +204,11 @@ analyseContent rtOpts (ProjectDefinition baseDir (Site (Hugo components)) [] pat
   let
     globConfig = scanForGlobConfig (getHugoEnvironment rtOpts) components.config
     markupFiles = extractMarkup components.content
-    dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
+    -- dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
   in do
   runConfigs <- analyzeConfig rtOpts globConfig
-  pure . Left $ SimpleMsg dbgContent
+  -- TODO: incorporate the analysis into the WorkPlan.
+  pure . Left . SimpleMsg $ pack (show runConfigs)
 
 
 extractMarkup :: [ FileWithPath ] -> Mp.Map String [ FileWithPath ]
@@ -210,12 +247,10 @@ getHugoEnvironment rtOpts =
     HugoOptions opts -> Just opts.environment
     _ -> Nothing
 
-data AnalyzeContext = AnalyzeContext
-
 
 analyzeConfig :: RunOptions -> (Maybe FileWithPath, Maybe FileWithPath, [ FileWithPath ]) -> IO (Either GenError AnalyzeContext)
 analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
-  maybe (pure $ Right AnalyzeContext) (parseTopConfig AnalyzeContext rtOpts.baseDir) topConfig
+  maybe (pure $ Right defaultContext) (parseTopConfig defaultContext rtOpts.baseDir) topConfig
     >>= (\case
         Left err -> pure $ Left err
         Right ctxt -> maybe (pure $ Right ctxt) (parseDefaultConfig ctxt rtOpts.baseDir) defaultConfig
@@ -227,32 +262,42 @@ analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
   where
   parseTopConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
   parseTopConfig context rootDir aFile = do
-    putStrLn "Parsing top config..."
-    parseConfigFile context rootDir aFile
+    eiRez <- parseConfigFile rootDir aFile
+    case eiRez of
+      Left err -> pure $ Left err
+      Right aConfig -> pure $ Right context { globalVars = aConfig }
 
   parseDefaultConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
   parseDefaultConfig context rootDir aFile = do
-    putStrLn "Parsing default config..."
-    parseConfigFile context rootDir aFile
+    eiRez <- parseConfigFile rootDir aFile
+    case eiRez of
+      Left err -> pure $ Left err
+      Right aConfig -> pure $ Right context { defaultVars = aConfig }
 
   parseOtherConfigs :: AnalyzeContext -> FilePath -> [ FileWithPath ] -> IO (Either GenError AnalyzeContext)
   parseOtherConfigs context rootDir otherConfigs = do
-    putStrLn "Parsing other configs..."
-    parseRez <- foldM (\accum aFile -> case accum of
+    -- putStrLn "Parsing other configs..."
+    foldM (\accum aFile@(dirPath, aFileItem) -> case accum of
           Left err -> pure $ Left err
-          Right aCtxt -> parseConfigFile aCtxt rootDir aFile
+          Right aCtxt -> case aFileItem of
+              Fs.KnownFile kind filePath ->
+                if kind == Fs.Toml || kind == Fs.Yaml || kind == Fs.Json then do
+                  eiRez <- parseConfigFile rootDir aFile
+                  case eiRez of
+                    Left err -> pure $ Left err
+                    Right aConfig -> pure $ Right aCtxt { otherVars = Mp.insertWith (<>) (pack $ dropExtension filePath) aConfig aCtxt.otherVars }
+                else
+                  pure $ Right aCtxt
+              _ -> pure $ Left $ SimpleMsg "Misc file in other configs."
         ) (Right context) otherConfigs
-    pure $ case parseRez of
-      Left err -> Left err
-      Right _ -> Right context
 
 
-parseConfigFile :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
-parseConfigFile context rootDir (dirPath, Fs.KnownFile kind filePath) = do
+parseConfigFile :: FilePath -> FileWithPath -> IO (Either GenError (Mp.Map Text DictEntry))
+parseConfigFile rootDir (dirPath, Fs.KnownFile kind filePath) = do
   let
     fullPath = rootDir </> "config" </> dirPath </> filePath
-  putStrLn $ "@[parseDefaultConfig] reading: " <> fullPath
-  putStrLn $ "@[parseDefaultConfig] analyzing: " <> fullPath
+  -- putStrLn $ "@[parseDefaultConfig] reading: " <> fullPath
+  -- putStrLn $ "@[parseDefaultConfig] analyzing: " <> fullPath
   case kind of
     Fs.Toml -> do
       srcText <- T.readFile fullPath
@@ -261,8 +306,10 @@ parseConfigFile context rootDir (dirPath, Fs.KnownFile kind filePath) = do
           putStrLn $ "@[parseDefaultConfig] error parsing TOML: " <> show err
           pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
         Right tomlVal -> do
-          putStrLn $ "@[parseDefaultConfig] parsed TOML: " <> show tomlVal
-          pure $ Right AnalyzeContext
+          -- putStrLn $ "@[parseDefaultConfig] parsed TOML: " <> show tomlVal
+          pure $ case tomlToDict tomlVal of
+            Left err -> Left $ SimpleMsg ("TOML conversion err: " <> pack err)
+            Right aDict -> Right aDict
     Fs.Yaml -> do
       eiYamlRez <- Ym.decodeFileEither fullPath :: IO (Either Ym.ParseException Ae.Value)
       case eiYamlRez of
@@ -271,7 +318,7 @@ parseConfigFile context rootDir (dirPath, Fs.KnownFile kind filePath) = do
           pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
         Right yamlVal -> do
           putStrLn $ "@[parseDefaultConfig] parsed Yaml: " <> show yamlVal
-          pure $ Right AnalyzeContext
+          pure . Left $ SimpleMsg "Yaml parsing not implemented yet."
     Fs.Json -> do
       putStrLn $ "@[parseDefaultConfig] parsing JSON..."
       eiJsonRez <- Ae.eitherDecodeFileStrict' fullPath :: IO (Either String Ae.Object)
@@ -281,8 +328,56 @@ parseConfigFile context rootDir (dirPath, Fs.KnownFile kind filePath) = do
           pure . Left $ SimpleMsg ("JSON err: " <> pack err)
         Right jsonVal -> do
           putStrLn $ "@[parseDefaultConfig] parsed JSON: " <> show jsonVal
-          pure $ Right AnalyzeContext
+          pure . Left $ SimpleMsg "JSON parsing not implemented yet."
 
-parseConfigFile context rootDir (dirPath, Fs.MiscFile aPath) = do
+parseConfigFile rootDir (dirPath, Fs.MiscFile aPath) = do
   putStrLn "@[parseConfigFile] misc file!"
   pure . Left . SimpleMsg $ "@[parseConfigFile] error, trying to parse misc file " <> pack aPath
+
+
+-- Toml to AnalyzeContext conversion helpers:
+
+tomlToDict :: Tm.TOML -> Either String (Mp.Map Text DictEntry)
+tomlToDict tomlBlock =
+  let
+    eiPairs = foldM (\accum (fKey Tm.:|| rKey, value)-> case tomlToValue value of
+          Left err -> Left $ "@[tomlToDict] pair error: " <> show err
+          Right aVal -> Right $ Mp.insert fKey.unPiece (ValueDE aVal) accum
+        ) Mp.empty $ Hm.toList tomlBlock.tomlPairs
+    eiTables =
+      case eiPairs of
+        Left _ -> eiPairs
+        Right pairs -> foldM (\accum (fKey Tm.:|| rKey, value) -> case tomlToDict value of
+              Left err -> Left $ "@[tomlToDict] table error: " <> err
+              Right aVal -> Right $ Mp.insert fKey.unPiece (DictDE aVal) accum
+          ) pairs (Tpt.toList tomlBlock.tomlTables)
+  in
+  case eiTables of
+    Left err -> eiTables
+    Right tables -> foldM (\accum (fKey Tm.:|| rKey, arrayVal) ->
+        let
+          mbExistingArray = Mp.lookup fKey.unPiece accum
+          newValues = mapM tomlToDict (Nem.toList arrayVal)
+        in
+        case newValues of
+          Left err -> Left $ "@[tomlToDict] table array conversion error: " <> err
+          Right aArray ->
+            case mbExistingArray of
+              Nothing -> Right $ Mp.insert fKey.unPiece (ListDE aArray) accum
+              Just (ListDE existingArray) -> Right $ Mp.insert fKey.unPiece (ListDE $ existingArray <> aArray) accum
+              _ -> Left $ "@[tomlToDict] array error, key " <> unpack fKey.unPiece <> " already exists for a non-array value."
+      ) tables (Hm.toList tomlBlock.tomlTableArrays)
+  where
+  tomlToValue :: Tm.AnyValue -> Either Tm.MatchError DictValue
+  tomlToValue (Tm.AnyValue v) =
+    case Tm.matchBool v of
+      Right b -> Right $ BoolDV b
+      Left _ -> case Tm.matchText v of
+        Right s -> Right $ StringDV s
+        Left _ -> case Tm.matchInteger v of
+          Right i -> Right $ IntDV i
+          Left _ -> case Tm.matchDouble v of
+            Right d -> Right $ DoubleDV d
+            Left _ -> case Tm.matchArray tomlToValue v of
+                Right aArray -> Right $ ListDV aArray
+                Left _ -> Tm.mkMatchError Tm.TText (Tm.Text $ "@[tomlToValue] unknown value type: " <> pack (show v))

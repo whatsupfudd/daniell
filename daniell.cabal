@@ -99,6 +99,7 @@ library
     , filepath
     , ginger >=0.10.4.1
     , gitrev
+    , hashmap
     , http-client
     , http-media
     , http-types
@@ -161,6 +162,7 @@ executable daniell
     , filepath
     , ginger >=0.10.4.1
     , gitrev
+    , hashmap
     , http-client
     , http-media
     , http-types
