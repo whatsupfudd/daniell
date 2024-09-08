@@ -34,8 +34,10 @@ dependencies:
   # For JWT crypto support:
   - lens
   - lucid
+  # For syntax parsing:
   - megaparsec
   - parser-combinators
+  # For Markdown content: 
   - mmark
   # For Ginger demo:
   - mtl

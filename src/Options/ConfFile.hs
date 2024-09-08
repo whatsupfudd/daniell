@@ -14,7 +14,7 @@ import qualified System.FilePath.Posix as Spsx
 import qualified System.IO.Error as Serr
 
 import Toml (TomlCodec, (.=), dioptional)  -- add 'TomlBiMap' and 'Key' here optionally
-import qualified Toml as Toml
+import qualified Toml
 import qualified Validation as Vld
 import qualified Data.Yaml as Yaml
 

@@ -18,10 +18,12 @@ import qualified Data.List.NonEmpty as Nem
 import qualified Data.Yaml as Ym
 import qualified Data.Aeson as Ae
 
-import qualified FileSystem.Types as Fs
 import Options.Runtime (RunOptions (..), TechOptions (..), HugoRunOptions (..))
 import Conclusion (GenError (..))
+import qualified FileSystem.Types as Fs
 import Generator.Types (WorkPlan (..))
+import Markup.Types (MarkupPage (..))
+import Markup.Page (parseContent)
 
 import ProjectDefinition.Types
 
@@ -207,8 +209,9 @@ analyseContent rtOpts (ProjectDefinition baseDir (Site (Hugo components)) [] pat
     -- dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
   in do
   runConfigs <- analyzeConfig rtOpts globConfig
+  mrkpPages <- analyzeMarkups rtOpts markupFiles
   -- TODO: incorporate the analysis into the WorkPlan.
-  pure . Left . SimpleMsg $ pack (show runConfigs)
+  pure . Left . SimpleMsg $ pack (show mrkpPages)
 
 
 extractMarkup :: [ FileWithPath ] -> Mp.Map String [ FileWithPath ]
@@ -246,6 +249,43 @@ getHugoEnvironment rtOpts =
   case rtOpts.techOpts of
     HugoOptions opts -> Just opts.environment
     _ -> Nothing
+
+
+analyzeMarkups :: RunOptions -> Mp.Map String [ FileWithPath ] -> IO (Either GenError [ MarkupPage ])
+analyzeMarkups rtOpts markupFiles = do
+  foldM (\accum (topPath, files) -> case accum of
+      Left err -> pure $ Left err
+      Right accumPages -> do
+        groupPages <- foldM (\eiAccum aFile -> case eiAccum of
+            Left err -> pure $ Left err
+            Right somePages -> do
+              eiMrkPage <- analyzeMarkupPage rtOpts rtOpts.baseDir topPath aFile
+              case eiMrkPage of
+                Left err -> pure $ Left err
+                Right aPage -> pure $ Right $ somePages <> [ aPage ]
+          ) (Right [] :: Either GenError [ MarkupPage ]) files
+        case groupPages of
+          Left err -> pure $ Left err
+          Right morePages -> pure $ Right $ accumPages <> morePages
+    ) (Right []) (Mp.toList markupFiles)
+
+
+analyzeMarkupPage :: RunOptions -> FilePath -> FilePath -> FileWithPath -> IO (Either GenError MarkupPage)
+analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.KnownFile Fs.Markup filePath) =
+  let
+    inProjPath = groupPath </> filePath
+    fullPath = rootDir </> "content" </> inProjPath
+  in do
+  -- putStrLn $ "@[analyzeMarkupPage] analyzing: " <> fullPath
+  parseContent rtOpts fullPath
+
+analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.KnownFile _ filePath) = do
+  putStrLn $ "@[analyzeMarkupPage] error, trying to analyze a non-markup file: " <> groupPath </> filePath
+  pure $ Left $ SimpleMsg "Trying to analyze a non-markup file."
+
+analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.MiscFile filePath) = do
+  putStrLn $ "@[analyzeMarkupPage] error, trying to analyze a non-markup file: " <> groupPath </> filePath
+  pure $ Left $ SimpleMsg "Trying to analyze a non-markup file."
 
 
 analyzeConfig :: RunOptions -> (Maybe FileWithPath, Maybe FileWithPath, [ FileWithPath ]) -> IO (Either GenError AnalyzeContext)

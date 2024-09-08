@@ -3,6 +3,9 @@ module Markup.Types where
 import qualified Data.Map as Mp
 import Data.Text (Text)
 
+import qualified Data.Aeson as Ae
+import Text.MMark (MMark)
+
 {- TODO:
  * FrontMatter: add encoding style (toml / yaml / json)
  * Remove GenFormat, it's not part of the information in Markup doc
@@ -11,28 +14,44 @@ import Data.Text (Text)
 -}
 
 
-data FieldsSyntax =
-  TomlFT
-  | YamlFT
-  | JsonFT
-
-
 data FrontMatter = FrontMatter {
-    fields :: Mp.Map Text Definition
-    , syntax :: FieldsSyntax
+    encoding :: FMEncoding
+    , fields :: Mp.Map Text Definition
   }
+  deriving Show
 
-type Content = Text
+data FMEncoding =
+  YamlEnc
+  | TomlEnc
+  | JsonEnc
+  | OrgEnc
+  | UnknownEnc
+  deriving Show
 
-data Encoding =
-  Markdown
 
 data Definition =
-  ValueDF
+  ValueDF Ae.Value
   | EnvVarDF
   | ReferenceDF
+  deriving Show
+
+
+data Content = Content {
+    encoding :: ContentEncoding
+    , body :: Maybe Text
+  }
+  deriving Show
+
+data ContentEncoding =
+  ParsedMarkdown MMark
+  | RawText
+  deriving Show
 
 
 -- Content that fills in the template.
-data MarkupPage =
-  MkPage Encoding FrontMatter Content
+data MarkupPage = MarkupPage {
+    path :: FilePath
+    , frontMatter :: Maybe FrontMatter
+    , content :: Content
+  }
+  deriving Show
