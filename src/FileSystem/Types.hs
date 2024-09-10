@@ -9,19 +9,27 @@ data FileItem =
   | MiscFile FilePath
   deriving Show
 
+-- TODO: group certain files by category (yaml/toml/json, markdown/rss/pandoc/asciidoc, etc)
 data FileKind =
-  Markup
-  | Html
+  Html
   | Yaml
   | Toml
   | Json
+  | DanTmpl
   | Haskell
   | Elm
-  | DanTmpl
-  | TsReact
-  | JsReact
   | Typescript
   | Javascript
+  | TsReact
+  | JsReact
+  | EmacsOrg
+  | Css
+  | Rss
+  | AsciiDoc
+  | Markdown
+  | Pandoc
+  | Xml
+  | TxtTempl
   deriving (Eq, Ord, Show)
 
 

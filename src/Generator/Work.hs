@@ -15,7 +15,7 @@ import qualified System.Directory as SE
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions (..), ProjectKind (..), SubProjKind (..))
+import Options.Types (NewOptions (..), ProjectKind (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
@@ -134,7 +134,7 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
               Exec vmModule -> do
                 pure . Right $ FuddleVM vmModule
               _ -> pure . Left . SimpleMsg . pack $ "@[genFileFromTemplate] logic " <> show anOp <> " not implemented."
-    Fs.Markup -> do
+    Fs.Markdown -> do
       putStrLn $ "@[genFileFromTemplate] no engine for: " <> show srcPath
       pure . Left $ SimpleMsg "@[genFileFromTemplate] no engine for markup template."
     Fs.Yaml -> do

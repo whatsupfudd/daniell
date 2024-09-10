@@ -45,18 +45,25 @@ filesAnalyser prefixLength root dirs files =
 
 itemMaker :: FilePath -> Maybe FileItem
 itemMaker fileName
-  | ".md" `isSuffixOf` fileName = Just $ KnownFile Markup fileName
   | ".html" `isSuffixOf` fileName = Just $ KnownFile Html fileName
   | ".yaml" `isSuffixOf` fileName = Just $ KnownFile Yaml fileName
   | ".toml" `isSuffixOf` fileName = Just $ KnownFile Toml fileName
   | ".json" `isSuffixOf` fileName = Just $ KnownFile Json fileName
+  | ".dant" `isSuffixOf` fileName = Just $ KnownFile DanTmpl fileName
   | ".hs" `isSuffixOf` fileName = Just $ KnownFile Haskell fileName
   | ".elm" `isSuffixOf` fileName = Just $ KnownFile Elm fileName
-  | ".dant" `isSuffixOf` fileName = Just $ KnownFile DanTmpl fileName
-  | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
-  | ".jsx" `isSuffixOf` fileName = Just $ KnownFile JsReact fileName
   | ".ts" `isSuffixOf` fileName = Just $ KnownFile Typescript fileName
   | ".js" `isSuffixOf` fileName = Just $ KnownFile Javascript fileName
+  | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
+  | ".jsx" `isSuffixOf` fileName = Just $ KnownFile JsReact fileName
+  | ".md" `isSuffixOf` fileName = Just $ KnownFile Markdown fileName
+  | ".org" `isSuffixOf` fileName = Just $ KnownFile EmacsOrg fileName
+  | ".css" `isSuffixOf` fileName = Just $ KnownFile Css fileName
+  | ".adoc" `isSuffixOf` fileName = Just $ KnownFile AsciiDoc fileName
+  | ".pandoc" `isSuffixOf` fileName = Just $ KnownFile Pandoc fileName
+  | ".rss" `isSuffixOf` fileName = Just $ KnownFile Rss fileName
+  | ".xml" `isSuffixOf` fileName = Just $ KnownFile Xml fileName
+  | ".txt" `isSuffixOf` fileName = Just $ KnownFile TxtTempl fileName
   | otherwise = Just $ MiscFile fileName
 
 

@@ -28,16 +28,72 @@ data ParameterTpl =
 
 
 data BuildOptions = BuildOptions {
-    projKind :: ProjectKind
-    , subKind :: Maybe Text
+    kind :: BuildKind
     , srcDir :: Maybe Text
   }
   deriving Show
 
 
-data SubProjKind =
-  HugoSP
-  | NextSP
-  | FuddleSP
-  | GatsbySP
+data BuildKind =
+  SiteBK SiteOptions
+  | WebAppBK
+  | LocalAppBK
+  deriving Show
+
+data SiteOptions =
+  HugoSS HugoBuildOptions
+  | NextSS
+  | FuddleSS
+  | GatsbySS
+  deriving Show
+
+data WebAppOptions =
+  NextWA
+  | FuddleWA
+  deriving Show
+
+
+data HugoBuildOptions = HugoBuildOptions {
+    baseURL :: Maybe Text
+    , buildDrafts :: Maybe Bool
+    , buildExpired :: Maybe Bool
+    , buildFuture :: Maybe Bool
+    , cacheDir :: Maybe Text
+    , cleanDestinationDir :: Maybe Bool
+    , clock :: Maybe Text
+    , configFiles :: Maybe Text
+    , configDir :: Maybe Text
+    , contentDir :: Maybe Text
+    , debug :: Maybe Bool
+    , destination :: Maybe Text
+    , disableKinds :: Maybe Text
+    , enableGitInfo :: Maybe Bool
+    , environment :: Maybe Text
+    , forceSyncStatic :: Maybe Bool
+    , gc :: Maybe Bool
+    , ignoreCache :: Maybe Bool
+    , ignoreVendorPaths :: Maybe Text
+    , layoutDir :: Maybe Text
+    , logLevel :: Maybe Text
+    , minify :: Maybe Bool
+    , noBuildLock :: Maybe Bool
+    , noChmod :: Maybe Bool
+    , noTimes :: Maybe Bool
+    , panicOnWarning :: Maybe Bool
+    , poll :: Maybe Text
+    , printI18nWarnings :: Maybe Bool
+    , printMemoryUsage :: Maybe Bool
+    , printPathWarnings :: Maybe Bool
+    , printUnusedTemplates :: Maybe Bool
+    , quiet :: Maybe Bool
+    , renderToMemory :: Maybe Bool
+    , source :: Maybe Text
+    , templateMetrics :: Maybe Bool
+    , templateMetricsHints :: Maybe Bool
+    , theme :: Maybe Text
+    , themesDir :: Maybe Text
+    , trace :: Maybe Text
+    , verbose :: Maybe Bool
+    , watch :: Maybe Bool
+  }
   deriving Show

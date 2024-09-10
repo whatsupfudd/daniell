@@ -20,6 +20,7 @@ data FrontMatter = FrontMatter {
   }
   deriving Show
 
+-- TODO: figure out is Hugo is indeed using OrgEnc for front-matter (mentioned in content section, but not in front-matter section).
 data FMEncoding =
   YamlEnc
   | TomlEnc
@@ -44,7 +45,7 @@ data Content = Content {
 
 data ContentEncoding =
   ParsedMarkdown MMark
-  | RawText
+  | RawMarkdown
   deriving Show
 
 

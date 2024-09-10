@@ -77,6 +77,10 @@ dependencies:
   - array
   # For parsing TOML:
   - hashmap
+  # For parsing Yaml:
+  - scientific
+  # For language 2-letters definitions (hugo configs):
+  - iso639
 
 default-extensions:
 - OverloadedStrings

@@ -14,7 +14,7 @@ import qualified System.Directory as SE
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions (..), ProjectKind (..), SubProjKind (..))
+import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
@@ -129,7 +129,7 @@ displayFTrees rtOpts fTrees = do
                     rez <- Cfgp.parseToml (r <> "/" <> filePath)
                     pure ()
                   -}
-                  Fs.KnownFile Fs.Markup filePath -> do
+                  Fs.KnownFile Fs.Markdown filePath -> do
                     Mrkp.parseContent rtOpts (folder <> "/" <> filePath)
                     -- TMP:
                     pure $ Right ()
@@ -149,8 +149,8 @@ countItems fTrees =
   putStrLn $ "@[countItems] total: " <> show totalItems <> "."
 
 {- New stuff 24.09.02 -}
-buildSite :: RunOptions -> SubProjKind -> IO (Either GenError ())
-buildSite rtOpts subKind = do
+buildSite :: RunOptions -> SiteOptions -> IO (Either GenError ())
+buildSite rtOpts siteOpts = do
   putStrLn $ "@[buildSite] starting, root: " <> rtOpts.baseDir
   -- explore the folder for the site -> flat list of all dirs and files.
   -- eiSiteDef <- Fs.buildDirTree rtOpts
@@ -162,12 +162,16 @@ buildSite rtOpts subKind = do
     Right dirTree -> do
       -- TODO: move the dirTree analysis in ProjectDefinition.Logic.
       eiWorkPlan <-
-         case subKind of
-          FuddleSP -> pure $ analyseFuddleProject rtOpts True dirTree
-          GatsbySP -> pure $ analyseGatsbyProject rtOpts dirTree
-          HugoSP -> Hu.analyseHugoProject rtOpts dirTree
-          NextSP -> pure $ Nx.analyseNextJsProject rtOpts True dirTree
-          _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show subKind
+         case siteOpts of
+          FuddleSS -> pure $ analyseFuddleProject rtOpts True dirTree
+          GatsbySS -> pure $ analyseGatsbyProject rtOpts dirTree
+          HugoSS hugoOpts ->
+            let
+              newRtOpts = Hu.extractOptions rtOpts hugoOpts
+            in
+            Hu.analyseProject newRtOpts dirTree
+          NextSS -> pure $ Nx.analyseNextJsProject rtOpts True dirTree
+          _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
       case eiWorkPlan of
         Left err -> pure $ Left err
         Right workPlan -> do

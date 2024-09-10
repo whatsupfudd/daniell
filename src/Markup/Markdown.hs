@@ -56,7 +56,7 @@ parse filePath = do
       pure . Right $ MarkupPage {
                 path = filePath
               , frontMatter = mbFrontMatter
-              , content = Content RawText (Just rest)
+              , content = Content RawMarkdown (Just rest)
             }
 
 parseMarkup :: FilePath -> Maybe FrontMatter -> Text -> IO (Either GenError MarkupPage)
@@ -76,6 +76,7 @@ parseMarkup filePath mbFrontMatter rest =
             }
 
 
+{-
 data YamlValue =
   BoolYV Bool
   | IntYV Int
@@ -85,7 +86,6 @@ data YamlValue =
   | ObjectYV (Mp.Map Text YamlValue)
   deriving (Show, Generic)
 
-{-
 instance Ae.FromJSON YamlValue where
   parseJSON (Ae.Object o) = 
 -}  

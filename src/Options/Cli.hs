@@ -125,43 +125,112 @@ newOpts =
 
 
 buildOpts :: Parser BuildOptions
-buildOpts =
-  BuildOptions <$>
-    subparser (sitePK <> webAppPK <> localAppPK)
-    <*> optional (strOption (
-        long "type"
-        <> short 't'
-        <> help "technology type (fuddle, hugo, nextjs)."
-      ))
-    <*> optional (strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory."))
+buildOpts = do
+  BuildOptions <$> subparser (sitePK <> webAppPK <> localAppPK)
+        <*> optional (strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory."))
   -- (subparser (hugoSP <> nextSP <> fuddleSP <> gatsbySP)
   where
-  sitePK = command "site" (info (pure SitePK) (progDesc "Create a new site project."))
-  webAppPK = command "webapp" (info (pure WebAppPK) (progDesc "Create a new webapp project."))
-  localAppPK = command "localapp" (info (pure LocalAppPK) (progDesc "Create a new localapp project."))
+  sitePK = command "site" (info (SiteBK <$> siteOpts) (progDesc "Create a new site project."))
+  webAppPK = command "webapp" (info (pure WebAppBK) (progDesc "Create a new webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppBK) (progDesc "Create a new localapp project."))
   {- TODO: get the parser to only accept these keywoards:
-  hugoSP = command "hugo" (info (pure HugoSP) (progDesc "Build a Hugo project."))
   nextSP = command "next" (info (pure NextSP) (progDesc "Build a Next project."))
   fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Build a Fuddle project."))
   gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Build a Gatsby project."))
   -}
   {-
    Hugo options:
-    --config <filename>[, <filename>]*   config file(s, with left-to-right priority), default is path/{hugo|config}.{yaml|json|toml}.
-    --environment <env>                 build environment (development, staging, production, ...), default is 'development'.
-    -b / --baseURL <url>                     hostname (and path) to the root, default is taken from baseURL in config file.
-    -D / --buildDrafts                    include content marked as draft.
-    -E / --buildExpired                   include expired content.
-    -F / --buildFuture                    include content with publishdate in the future.
-    --cacheDir <directory>            filesystem path to cache directory.
-    --cleanDestinationDir            remove files from destination not found in source.
-    --clock <string>                  set the clock used by generator, default is the machine's local time, e.g. --clock 2021-11-06T22:30:00.00+09:00
-    --contentDir <directory>          filesystem path to content directory, default is path/content.
-    --configDir <directory>           filesystem path to configuration directory, default is path/config.
-    -c / --contentDir <directory>          filesystem path to content directory, default is path/content.
-    --debug                          debug output.
-    --destination <directory>         filesystem path to write files to, default is path/public.
+  -b, --baseURL string             hostname (and path) to the root, e.g. https://spf13.com/
+  -D, --buildDrafts                include content marked as draft
+  -E, --buildExpired               include expired content
+  -F, --buildFuture                include content with publishdate in the future
+      --cacheDir string            filesystem path to cache directory
+      --cleanDestinationDir        remove files from destination not found in static directories
+      --clock string               set the clock used by Hugo, e.g. --clock 2021-11-06T22:30:00.00+09:00
+      --config string              config file (default is hugo.yaml|json|toml)
+      --configDir string           config dir (default "config")
+  -c, --contentDir string          filesystem path to content directory
+      --debug                      debug output
+  -d, --destination string         filesystem path to write files to
+      --disableKinds strings       disable different kind of pages (home, RSS etc.)
+      --enableGitInfo              add Git revision, date, author, and CODEOWNERS info to the pages
+  -e, --environment string         build environment
+      --forceSyncStatic            copy all files when static is changed.
+      --gc                         enable to run some cleanup tasks (remove unused cache files) after the build
+  -h, --help                       help for hugo
+      --ignoreCache                ignores the cache directory
+      --ignoreVendorPaths string   ignores any _vendor for module paths matching the given Glob pattern
+  -l, --layoutDir string           filesystem path to layout directory
+      --logLevel string            log level (debug|info|warn|error)
+      --minify                     minify any supported output format (HTML, XML etc.)
+      --noBuildLock                don't create .hugo_build.lock file
+      --noChmod                    don't sync permission mode of files
+      --noTimes                    don't sync modification time of files
+      --panicOnWarning             panic on first WARNING log
+      --poll string                set this to a poll interval, e.g --poll 700ms, to use a poll based approach to watch for file system changes
+      --printI18nWarnings          print missing translations
+      --printMemoryUsage           print memory usage to screen at intervals
+      --printPathWarnings          print warnings on duplicate target paths etc.
+      --printUnusedTemplates       print warnings on unused templates.
+      --quiet                      build in quiet mode
+      --renderToMemory             render to memory (only useful for benchmark testing)
+  -s, --source string              filesystem path to read files relative from
+      --templateMetrics            display metrics about template executions
+      --templateMetricsHints       calculate some improvement hints when combined with --templateMetrics
+  -t, --theme strings              themes to use (located in /themes/THEMENAME/)
+      --themesDir string           filesystem path to themes directory
+      --trace file                 write trace to file (not useful in general)
+  -v, --verbose                    verbose output
+  -w, --watch                      watch filesystem for changes and recreate as needed
   -}
+
+siteOpts :: Parser SiteOptions
+siteOpts = subparser (command "hugo" (info (HugoSS <$> hugoOpts <**> helper) (progDesc "Build a Hugo project.")))
+
+hugoOpts :: Parser HugoBuildOptions
+hugoOpts =
+  HugoBuildOptions <$> optional (strOption (long "baseURL" <> short 'b' <> help "(string) hostname (and path) to the root, e.g. https://spf13.com/"))
+  <*> optional (switch (long "buildDrafts" <> short 'D' <> help "include content marked as draft"))
+  <*> optional (switch (long "buildExpired" <> short 'E' <> help "include expired content"))
+  <*> optional (switch (long "buildFuture" <> short 'F' <> help "include content with publishdate in the future"))
+  <*> optional (strOption (long "cacheDir" <> help "(string) filesystem path to cache directory"))
+  <*> optional (switch (long "cleanDestinationDir" <> help "remove files from destination not found in static directories"))
+  <*> optional (strOption (long "clock" <> help "(string) set the clock used by Hugo, e.g. --clock 2021-11-06T22:30:00.00+09:00"))
+  <*> optional (strOption (long "config" <> help "(string) config file (default is hugo.yaml|json|toml)"))
+  <*> optional (strOption (long "configDir" <> help "(string) config dir (default \"config\")"))
+  <*> optional (strOption (long "contentDir" <> short 'c' <> help "(string) filesystem path to content directory"))
+  <*> optional (switch (long "debug" <> help "debug output"))
+  <*> optional (strOption (long "destination" <> short 'd' <> help "(string) filesystem path to write files to"))
+  <*> optional (strOption (long "disableKinds" <> help "(strings) disable different kind of pages (home, RSS etc.)"))
+  <*> optional (switch (long "enableGitInfo" <> help "add Git revision, date, author, and CODEOWNERS info to the pages"))
+  <*> optional (strOption (long "environment" <> short 'e' <> help "(string) build environment"))
+  <*> optional (switch (long "forceSyncStatic" <> help "copy all files when static is changed."))
+  <*> optional (switch (long "gc" <> help "enable to run some cleanup tasks (remove unused cache files) after the build"))
+  <*> optional (switch (long "ignoreCache" <> help "ignores the cache directory"))
+  <*> optional (strOption (long "ignoreVendorPaths" <> help "(string) ignores any _vendor for module paths matching the given Glob pattern"))
+  <*> optional (strOption (long "layoutDir" <> short 'l' <> help "(string) filesystem path to layout directory"))
+  <*> optional (strOption (long "logLevel" <> help "(string) log level (debug|info|warn|error)"))
+  <*> optional (switch (long "minify" <> help "minify any supported output format (HTML, XML etc.)"))
+  <*> optional (switch (long "noBuildLock" <> help "don't create .hugo_build.lock file"))
+  <*> optional (switch (long "noChmod" <> help "don't sync permission mode of files"))
+  <*> optional (switch (long "noTimes" <> help "don't sync modification time of files"))
+  <*> optional (switch (long "panicOnWarning" <> help "panic on first WARNING log"))
+  <*> optional (strOption (long "poll" <> help "(string) set this to a poll interval, e.g --poll 700ms, to use a poll based approach to watch for file system changes"))
+  <*> optional (switch (long "printI18nWarnings" <> help "print missing translations"))
+  <*> optional (switch (long "printMemoryUsage" <> help "print memory usage to screen at intervals"))
+  <*> optional (switch (long "printPathWarnings" <> help "print warnings on duplicate target paths etc."))
+  <*> optional (switch (long "printUnusedTemplates" <> help "print warnings on unused templates."))
+  <*> optional (switch (long "quiet" <> help "build in quiet mode"))
+  <*> optional (switch (long "renderToMemory" <> help "render to memory (only useful for benchmark testing)"))
+  <*> optional (strOption (long "source" <> short 's' <> help "(string) filesystem path to read files relative from"))
+  <*> optional (switch (long "templateMetrics" <> help "display metrics about template executions"))
+  <*> optional (switch (long "templateMetricsHints" <> help "calculate some improvement hints when combined with --templateMetrics"))
+  <*> optional (strOption (long "theme" <> short 't' <> help "(strings) themes to use (located in /themes/THEMENAME/)"))
+  <*> optional (strOption (long "themesDir" <> help "(string) filesystem path to themes directory"))
+  <*> optional (strOption (long "trace" <> help "(file) write trace to file (not useful in general)"))
+  <*> optional (switch (long "verbose" <> short 'v' <> help "verbose output"))
+  <*> optional (switch (long "watch" <> short 'w' <> help "watch filesystem for changes and recreate as needed"))
+
 
 paramParser :: ReadM ParameterTpl
 paramParser = eitherReader $ \s ->
