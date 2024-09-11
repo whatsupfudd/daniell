@@ -20,6 +20,7 @@ import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
+import ProjectDefinition.Hugo.Config (setRunOptions)
 import qualified ProjectDefinition.NextJS as Nx
 import qualified ProjectDefinition.Scaffholding as Scf
 import ProjectDefinition.Defaults (defaultLocations)
@@ -167,7 +168,7 @@ buildSite rtOpts siteOpts = do
           GatsbySS -> pure $ analyseGatsbyProject rtOpts dirTree
           HugoSS hugoOpts ->
             let
-              newRtOpts = Hu.extractOptions rtOpts hugoOpts
+              newRtOpts = setRunOptions rtOpts hugoOpts
             in
             Hu.analyseProject newRtOpts dirTree
           NextSS -> pure $ Nx.analyseNextJsProject rtOpts True dirTree

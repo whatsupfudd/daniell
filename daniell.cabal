@@ -52,6 +52,7 @@ library
       ProjectDefinition.AssocRules
       ProjectDefinition.Defaults
       ProjectDefinition.Hugo
+      ProjectDefinition.Hugo.Config
       ProjectDefinition.NextJS
       ProjectDefinition.Scaffholding
       ProjectDefinition.Types

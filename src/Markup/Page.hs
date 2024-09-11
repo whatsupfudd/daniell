@@ -5,7 +5,7 @@ import Data.Text (pack)
 import Conclusion (GenError (..))
 import Options.Runtime
 
-import Markup.Markdown (parse)
+import qualified Markup.Markdown as Mkd
 import Markup.Types
 import System.FilePath (takeExtension)
 
@@ -17,7 +17,7 @@ parseContent rtOpts filePath =
   -- send to the right parser.
   -- build page variables accordding to FrontMatter (into FrontMatter?)
   case takeExtension filePath of
-    ".md" -> parse filePath
+    ".md" -> Mkd.parse filePath
     ".org" -> pure . Left . SimpleMsg $ "@[parseContent] emacs org content not supported: " <> pack filePath
     ".rss" -> pure . Left . SimpleMsg $ "@[parseContent] rss content not supported: " <> pack filePath
     ".pandoc" -> pure . Left . SimpleMsg $ "@[parseContent] pandoc content not supported: " <> pack filePath

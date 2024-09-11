@@ -1,10 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 {-# HLINT ignore "Use second" #-}
 {-# HLINT ignore "Use bimap" #-}
-{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module ProjectDefinition.Hugo where
 
 import Control.Monad (foldM)
@@ -27,7 +25,6 @@ import qualified Data.Yaml as Ym
 import qualified Data.Aeson as Ae
 import qualified Data.Aeson.Types as Ae
 import qualified Data.Aeson.KeyMap as Ae
-import Data.Scientific (toRealFloat)
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
@@ -38,34 +35,13 @@ import Markup.Types (MarkupPage (..), Content (..), ContentEncoding (..), FrontM
 import Markup.Page (parseContent)
 
 import ProjectDefinition.Types
+import ProjectDefinition.Hugo.Config
 
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
 
 -- Analysis context for a Hugo project (configurations, etc) that will be used to drive generation.
-data LocaleConfig = LanguageConfig {
-    symbol :: Text
-    , disabled :: Bool
-    , languageCode :: Text
-    , languageDirection :: Text
-    , languageName :: Text
-    , title :: Text
-    , weight :: Integer
-  }
-  deriving Show
-
--- TODO: assert language code using the iso639 package.
-defaultLocale = LanguageConfig {
-    symbol = "en"
-    , disabled = False
-    , languageCode = ""
-    , languageDirection = ""
-    , languageName = ""
-    , title = ""
-    , weight = 0
-  }
-
 data AnalyzeContext = AnalyzeContext {
     globalVars :: Mp.Map Text DictEntry
     , defaultVars :: Mp.Map Text DictEntry
@@ -81,29 +57,6 @@ defaultContext = AnalyzeContext {
     , otherVars = Mp.empty
     , mergedConfigs = Mp.empty
   }
-
-
-data DictEntry =
-  StringDV Text
-  | IntDV Integer
-  | DoubleDV Double
-  | BoolDV Bool
-  | DictDV (Mp.Map Text DictEntry)
-  | ListDV [ DictEntry ]
-  deriving Show
-
-
-instance Ae.FromJSON DictEntry where
-  parseJSON :: Ae.Value -> Ae.Parser DictEntry
-  parseJSON val =
-    case val of
-      Ae.Array anArray -> ListDV <$> mapM Ae.parseJSON (Vc.toList anArray)
-      Ae.String s -> pure $ StringDV s
-      Ae.Number n -> pure $ DoubleDV $ toRealFloat n
-      Ae.Bool b -> pure $ BoolDV b
-      Ae.Null -> pure $ StringDV ""
-      Ae.Object obj -> -- DictDV Mp.fromList <$> mapM (\(key, value) -> pure (pack . show $ key, value)) (Ae.toList obj)
-        DictDV <$> Ae.parseJSON val
 
 
 defaultComponents :: HugoComponents
@@ -125,17 +78,6 @@ defaultComponents = HugoComponents {
     , themes = Mp.empty
     , staticDest = "public"
   }
-
-
--- ***** Utilities for extracting command line options *****
-getHugoOpts :: TechOptions -> Maybe HugoBuildOptions
-getHugoOpts (HugoOptions options) = Just options
-getHugoOpts _ = Nothing
-
-extractOptions :: RunOptions -> HugoBuildOptions -> RunOptions
-extractOptions rtOpts buildOpts =
-  rtOpts { techOpts = HugoOptions buildOpts }
-
 
 -- ***** Logic for dealing with a project work (create, build) *****
 
@@ -499,6 +441,9 @@ analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
   where
   mergeConfig :: AnalyzeContext -> Either GenError AnalyzeContext
   mergeConfig context =
+    -- let
+    --  mValues = foldl (mergeOption ) [] ctxtOptionKeys
+    -- in
     Right context
 
   parseTopConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
@@ -622,20 +567,6 @@ tomlToDict tomlBlock =
                 Right aArray -> Right $ ListDV aArray
                 Left _ -> Tm.mkMatchError Tm.TText (Tm.Text $ "@[tomlToValue] unknown value type: " <> pack (show v))
 
-validConfigKeys :: [ Text ]
-validConfigKeys = [
-    "archetypeDir", "assetDir", "baseURL", "build", "buildDrafts", "buildExpired", "buildFuture", "caches"
-  , "canonifyURLs", "capitalizeListTitles", "cascade", "cleanDestinationDir", "contentDir", "copyright", "dataDir"
-  , "defaultContentLanguage", "defaultContentLanguageInSubdir", "disableAliases", "disableHugoGeneratorInject", "disableKinds"
-  , "disableLanguages", "disableLiveReload", "disablePathToLower", "enableEmoji", "enableGitInfo"
-  , "enableMissingTranslationPlaceholders", "enableRobotsTXT", "environment", "frontmatter", "hasCJKLanguage", "ignoreCache"
-  , "ignoreLogs", "ignoreVendorPaths", "imaging", "languageCode", "languages", "layoutDir", "markup", "mediaTypes", "menus"
-  , "minify", "module", "newContentEditor", "noBuildLock", "noChmod", "noTimes", "outputFormats", "page", "pagination"
-  , "panicOnWarning", "permalinks", "pluralizeListTitles", "printI18nWarnings", "printPathWarnings", "printUnusedTemplates"
-  , "publishDir", "refLinksErrorLevel", "refLinksNotFoundURL", "related", "relativeURLs", "removePathAccents", "renderSegments"
-  , "sectionPagesMenu", "security", "segments", "sitemap", "summaryLength", "taxonomies", "templateMetrics", "templateMetricsHints"
-  , "theme", "themesDir", "timeout", "timeZone", "title", "titleCaseStyle", "uglyURLs", "watch"
-  ]
 
 {-
   - config folder: contains sections of configuration, _default and others (eg 'production).
@@ -1127,4 +1058,62 @@ uglyURLs
 
 watch 
 (bool) Watch filesystem for changes and recreate as needed. Default is false.
+
+
+------
+Known media types and matching file extensions:
+application/json	[json]
+application/manifest+json	[webmanifest]
+application/octet-stream	[webmanifest]
+application/pdf	[pdf]
+application/rss+xml	[xml rss]
+application/toml	[toml]
+application/wasm	[wasm]
+application/xml	[xml]
+application/yaml	[yaml yml]
+font/otf	[otf]
+font/ttf	[ttf]
+image/bmp	[bmp]
+image/gif	[gif]
+image/jpeg	[jpg jpeg jpe jif jfif]
+image/png	[png]
+image/svg+xml	[svg]
+image/tiff	[tif tiff]
+image/webp	[webp]
+text/asciidoc	[adoc asciidoc ad]
+text/calendar	[ics]
+text/css	[css]
+text/csv	[csv]
+text/html	[html htm]
+text/javascript	[js jsm mjs]
+text/jsx	[jsx]
+text/markdown	[md mdown markdown]
+text/org	[org]
+text/pandoc	[pandoc pdc]
+text/plain	[txt]
+text/rst	[rst]
+text/tsx	[tsx]
+text/typescript	[ts]
+text/x-sass	[sass]
+text/x-scss	[scss]
+video/3gpp	[3gpp 3gp]
+video/mp4	[mp4]
+video/mpeg	[mpg mpeg]
+video/ogg	[ogv]
+video/webm	[webm]
+video/x-msvideo	[avi]
+
+* Output formats:
+Type            BaseName  Html?   PlTxt?  MediaType                   NoUgly  Path  Perma?  Protocol    Rel
+amp           	index	    true	  false	  text/html	                  false	  amp	  true		            amphtml
+calendar	      index	    false	  true	  text/calendar	              false		      false	  webcal://	  alternate
+css	            styles	  false	  true	  text/css	                  false		      false		            stylesheet
+csv	            index	    false	  true	  text/csv	                  false		      false		            alternate
+html	          index	    true	  false	  text/html	                  false		      true		            canonical
+json	          index	    false	  true	  application/json	          false		      false		            alternate
+markdown	      index	    false	  true	  text/markdown	              false		      false		            alternate
+robots	        robots	  false	  true	  text/plain	                false		      false		            alternate
+rss	            index	    false	  false	  application/rss+xml	        true		      false		            alternate
+sitemap	        sitemap	  false	  false	  application/xml	            false		      false		            sitemap
+webappmanifest	manifest	false	  true	  application/manifest+json	  false		      false		            manifest
 -}
