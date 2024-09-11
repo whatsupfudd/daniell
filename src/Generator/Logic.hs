@@ -155,6 +155,8 @@ buildSite rtOpts siteOpts = do
   putStrLn $ "@[buildSite] starting, root: " <> rtOpts.baseDir
   -- explore the folder for the site -> flat list of all dirs and files.
   -- eiSiteDef <- Fs.buildDirTree rtOpts
+  -- TODO: need to check the HugoBuildOptions (configDir, dataDir, ...) and
+  --   assemble the file list based on a loadFolderTree of these locations.
   eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
   putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
   -- extract the content pages, turn them into with Markup.parseContent to [ MarkupPage ]

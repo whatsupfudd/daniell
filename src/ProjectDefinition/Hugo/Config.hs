@@ -443,3 +443,101 @@ ctxtOptionKeys = [
   , "sectionPagesMenu", "security", "segments", "sitemap", "summaryLength", "taxonomies", "templateMetrics", "templateMetricsHints"
   , "theme", "themesDir", "timeout", "timeZone", "title", "titleCaseStyle", "uglyURLs", "watch"
   ]
+
+
+data BuildOptValue =
+  StringBO Text
+  | BoolBO Bool
+
+
+checkBuildOptsForKey :: HugoBuildOptions -> Text -> Maybe BuildOptValue
+checkBuildOptsForKey opts key =
+  if key `elem` [
+          "archetypeDir", "assetDir", "build", "caches"
+        , "canonifyURLs", "capitalizeListTitles", "cascade", "copyright", "dataDir"
+        , "defaultContentLanguage", "defaultContentLanguageInSubdir", "disableAliases", "disableHugoGeneratorInject"
+        , "disableLanguages", "disableLiveReload", "disablePathToLower", "enableEmoji"
+        , "enableMissingTranslationPlaceholders", "enableRobotsTXT", "frontmatter", "hasCJKLanguage"
+        , "ignoreLogs", "imaging", "languageCode", "languages", "markup", "mediaTypes", "menus"
+        , "module", "newContentEditor", "outputFormats", "page", "pagination"
+        , "permalinks", "pluralizeListTitles"
+        , "publishDir", "refLinksErrorLevel", "refLinksNotFoundURL", "related", "relativeURLs", "removePathAccents", "renderSegments"
+        , "sectionPagesMenu", "security", "segments", "sitemap", "summaryLength", "taxonomies"
+        , "timeout", "timeZone", "title", "titleCaseStyle", "uglyURLs" 
+    ] then
+      Nothing
+  else
+  case key of
+    "baseURL" -> case opts.baseURL of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "buildDrafts" -> case opts.buildDrafts of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "buildExpired" -> case opts.buildExpired of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "buildFuture" -> case opts.buildFuture of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "cleanDestinationDir" -> case opts.cleanDestinationDir of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "contentDir" -> case opts.contentDir of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "disableKinds" -> case opts.disableKinds of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "enableGitInfo" -> case opts.enableGitInfo of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "environment" -> case opts.environment of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "ignoreCache" -> case opts.ignoreCache of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "ignoreVendorPaths" -> case opts.ignoreVendorPaths of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "layoutDir" -> case opts.layoutDir of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "minify" -> case opts.minify of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "noChmod" -> case opts.noChmod of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "noTimes" -> case opts.noTimes of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "panicOnWarning" -> case opts.panicOnWarning of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "printI18nWarnings" -> case opts.printI18nWarnings of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "printPathWarnings" -> case opts.printPathWarnings of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "printUnusedTemplates" -> case opts.printUnusedTemplates of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "templateMetrics" -> case opts.templateMetrics of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "templateMetricsHints" -> case opts.templateMetricsHints of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    "theme" -> case opts.theme of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "themesDir" -> case opts.themesDir of
+      Just val -> Just $ StringBO val
+      Nothing -> Nothing
+    "watch" -> case opts.watch of
+      Just val -> Just $ BoolBO val
+      Nothing -> Nothing
+    _ -> Nothing

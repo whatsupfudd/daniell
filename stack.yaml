@@ -32,7 +32,7 @@ extra-deps:
 
 # Control whether we use the GHC we find on the path
 system-ghc: true
-# allow-newer: true
+allow-newer: true
 #
 # Extra directories used by stack for building
 # extra-include-dirs: [/path/to/dir]

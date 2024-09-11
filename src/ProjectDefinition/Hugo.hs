@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 {-# HLINT ignore "Use second" #-}
 {-# HLINT ignore "Use bimap" #-}
+{-# HLINT ignore "Use list comprehension" #-}
 module ProjectDefinition.Hugo where
 
 import Control.Monad (foldM)
@@ -84,7 +85,7 @@ defaultComponents = HugoComponents {
 analyseProject :: RunOptions -> Fs.PathFiles -> IO (Either GenError WorkPlan)
 analyseProject rtOpts pathFiles =
   case getHugoOpts rtOpts.techOpts of
-    Nothing -> pure $ Left $ SimpleMsg "Not a Hugo project."
+    Nothing -> pure $ Left $ SimpleMsg "@[analyseProject] not a Hugo project."
     Just hugoOpts ->
         let
           content = classifyContent (rtOpts, hugoOpts) pathFiles
@@ -109,6 +110,7 @@ classifyContent (rtOpts, hugoOpts) pathFiles =
     case aFile of
       Fs.KnownFile aKind aPath -> (Mp.insertWith (<>) aKind [(dirPath, aFile)] fileDict, miscItems)
       Fs.MiscFile aPath -> (fileDict, miscItems <> [ (dirPath, aFile) ])
+
 
 organizeFiles :: FileSet -> HugoComponents
 organizeFiles (knownFiles, miscFiles) =
@@ -176,6 +178,8 @@ organizeFiles (knownFiles, miscFiles) =
 
 analyseContent :: (RunOptions, HugoBuildOptions) -> ProjectDefinition -> IO (Either GenError WorkPlan)
 analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site (Hugo components)) [] pathFiles) =
+  -- TODO: analyze the configs first to confirm where the content/data/... files come from (implicit location or explicitly defined directories).
+  --    Then load the file trees for each of these directories to assemble the correct list of files to analyze.
   let
     globConfig = scanForGlobConfig hugoOpts.environment components.config
     markupFiles = extractMarkup components.content
@@ -343,6 +347,7 @@ buildTemplateFromCore coreTmpl =
         _ -> accum
     ) Mp.empty
 
+
 selectTheme :: HugoBuildOptions -> AnalyzeContext -> Either GenError Text
 selectTheme options context =
   case options.theme of
@@ -439,12 +444,65 @@ analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
             Left err -> pure $ Left err
             Right ctxt -> pure $ mergeConfig ctxt
   where
+  -- TODO: get the RugFlag for the contextDefaultOptions from somewhere (build vs server).
   mergeConfig :: AnalyzeContext -> Either GenError AnalyzeContext
   mergeConfig context =
-    -- let
-    --  mValues = foldl (mergeOption ) [] ctxtOptionKeys
-    -- in
-    Right context
+    let
+      mbHugoOpts = getHugoOpts rtOpts.techOpts
+      environment = case mbHugoOpts of
+        Nothing -> "production"
+        Just hugoOpts ->
+          case hugoOpts.environment of
+            Just envName -> envName
+            Nothing -> case Mp.lookup "environment" context.globalVars of
+              Just (StringDV globEnvName) -> globEnvName
+              _ -> case Mp.lookup "environment" context.defaultVars of
+                Just (StringDV defEnvName) -> defEnvName
+                _ -> "production"
+      configVars = if Mp.null context.globalVars then [] else [ context.globalVars ]
+                  <> case Mp.lookup environment context.otherVars of
+                       Nothing -> [] 
+                       Just envVars -> if Mp.null envVars then [] else [ envVars ]
+                  <> if Mp.null context.defaultVars then [] else [ context.defaultVars ]
+                  <> [ contextDefaultOptions BuildF ]
+      valueList = map (resolveConfig mbHugoOpts configVars) ctxtOptionKeys
+    in
+    Right context { mergedConfigs = Mp.fromList $ foldl (\accum v -> case v of Nothing -> accum ; Just aVal -> aVal : accum) [] valueList }
+    where
+    resolveConfig :: Maybe HugoBuildOptions -> [ Mp.Map Text DictEntry ] -> Text -> Maybe (Text, DictEntry)
+    resolveConfig mbHugoOpts configVars aKey =
+      let
+        mbValue = case mbHugoOpts of
+          Nothing -> Nothing
+          Just hugoOpts -> case checkBuildOptsForKey hugoOpts aKey of
+            Just aVal -> case aVal of
+              BoolBO aBool -> Just (aKey, BoolDV aBool)
+              StringBO aText -> Just (aKey, StringDV aText)
+            Nothing -> Nothing
+      in
+      case mbValue of
+        Just aVal -> mbValue
+        Nothing -> case findKeyInConfigs aKey configVars of
+          Just aVal -> Just (aKey, aVal)
+          Nothing -> case Mp.lookup aKey (contextDefaultOptions BuildF) of
+            Just aVal -> Just (aKey, aVal)
+            Nothing -> Nothing
+    findKeyInConfigs :: Text -> [ Mp.Map Text DictEntry ] -> Maybe DictEntry
+    findKeyInConfigs aKey configVars =
+      case configVars of
+        [] -> Nothing
+        aConfig : rest -> case Mp.lookup aKey aConfig of
+          Just aVal -> Just aVal
+          Nothing -> findKeyInConfigs aKey rest
+    {-
+      - then assemble an array of main config, environment config and default config,
+      - then iterate through the main config keys (ctxtOptionKeys):
+        - first check if the HugoBuildOptions has been specified,
+        - if not, then check for the 1st item of the config array,
+        - if not, then check for the 2nd item of the config array,
+        - if not, then check for the 3rd item of the config array,
+        - if not, use the default value.
+    -}
 
   parseTopConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
   parseTopConfig context rootDir aFile = do
