@@ -4,7 +4,7 @@ module Template.Parser where
 import Data.Text (Text)
 
 import Options.Runtime (RunOptions (..))
-import ProjectDefinition.Types (ProjectDefinition (..), TmpFileDef (..))
+import ProjectDefinition.Types (ProjectDefinition (..))
 import Template.Types (Template (..))
 
 

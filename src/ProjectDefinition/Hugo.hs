@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 {-# HLINT ignore "Use second" #-}
@@ -10,54 +9,30 @@ import Control.Monad (foldM)
 
 import qualified Data.ByteString as Bs
 import Data.List (isPrefixOf)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.Map as Mp
 import Data.Text (Text, pack, unpack)
-import qualified Data.Text.IO as T
 import qualified Data.Vector as Vc
 
-import System.FilePath ((</>), dropExtension)
+import System.FilePath ((</>), splitDirectories)
 
-import qualified Toml as Tm
-import qualified Toml.Type.PrefixTree as Tpt
-import qualified Data.HashMap.Strict as Hm
-import qualified Data.List.NonEmpty as Nem
-import qualified Data.Yaml as Ym
-import qualified Data.Aeson as Ae
-import qualified Data.Aeson.Types as Ae
-import qualified Data.Aeson.KeyMap as Ae
+import Data.LanguageCodes (fromChars)
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
 import Conclusion (GenError (..))
 import qualified FileSystem.Types as Fs
-import Generator.Types (WorkPlan (..), WorkItem)
+import FileSystem.Types (FileWithPath)
+import Generator.Types (WorkPlan (..), WorkItem (..))
 import Markup.Types (MarkupPage (..), Content (..), ContentEncoding (..), FrontMatter (..), FMEncoding (..), Definition (..))
 import Markup.Page (parseContent)
+import ProjectDefinition.Paraml (tomlToDict)
 
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
-
+import ProjectDefinition.Hugo.Types
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
-
-
--- Analysis context for a Hugo project (configurations, etc) that will be used to drive generation.
-data AnalyzeContext = AnalyzeContext {
-    globalVars :: Mp.Map Text DictEntry
-    , defaultVars :: Mp.Map Text DictEntry
-    , otherVars :: Mp.Map Text (Mp.Map Text DictEntry)
-    , mergedConfigs :: Mp.Map Text DictEntry
-  }
-  deriving Show
-
-defaultContext :: AnalyzeContext
-defaultContext = AnalyzeContext {
-    globalVars = Mp.empty
-    , defaultVars = Mp.empty
-    , otherVars = Mp.empty
-    , mergedConfigs = Mp.empty
-  }
 
 
 defaultComponents :: HugoComponents
@@ -89,9 +64,66 @@ analyseProject rtOpts pathFiles =
     Just hugoOpts ->
         let
           content = classifyContent (rtOpts, hugoOpts) pathFiles
+          projDef = ProjectDefinition rtOpts.baseDir (Site Hugo) [] pathFiles
         in
-        analyseContent (rtOpts, hugoOpts) $ ProjectDefinition rtOpts.baseDir (Site (Hugo content)) [] pathFiles
+        analyseContent (rtOpts, hugoOpts) projDef content
 
+
+
+analyseContent :: (RunOptions, HugoBuildOptions) -> ProjectDefinition -> HugoComponents -> IO (Either GenError WorkPlan)
+analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] pathFiles) components =
+  -- TODO: analyze the configs first to confirm where the content/data/... files come from (implicit location or explicitly defined directories).
+  --    Then load the file trees for each of these directories to assemble the correct list of files to analyze.
+  let
+    globConfig = scanForGlobConfig hugoOpts.environment components.config
+    markupFiles = extractMarkup components.content
+    -- dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
+  in do
+  runConfigs <- analyzeConfig rtOpts globConfig
+  case runConfigs of
+    Left err -> pure $ Left err
+    Right context -> do
+      mrkpPages <- analyzeMarkups rtOpts context markupFiles
+      case mrkpPages of
+        Left err -> pure $ Left err
+        Right mrkpPages ->
+          let
+            eiTheme = selectTheme hugoOpts context
+          in
+          case eiTheme of
+            Left err -> pure $ Left err
+            Right aLabel ->
+              let
+                mbProjLayout = if null components.templCore.layouts then Nothing else Just $ buildTemplateFromCore components.templCore
+                mbTheme = case Mp.lookup (unpack aLabel) components.themes of
+                  Nothing -> Nothing
+                  Just aTmplCore -> Just $ buildTemplateFromCore aTmplCore
+              in
+              case (mbTheme, mbProjLayout) of
+                (Nothing, Nothing) -> pure . Left . SimpleMsg $ "@[analyseContent] no theme directory (" <> aLabel <> ") nor site layout available."
+                (_, _) -> do
+                  putStrLn $ "@[analyseContent] theme: " <> show mbTheme
+                  putStrLn $ "@[analyseContent] proj layout: " <> show mbProjLayout
+                  putStrLn $ "@[analyseContent] markup pages: " <> show mrkpPages
+                  case assignContentToTheme context components (maybesToArray (mbProjLayout, mbTheme)) mrkpPages of
+                    Left err -> pure $ Left err
+                    Right pairs ->
+                      let
+                        workItems = foldr (\(aPage, aTmpl) accum ->
+                            let
+                              (dirPath, fileItem) = aPage.item
+                              mbWorkItem = case aTmpl of
+                                FileRef (templPath, Fs.KnownFile aKind filePath) -> 
+                                  Just $ RunTemplateToDest aKind dirPath fileItem (templPath </> filePath)
+                                _ -> Nothing
+                            in
+                            maybe accum (: accum) mbWorkItem
+                          ) [] pairs
+                      in pure $ Right WorkPlan { destDir = "", items = workItems }
+
+
+maybesToArray :: (Maybe a, Maybe a) -> [ a ]
+maybesToArray = foldr (\a accum -> maybe accum (: accum) a) []
 
 classifyContent :: (RunOptions, HugoBuildOptions) -> Fs.PathFiles -> HugoComponents
 classifyContent (rtOpts, hugoOpts) pathFiles =
@@ -147,6 +179,7 @@ organizeFiles (knownFiles, miscFiles) =
     | "themes" `isPrefixOf` dirPath = (orgMap, organizeFileForTheme (drop 7 dirPath, aFile) themeMap)
     | otherwise = (organizeFileForTemplCore (dirPath, aFile) orgMap, themeMap)
 
+
   organizeFileForTemplCore :: FileWithPath -> OrgMap -> OrgMap
   organizeFileForTemplCore (dirPath, aFile) orgMap
     | dirPath == "" = case aFile of
@@ -166,6 +199,7 @@ organizeFiles (knownFiles, miscFiles) =
     | "static" `isPrefixOf` dirPath = Mp.insertWith (<>) "static" [(drop 7 dirPath, aFile)] orgMap
     | otherwise = Mp.insertWith (<>) "miscs" [(dirPath, aFile)] orgMap
 
+
   organizeFileForTheme :: FileWithPath -> Mp.Map String OrgMap -> Mp.Map String OrgMap
   organizeFileForTheme (dirPath, aFile) themeMap =
     let
@@ -176,67 +210,108 @@ organizeFiles (knownFiles, miscFiles) =
     Mp.insert themeName newTemplCore themeMap
 
 
-analyseContent :: (RunOptions, HugoBuildOptions) -> ProjectDefinition -> IO (Either GenError WorkPlan)
-analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site (Hugo components)) [] pathFiles) =
-  -- TODO: analyze the configs first to confirm where the content/data/... files come from (implicit location or explicitly defined directories).
-  --    Then load the file trees for each of these directories to assemble the correct list of files to analyze.
-  let
-    globConfig = scanForGlobConfig hugoOpts.environment components.config
-    markupFiles = extractMarkup components.content
-    -- dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
-  in do
-  runConfigs <- analyzeConfig rtOpts globConfig
-  case runConfigs of
-    Left err -> pure $ Left err
-    Right context -> do
-      mrkpPages <- analyzeMarkups rtOpts context markupFiles
-      case mrkpPages of
-        Left err -> pure $ Left err
-        Right mrkpPages ->
-          let
-            eiTheme = selectTheme hugoOpts context
-          in
-          case eiTheme of
-            Left err -> pure $ Left err
-            Right aLabel ->
-              let
-                mbProjLayout = if null components.templCore.layouts then Nothing else Just $ buildTemplateFromCore components.templCore
-                mbTheme = case Mp.lookup (unpack aLabel) components.themes of
-                  Nothing -> Nothing
-                  Just aTmplCore -> Just $ buildTemplateFromCore aTmplCore
-              in
-              case (mbTheme, mbProjLayout) of
-                (Nothing, Nothing) -> pure . Left . SimpleMsg $ "@[analyseContent] no theme directory (" <> aLabel <> ") nor site layout available."
-                (_, _) -> do
-                  putStrLn $ "@[analyseContent] theme: " <> show mbTheme
-                  putStrLn $ "@[analyseContent] proj layout: " <> show mbProjLayout
-                  case assignContentToTheme context components (mbProjLayout, mbTheme) mrkpPages of
-                    Left err -> pure $ Left err
-                    Right workPlan -> pure $ Right workPlan
-
-
 -- TODO: get this working!
-assignContentToTheme :: AnalyzeContext -> HugoComponents -> (Maybe Template, Maybe Template) ->[ MarkupPage ] -> Either GenError WorkPlan
-assignContentToTheme context components (mbTheme, mbLayout) markupPages =
+assignContentToTheme :: AnalyzeContext -> HugoComponents -> [ Template ] ->[ MarkupPage ] -> Either GenError [ (MarkupPage, PageTmpl) ]
+assignContentToTheme context components themes markupPages =
   let
-    rezWork = foldM analyzePage [] markupPages
+    language = case Mp.lookup "defaultContentLanguage" context.mergedConfigs of
+      Just (StringDV aV) -> aV
+      _ -> "en"
   in
-  Left $ SimpleMsg "@[assignPagesToTheme] not implemented yet."
+  foldM (analyzePage context themes) [] markupPages
   where
-  analyzePage :: [ WorkItem ] -> MarkupPage -> Either GenError [ WorkItem ]
-  analyzePage accum aPage =
+  analyzePage :: AnalyzeContext -> [ Template ] -> [ (MarkupPage, PageTmpl) ] -> MarkupPage -> Either GenError [ (MarkupPage, PageTmpl) ]
+  analyzePage context themes accum aPage =
     if isMarkdown aPage.content.encoding then
-      -- TODO: get this working!
+      -- TODO: apply the relevant front-matter and association rules to assign the page to a theme.
       let
-        mbLocale = (\fm -> case Mp.lookup "language" fm.fields of
+        mbLocale = aPage.frontMatter >>= (\fm -> case Mp.lookup "language" fm.fields of
               Just (ValueDF aLang) -> Just aLang
               Nothing -> Nothing
             )
-            =<< aPage.frontMatter
+        (dirPath, aFile) = aPage.item
+        (locale, sections) =
+          let
+            allDirs = splitDirectories dirPath
+          in
+          if isIso639 $ head allDirs then
+            (head allDirs, tail allDirs)
+          else           
+            ("", allDirs)
+        mbPage = findPageTmpl themes (locale, sections) aPage
       in
-        Right []
+      case mbPage of
+        Nothing -> Right accum
+        Just pageTmpl -> Right $ accum <> [ (aPage, pageTmpl) ]
     else
       Left . SimpleMsg $ "@[assignContentToTheme] markup encoding " <> pack (show aPage.content.encoding) <> " not supported yet."
+
+  findPageTmpl :: [ Template ] -> (FilePath, [FilePath]) -> MarkupPage -> Maybe PageTmpl
+  findPageTmpl templates (locale, sections) mkPage =
+    case templates of
+      [] -> Nothing
+      aTempl : rest ->
+        let
+          mkPagePath = Fs.getItemPath (snd mkPage.item)
+          kind = case mkPage.frontMatter of
+            Nothing -> if null sections && mkPagePath `elem` ["index.md", "_index.md" ] then Home else Single
+            Just aFM -> case Mp.lookup "layout" aFM.fields of
+              Just (ValueDF aType) -> case aType of
+                StringDV "home" -> Home
+                StringDV "section" -> Section
+                StringDV "taxonomy" -> Taxonomy
+                StringDV "term" -> Term
+                StringDV "list" -> List
+                StringDV "summary" -> Summary
+                StringDV aLabel -> Other aLabel
+                _ -> Single
+              Nothing -> if null sections && mkPagePath `elem` [ "index.md", "_index.md" ] then Home else Single
+        in
+        case findInLayout aTempl.layout kind (locale, sections) mkPage of
+          Just aPageTmpl -> Just aPageTmpl
+          Nothing -> findPageTmpl rest (locale, sections) mkPage
+
+  findInLayout :: LayoutTmpl -> PageKind -> (FilePath, [FilePath]) -> MarkupPage -> Maybe PageTmpl
+  findInLayout layout kind (locale, sections) mkPage =
+    case sections of
+      [] -> case findAtTop layout.topLevel kind locale mkPage of
+        Just aPageTmpl -> Just aPageTmpl
+        Nothing -> findAtTop layout.defaults kind locale mkPage
+      aSection : _ ->
+        case findInKind layout.kinds kind (locale, aSection) mkPage of
+          Just aPageTmpl -> Just aPageTmpl
+          Nothing ->
+            case findAtTop layout.topLevel kind locale mkPage of
+              Just aPageTmpl -> Just aPageTmpl
+              Nothing -> findAtTop layout.defaults kind locale mkPage
+
+  findAtTop :: Mp.Map Text PageTmpl -> PageKind -> String -> MarkupPage -> Maybe PageTmpl
+  findAtTop aMap kind locale mkPage =
+    let
+      -- TODO: find out how the prefix/ext are decided.
+      prefix = case kind of
+        Home -> "home"
+        Single -> "single"
+        List -> "list"
+        Taxonomy -> "taxonomy"
+        Term -> "term"
+        Section -> "section"
+        Summary -> "summary"
+        Other aLabel -> aLabel
+      renderExt = "html"
+    in
+    case Mp.lookup (prefix <> "." <> pack locale <> "." <> renderExt) aMap of
+      Just aPageTmpl -> Just aPageTmpl
+      Nothing -> case Mp.lookup (prefix <> "." <> renderExt) aMap of
+        Just aPageTmpl -> Just aPageTmpl
+        Nothing -> Mp.lookup ("single." <> renderExt) aMap
+
+  findInKind :: Mp.Map Text ThemeTmplPages -> PageKind -> (String, String) -> MarkupPage -> Maybe PageTmpl
+  findInKind categMap kind (locale, section) mkPage =
+    case Mp.lookup (pack section) categMap of
+      Just aSubMap -> findAtTop aSubMap kind locale mkPage
+      Nothing -> Nothing 
+
 
   isMarkdown :: ContentEncoding -> Bool
   isMarkdown (ParsedMarkdown _) = True
@@ -244,30 +319,11 @@ assignContentToTheme context components (mbTheme, mbLayout) markupPages =
   isMarkdown _ = False
 
 
-data Template = Template {
-    core :: HugoTemplCore
-    , config :: Mp.Map Text DictEntry
-    , layout :: LayoutTmpl
-  }
-  deriving Show
-
-type ThemeTmplPages = Mp.Map Text PageTmpl
-type ThemeTmplMaps = Mp.Map Text ThemeTmplPages
-data LayoutTmpl = LayoutTmpl {
-    topLevel :: ThemeTmplPages
-    , defaults :: ThemeTmplPages
-    , kinds :: Mp.Map Text ThemeTmplPages
-    , partials :: Mp.Map Text ThemeTmplPages
-    , shortcodes :: ThemeTmplPages
-  }
-  deriving Show
-
-data PageTmpl =
-  FileRef FileWithPath
-  | Compiled CompiledTemplate
-  deriving Show
-
-type CompiledTemplate = Bs.ByteString
+isIso639 :: String -> Bool
+isIso639 aStr = 
+  case aStr of
+    [ a, b ] -> isJust $ fromChars a b
+    _ -> False
 
 
 buildTemplateFromCore :: HugoTemplCore -> Template
@@ -411,13 +467,9 @@ analyzeMarkups rtOpts context markupFiles = do
 
 -- TODO: generalize for all markup types.
 analyzeMarkupPage :: RunOptions -> FilePath -> FilePath -> FileWithPath -> IO (Either GenError MarkupPage)
-analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.KnownFile Fs.Markdown filePath) =
-  let
-    inProjPath = groupPath </> filePath
-    fullPath = rootDir </> "content" </> inProjPath
-  in do
+analyzeMarkupPage rtOpts rootDir groupPath file =
   -- putStrLn $ "@[analyzeMarkupPage] analyzing: " <> fullPath
-  parseContent rtOpts fullPath
+  parseContent rtOpts (rootDir </> "content") file
 
 analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.KnownFile _ filePath) = do
   putStrLn $ "@[analyzeMarkupPage] error, trying to analyze a non-markup file: " <> groupPath </> filePath
@@ -428,225 +480,10 @@ analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.MiscFile filePath) = do
   pure $ Left $ SimpleMsg "Trying to analyze a non-markup file."
 
 
-analyzeConfig :: RunOptions -> (Maybe FileWithPath, Maybe FileWithPath, [ FileWithPath ]) -> IO (Either GenError AnalyzeContext)
-analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
-  maybe (pure $ Right defaultContext) (parseTopConfig defaultContext rtOpts.baseDir) topConfig
-        >>= \case
-            Left err -> pure $ Left err
-            Right ctxt -> maybe (pure $ Right ctxt) (parseDefaultConfig ctxt rtOpts.baseDir) defaultConfig
-        >>= \case
-            Left err -> pure $ Left err
-            Right ctxt -> parseOtherConfigs ctxt rtOpts.baseDir otherConfigs
-        >>= \case
-            Left err -> pure $ Left err
-            Right ctxt -> pure $ Right ctxt
-        >>= \case
-            Left err -> pure $ Left err
-            Right ctxt -> pure $ mergeConfig ctxt
-  where
-  -- TODO: get the RugFlag for the contextDefaultOptions from somewhere (build vs server).
-  mergeConfig :: AnalyzeContext -> Either GenError AnalyzeContext
-  mergeConfig context =
-    let
-      mbHugoOpts = getHugoOpts rtOpts.techOpts
-      environment = case mbHugoOpts of
-        Nothing -> "production"
-        Just hugoOpts ->
-          case hugoOpts.environment of
-            Just envName -> envName
-            Nothing -> case Mp.lookup "environment" context.globalVars of
-              Just (StringDV globEnvName) -> globEnvName
-              _ -> case Mp.lookup "environment" context.defaultVars of
-                Just (StringDV defEnvName) -> defEnvName
-                _ -> "production"
-      configVars = if Mp.null context.globalVars then [] else [ context.globalVars ]
-                  <> case Mp.lookup environment context.otherVars of
-                       Nothing -> [] 
-                       Just envVars -> if Mp.null envVars then [] else [ envVars ]
-                  <> if Mp.null context.defaultVars then [] else [ context.defaultVars ]
-                  <> [ contextDefaultOptions BuildF ]
-      valueList = map (resolveConfig mbHugoOpts configVars) ctxtOptionKeys
-    in
-    Right context { mergedConfigs = Mp.fromList $ foldl (\accum v -> case v of Nothing -> accum ; Just aVal -> aVal : accum) [] valueList }
-    where
-    resolveConfig :: Maybe HugoBuildOptions -> [ Mp.Map Text DictEntry ] -> Text -> Maybe (Text, DictEntry)
-    resolveConfig mbHugoOpts configVars aKey =
-      let
-        mbValue = case mbHugoOpts of
-          Nothing -> Nothing
-          Just hugoOpts -> case checkBuildOptsForKey hugoOpts aKey of
-            Just aVal -> case aVal of
-              BoolBO aBool -> Just (aKey, BoolDV aBool)
-              StringBO aText -> Just (aKey, StringDV aText)
-            Nothing -> Nothing
-      in
-      case mbValue of
-        Just aVal -> mbValue
-        Nothing -> case findKeyInConfigs aKey configVars of
-          Just aVal -> Just (aKey, aVal)
-          Nothing -> case Mp.lookup aKey (contextDefaultOptions BuildF) of
-            Just aVal -> Just (aKey, aVal)
-            Nothing -> Nothing
-    findKeyInConfigs :: Text -> [ Mp.Map Text DictEntry ] -> Maybe DictEntry
-    findKeyInConfigs aKey configVars =
-      case configVars of
-        [] -> Nothing
-        aConfig : rest -> case Mp.lookup aKey aConfig of
-          Just aVal -> Just aVal
-          Nothing -> findKeyInConfigs aKey rest
-    {-
-      - then assemble an array of main config, environment config and default config,
-      - then iterate through the main config keys (ctxtOptionKeys):
-        - first check if the HugoBuildOptions has been specified,
-        - if not, then check for the 1st item of the config array,
-        - if not, then check for the 2nd item of the config array,
-        - if not, then check for the 3rd item of the config array,
-        - if not, use the default value.
-    -}
-
-  parseTopConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
-  parseTopConfig context rootDir aFile = do
-    eiRez <- parseConfigFile rootDir aFile
-    case eiRez of
-      Left err -> pure $ Left err
-      Right aConfig -> pure $ Right context { globalVars = aConfig }
-
-  parseDefaultConfig :: AnalyzeContext -> FilePath -> FileWithPath -> IO (Either GenError AnalyzeContext)
-  parseDefaultConfig context rootDir aFile = do
-    eiRez <- parseConfigFile rootDir aFile
-    case eiRez of
-      Left err -> pure $ Left err
-      Right aConfig -> pure $ Right context { defaultVars = aConfig }
-
-  parseOtherConfigs :: AnalyzeContext -> FilePath -> [ FileWithPath ] -> IO (Either GenError AnalyzeContext)
-  parseOtherConfigs context rootDir otherConfigs = do
-    -- putStrLn "Parsing other configs..."
-    foldM (\accum aFile@(dirPath, aFileItem) -> case accum of
-          Left err -> pure $ Left err
-          Right aCtxt -> case aFileItem of
-              Fs.KnownFile kind filePath ->
-                if kind == Fs.Toml || kind == Fs.Yaml || kind == Fs.Json then do
-                  eiRez <- parseConfigFile rootDir aFile
-                  case eiRez of
-                    Left err -> pure $ Left err
-                    Right aConfig -> pure $ Right aCtxt { otherVars = Mp.insertWith (<>) (pack $ dropExtension filePath) aConfig aCtxt.otherVars }
-                else
-                  pure $ Right aCtxt
-              _ -> pure $ Left $ SimpleMsg "Misc file in other configs."
-        ) (Right context) otherConfigs
-
-
-parseConfigFile :: FilePath -> FileWithPath -> IO (Either GenError (Mp.Map Text DictEntry))
-parseConfigFile rootDir (dirPath, Fs.KnownFile kind filePath) = do
-  let
-    fullPath = rootDir </> "config" </> dirPath </> filePath
-  -- putStrLn $ "@[parseDefaultConfig] reading: " <> fullPath
-  -- putStrLn $ "@[parseDefaultConfig] analyzing: " <> fullPath
-  case kind of
-    Fs.Toml -> do
-      srcText <- T.readFile fullPath
-      case Tm.parse srcText of
-        Left err -> do
-          putStrLn $ "@[parseDefaultConfig] error parsing TOML: " <> show err
-          pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
-        Right tomlVal ->
-          -- putStrLn $ "@[parseDefaultConfig] parsed TOML: " <> show tomlVal
-          pure $ case tomlToDict tomlVal of
-            Left err -> Left $ SimpleMsg ("TOML conversion err: " <> pack err)
-            Right aDict -> Right aDict
-    Fs.Yaml -> do
-      eiValue <- Ym.decodeFileEither fullPath :: IO (Either Ym.ParseException DictEntry)
-      case eiValue of
-        Left err ->
-          pure . Left . SimpleMsg $ "@[parseDefaultConfig] error in file " <> pack fullPath <> ", YAML err: " <> pack (show err)
-        Right aVal ->
-          case aVal of
-            DictDV aDict -> pure $ Right aDict
-            _ ->
-              pure . Left . SimpleMsg $ "@[parseDefaultConfig] error in file " <> pack fullPath <> ", YAML root is not a dictionary."
-    Fs.Json -> do
-      putStrLn "@[parseDefaultConfig] parsing JSON..."
-      eiJsonRez <- Ae.eitherDecodeFileStrict' fullPath :: IO (Either String Ae.Object)
-      case eiJsonRez of
-        Left err -> do
-          putStrLn $ "@[parseDefaultConfig] error parsing JSON: " <> err
-          pure . Left $ SimpleMsg ("JSON err: " <> pack err)
-        Right jsonVal -> do
-          putStrLn $ "@[parseDefaultConfig] parsed JSON: " <> show jsonVal
-          pure . Left $ SimpleMsg "JSON parsing not implemented yet."
-
-parseConfigFile rootDir (dirPath, Fs.MiscFile aPath) = do
-  putStrLn "@[parseConfigFile] misc file!"
-  pure . Left . SimpleMsg $ "@[parseConfigFile] error, trying to parse misc file " <> pack aPath
-
-
-tomlToDict :: Tm.TOML -> Either String (Mp.Map Text DictEntry)
-tomlToDict tomlBlock =
-  let
-    eiPairs = foldM (\accum (fKey Tm.:|| rKey, value)-> case tomlToValue value of
-          Left err -> Left $ "@[tomlToDict] pair error: " <> show err
-          Right aVal -> Right $ Mp.insert fKey.unPiece aVal accum
-        ) Mp.empty $ Hm.toList tomlBlock.tomlPairs
-    eiTables =
-      case eiPairs of
-        Left _ -> eiPairs
-        Right pairs -> foldM (\accum (fKey Tm.:|| rKey, value) -> case tomlToDict value of
-              Left err -> Left $ "@[tomlToDict] table error: " <> err
-              Right aVal -> Right $ Mp.insert fKey.unPiece (DictDV aVal) accum
-          ) pairs (Tpt.toList tomlBlock.tomlTables)
-  in
-  case eiTables of
-    Left err -> eiTables
-    Right tables -> foldM (\accum (fKey Tm.:|| rKey, arrayVal) ->
-        let
-          mbExistingArray = Mp.lookup fKey.unPiece accum
-          newValues = mapM tomlToDict (Nem.toList arrayVal)
-        in
-        case newValues of
-          Left err -> Left $ "@[tomlToDict] table array conversion error: " <> err
-          Right anArray ->
-            case mbExistingArray of
-              Nothing -> Right $ Mp.insert fKey.unPiece (ListDV (map DictDV anArray)) accum
-              Just (ListDV existingArray) -> Right $ Mp.insert fKey.unPiece (ListDV $ existingArray <> map DictDV anArray) accum
-              _ -> Left $ "@[tomlToDict] array error, key " <> unpack fKey.unPiece <> " already exists for a non-array value."
-      ) tables (Hm.toList tomlBlock.tomlTableArrays)
-  where
-  tomlToValue :: Tm.AnyValue -> Either Tm.MatchError DictEntry
-  tomlToValue (Tm.AnyValue v) =
-    case Tm.matchBool v of
-      Right b -> Right $ BoolDV b
-      Left _ -> case Tm.matchText v of
-        Right s -> Right $ StringDV s
-        Left _ -> case Tm.matchInteger v of
-          Right i -> Right $ IntDV i
-          Left _ -> case Tm.matchDouble v of
-            Right d -> Right $ DoubleDV d
-            Left _ -> case Tm.matchArray tomlToValue v of
-                Right aArray -> Right $ ListDV aArray
-                Left _ -> Tm.mkMatchError Tm.TText (Tm.Text $ "@[tomlToValue] unknown value type: " <> pack (show v))
-
-
 {-
   - config folder: contains sections of configuration, _default and others (eg 'production).
       The main config should be 'hugo.<ext>', a change in v0.109.0 from 'config.<ext>' (still supported).
-    , content :: [ FileWithPath ]
-    , public :: [ FileWithPath ]
-    , themes :: ThemeMap
-    , templCore :: HugoTemplCore
-    , staticDest :: FilePath
-
-    HugoTemplCore {
-      archetypes :: [ FileWithPath ]
-      , assets :: [ FileWithPath ]
-      , dataSet :: [ FileWithPath ]
-      , i18n :: [ FileWithPath ]
-      , layouts :: [ FileWithPath ]
-      , resource :: [ FileWithPath ]
-      , static :: [ FileWithPath ]
-      , projConfig :: [ FileWithPath ]
-      , miscs :: [ FileWithPath ]
-    }
-
+  
 - root configuration keys: build, caches, cascade, deployment, frontmatter, imaging, languages, markup, mediatypes, menus, minify, module, outputformats, outputs, params, permalinks, privacy, related, security, segments, server, services, sitemap, taxonomies.
   Each one can become a separate config file (eg build.toml, params.toml).
   Subfolders (eg config/staging/hugo.toml) will be used in conjunction with the --environment param (or HUGO_ENVIRONMENT env var).
@@ -662,130 +499,6 @@ page:
   nextPrevSortOrder: desc
 
 
-* build defaults:
-build:
-  buildStats:
-    disableClasses: false
-    disableIDs: false
-    disableTags: false
-    enable: false
-  cacheBusters:
-  - source: (postcss|tailwind)\.config\.js
-    target: (css|styles|scss|sass)
-  noJSConfigInAssets: false
-  useResourceCacheWhen: fallback
-
-
-* Front-Matter dates default:
-frontmatter:
-  date:
-  - date
-  - publishdate
-  - pubdate
-  - published
-  - lastmod
-  - modified
-  expiryDate:
-  - expirydate
-  - unpublishdate
-  lastmod:
-  - :git
-  - lastmod
-  - modified
-  - date
-  - publishdate
-  - pubdate
-  - published
-  publishDate:
-  - publishdate
-  - pubdate
-  - published
-  - date
-* special values:
- :default
- :fileModTime
- :filename
- :git
-
-* minify defaults:
-minify:
-  disableCSS: false
-  disableHTML: false
-  disableJS: false
-  disableJSON: false
-  disableSVG: false
-  disableXML: false
-  minifyOutput: false
-  tdewolff:
-    css:
-      inline: false
-      keepCSS2: true
-      precision: 0
-    html:
-      keepComments: false
-      keepConditionalComments: false
-      keepDefaultAttrVals: true
-      keepDocumentTags: true
-      keepEndTags: true
-      keepQuotes: false
-      keepSpecialComments: true
-      keepWhitespace: false
-      templateDelims:
-      - ""
-      - ""
-    js:
-      keepVarNames: false
-      precision: 0
-      version: 2022
-    json:
-      keepNumbers: false
-      precision: 0
-    svg:
-      inline: false
-      keepComments: false
-      precision: 0
-    xml:
-      keepWhitespace: false
-
-* file caches:
-caches:
-  assets:
-    dir: :resourceDir/_gen
-    maxAge: -1
-  getcsv:
-    dir: :cacheDir/:project
-    maxAge: -1
-  getjson:
-    dir: :cacheDir/:project
-    maxAge: -1
-  getresource:
-    dir: :cacheDir/:project
-    maxAge: -1
-  images:
-    dir: :resourceDir/_gen
-    maxAge: -1
-  misc:
-    dir: :cacheDir/:project
-    maxAge: -1
-  modules:
-    dir: :cacheDir/modules
-    maxAge: -1
-
-* http cache:
-HTTPCache:
-  cache:
-    for:
-      excludes:
-      - '**'
-      includes: null
-  polls:
-  - disable: true
-    for:
-      excludes: null
-      includes:
-      - '**'
-    high: 0s
-    low: 0s
 
 In 'server' mode, the 'server.{toml, yaml, json}' configures server options, with params matching
  https://docs.netlify.com/routing/headers/#syntax-for-the-netlify-configuration-file, using https://github.com/gobwas/glob for globbing:

@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use second" #-}
 
@@ -14,7 +12,7 @@ import qualified Data.Text.Lazy as L
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
 
-import qualified System.FilePath as Sfp
+import System.FilePath ((</>))
 
 import qualified Text.MMark as Mmkp
 import qualified Text.Megaparsec as Prsc
@@ -26,10 +24,12 @@ import qualified Toml as Tm
 
 import Conclusion (GenError (..))
 
+import FileSystem.Types (FileWithPath, FileItem (..), getItemPath)
 import Markup.Types
 import Data.Char (isSpace)
 import Data.Aeson (Value(Bool))
 import GHC.Generics (Generic)
+import ProjectDefinition.Types (DictEntry)
 
 {-
 TOML : identified by opening and closing +++.
@@ -39,13 +39,15 @@ ORG : a group of Org mode keywords in the format ‘#+KEY: VALUE’. Any line th
 -}
 
 
-parse :: FilePath -> IO (Either GenError MarkupPage)
-parse filePath = do
+parse :: FilePath -> FileWithPath -> IO (Either GenError MarkupPage)
+parse srcDir file@(dirPath, fileItem) = do
   let
-    fileName = Sfp.takeBaseName filePath
-    -- TODO: create real logic:
-    outPath = Sfp.addExtension (Sfp.joinPath ["/tmp", fileName]) "html"
-  txt <- T.readFile filePath
+    fullFilePath = srcDir </> dirPath </> getItemPath fileItem
+  {-
+      fileName = takeBaseName $ getItemPath filePath
+      -- outPath = addExtension (joinPath ["/tmp", fileName]) "html"
+  -}
+  txt <- T.readFile fullFilePath
   case parseFrontMatter txt of
     Left errMsg -> do
       putStrLn $ "@[parse] parseFrontMatter err: " <> errMsg
@@ -54,11 +56,12 @@ parse filePath = do
       -- TODO: do real stuff:
       -- putStrLn $ "@[parse] parseFrontMatter: " <> show mbFrontMatter
       pure . Right $ MarkupPage {
-                path = filePath
+                item = file
               , frontMatter = mbFrontMatter
               , content = Content RawMarkdown (Just rest)
             }
 
+{-
 parseMarkup :: FilePath -> Maybe FrontMatter -> Text -> IO (Either GenError MarkupPage)
 parseMarkup filePath mbFrontMatter rest =
       case Mmkp.parse filePath rest of
@@ -74,7 +77,7 @@ parseMarkup filePath mbFrontMatter rest =
               , frontMatter = mbFrontMatter
               , content = Content (ParsedMarkdown r) (Just . L.toStrict . Lcd.renderText . Mmkp.render $ r)
             }
-
+-}
 
 {-
 data YamlValue =
@@ -109,10 +112,10 @@ parseFrontMatter aText =
     case aKind of
       YamlEnc ->
         let
-          (fmText, rest) = T.breakOn "\n---" aText
+          (fmText, rest) = T.breakOn "---\n" aText
         in
         -- TODO: map the content of the Yaml data to the internal representation.
-        case Yaml.decodeEither' . TE.encodeUtf8 $ fmText :: Either Yaml.ParseException (Hl.HashMap Text Ae.Value) of
+        case Yaml.decodeEither' . TE.encodeUtf8 $ fmText :: Either Yaml.ParseException (Hl.HashMap Text DictEntry) of
           Left err -> Left $ "@[parseFrontMatterFrom] Yaml.decodeEither' err: " <> show err
           Right aMap ->
             let
@@ -123,7 +126,7 @@ parseFrontMatter aText =
               Right (Just fmDec, T.dropWhile (== '\n') . T.dropWhile (== '-') $ rest)
       TomlEnc ->
         let
-          (fmText, rest) = breakOn "\n+++" aText
+          (fmText, rest) = breakOn "+++\n" aText
         in Left "gaga"
       JsonEnc ->
         let

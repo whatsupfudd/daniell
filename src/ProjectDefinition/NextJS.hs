@@ -53,9 +53,9 @@ analyseNextJsProject rtOpts isStatic pathFiles =
     content = classifyContent rtOpts pathFiles
   in
   if isStatic then
-    analyseStaticProject rtOpts $ ProjectDefinition rtOpts.baseDir (Site (NextStatic content)) [] pathFiles
+    analyseStaticProject rtOpts (ProjectDefinition rtOpts.baseDir (Site NextStatic) [] pathFiles) content
   else
-    analyseWebAppProject rtOpts $ ProjectDefinition rtOpts.baseDir (WebApp (NextJS content)) [] pathFiles
+    analyseWebAppProject rtOpts (ProjectDefinition rtOpts.baseDir (WebApp NextJS) [] pathFiles) content
 
 
 classifyContent :: RunOptions -> Fs.PathFiles -> NextJSComponents
@@ -106,7 +106,7 @@ organizeFiles (knownFiles, miscFiles) =
     , miscs = miscFiles <> fromMaybe [] (Mp.lookup "miscs" orgSet)
   }
   where
-  organizeAFile :: FileWithPath -> OrgMap -> OrgMap
+  organizeAFile :: Fs.FileWithPath -> OrgMap -> OrgMap
   organizeAFile (dirPath, aFile) orgMap
     | dirPath == "" = case aFile of
         Fs.KnownFile aKind aPath ->
@@ -141,8 +141,8 @@ organizeFiles (knownFiles, miscFiles) =
     | "deploy" `isPrefixOf` dirPath = Mp.insertWith (<>) "deploy" [(drop 7 dirPath, aFile)] orgMap
     | otherwise = Mp.insertWith (<>) "miscs" [(dirPath, aFile)] orgMap
 
-analyseStaticProject :: RunOptions -> ProjectDefinition -> Either GenError WorkPlan
-analyseStaticProject rtOpts (ProjectDefinition baseDir (Site (NextStatic content)) [] pathFiles) =
+analyseStaticProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> Either GenError WorkPlan
+analyseStaticProject rtOpts (ProjectDefinition baseDir (Site NextStatic) [] pathFiles) content =
   let
     dbgContent = "NextJS Site project definition: " <> pack (show content)
   in
@@ -150,8 +150,8 @@ analyseStaticProject rtOpts (ProjectDefinition baseDir (Site (NextStatic content
   -- Right $ WorkPlan { destDir = "", items = [] }
 
 
-analyseWebAppProject :: RunOptions -> ProjectDefinition -> Either GenError WorkPlan
-analyseWebAppProject rtOpts (ProjectDefinition baseDir (WebApp (NextJS content)) [] pathFiles) =
+analyseWebAppProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> Either GenError WorkPlan
+analyseWebAppProject rtOpts (ProjectDefinition baseDir (WebApp NextJS) [] pathFiles) content =
   let
     dbgContent = "NextJS WebApp project definition: " <> pack (show content)
   in

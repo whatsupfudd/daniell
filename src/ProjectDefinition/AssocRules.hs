@@ -1,6 +1,6 @@
 module ProjectDefinition.AssocRules where
 
-import ProjectDefinition.Types (ProjectDefinition (..), TmpFileDef)
+import ProjectDefinition.Types (ProjectDefinition (..))
 import Markup.Types (MarkupPage (..))
 
 {-

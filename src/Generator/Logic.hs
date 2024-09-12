@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Generator.Logic where
 
@@ -22,7 +21,7 @@ import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
 import ProjectDefinition.Hugo.Config (setRunOptions)
 import qualified ProjectDefinition.NextJS as Nx
-import qualified ProjectDefinition.Scaffholding as Scf
+import qualified ProjectDefinition.Scaffolding as Scf
 import ProjectDefinition.Defaults (defaultLocations)
 import Template.Haskell (tsParseHaskell)
 import qualified Template.Parser as Tmpl
@@ -54,9 +53,9 @@ createSite rtOpts = do
     Right dirTree ->
       let
         contentPages = []   -- Fs.getContentPages siteDef
-        siteDef = ProjectDefinition rtOpts.baseDir (Site (Hugo Hu.defaultComponents)) [] dirTree
+        siteDef = ProjectDefinition rtOpts.baseDir (Site Hugo) [] dirTree
       in do
-        listEiGen <- mapM (Mrkp.parseContent rtOpts) contentPages
+        listEiGen <- mapM (Mrkp.parseContent rtOpts rtOpts.baseDir) contentPages
         let
           eiTemplateSet = foldM (eiTemplateFinder siteDef) (Mp.empty :: TemplateMatches) listEiGen
           execContext = Ri.createContext rtOpts
@@ -131,7 +130,7 @@ displayFTrees rtOpts fTrees = do
                     pure ()
                   -}
                   Fs.KnownFile Fs.Markdown filePath -> do
-                    Mrkp.parseContent rtOpts (folder <> "/" <> filePath)
+                    Mrkp.parseContent rtOpts folder (folder, item)
                     -- TMP:
                     pure $ Right ()
                   _ -> pure . Left . SimpleMsg . pack $ "@[displayFTrees] unknown item: " <> show item
@@ -178,20 +177,8 @@ buildSite rtOpts siteOpts = do
       case eiWorkPlan of
         Left err -> pure $ Left err
         Right workPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show workPlan
           pure $ Right ()
-  where
-  eiTemplateFinder :: ProjectDefinition -> TemplateMatches -> Either GenError MarkupPage -> Either GenError TemplateMatches
-  eiTemplateFinder siteDef matchSet genItem =
-    case genItem of
-      Left err -> Left . SimpleMsg . pack $ "@[buildSite] parseContent err: " <> show err
-      -- TODO: match the templates for a given MarkupPage item, and consolidate the MarkupPage under a single set of templates -> use a Map Text [ MarkupPage ]
-      Right anItem ->
-        let
-          aTmpl = Rules.findTemplForContent siteDef anItem
-        in
-        case Mp.lookup aTmpl matchSet of
-          Nothing -> Right $ Mp.insert aTmpl [anItem] matchSet
-          Just genList -> Right $ Mp.insert aTmpl (anItem : genList) matchSet
 
 
 -- TODO: move all the analyse... logic to their respective module in ProjectDefinition.
@@ -219,11 +206,11 @@ createProject rtOpts newOpts =
       putStrLn "@[createProject] WebApp project."
       pure NilCcl
     LocalAppPK ->
-      createScaffholding rtOpts newOpts
+      createScaffolding rtOpts newOpts
 
 
-createScaffholding :: RunOptions -> NewOptions -> IO Conclusion
-createScaffholding rtOpts newOpts = do
+createScaffolding :: RunOptions -> NewOptions -> IO Conclusion
+createScaffolding rtOpts newOpts = do
   rezTemplates <- mapM (Scf.parseFileTree rtOpts) newOpts.templates
   let
     (errTemplates, userTemplates) = splitResults rezTemplates

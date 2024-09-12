@@ -53,8 +53,10 @@ library
       ProjectDefinition.Defaults
       ProjectDefinition.Hugo
       ProjectDefinition.Hugo.Config
+      ProjectDefinition.Hugo.Types
       ProjectDefinition.NextJS
-      ProjectDefinition.Scaffholding
+      ProjectDefinition.Paraml
+      ProjectDefinition.Scaffolding
       ProjectDefinition.Types
       RunTime.Interpreter
       RunTime.Interpreter.Context

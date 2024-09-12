@@ -3,8 +3,10 @@ module Markup.Types where
 import qualified Data.Map as Mp
 import Data.Text (Text)
 
-import qualified Data.Aeson as Ae
 import Text.MMark (MMark)
+
+import FileSystem.Types (FileWithPath)
+import ProjectDefinition.Types (DictEntry)
 
 {- TODO:
  * FrontMatter: add encoding style (toml / yaml / json)
@@ -20,6 +22,7 @@ data FrontMatter = FrontMatter {
   }
   deriving Show
 
+
 -- TODO: figure out is Hugo is indeed using OrgEnc for front-matter (mentioned in content section, but not in front-matter section).
 data FMEncoding =
   YamlEnc
@@ -31,7 +34,7 @@ data FMEncoding =
 
 
 data Definition =
-  ValueDF Ae.Value
+  ValueDF DictEntry
   | EnvVarDF
   | ReferenceDF
   deriving Show
@@ -51,7 +54,7 @@ data ContentEncoding =
 
 -- Content that fills in the template.
 data MarkupPage = MarkupPage {
-    path :: FilePath
+    item :: FileWithPath
     , frontMatter :: Maybe FrontMatter
     , content :: Content
   }

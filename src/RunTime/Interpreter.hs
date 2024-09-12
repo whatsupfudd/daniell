@@ -4,7 +4,7 @@ import Data.Text (Text)
 
 import Conclusion (GenError (..))
 import Options.Runtime (RunOptions (..))
-import ProjectDefinition.Types (ProjectDefinition (..), TmpFileDef (..))
+import ProjectDefinition.Types (ProjectDefinition (..))
 import Markup.Types (MarkupPage)
 import Template.Types (Template)
 

@@ -40,6 +40,7 @@ getItemPath (KnownFile _ fp) = fp
 
 type PathNode = (FilePath, [FileItem])
 type PathFiles = Seq.Seq PathNode
+type FileWithPath = (FilePath, FileItem)
 
 type DirTreeMap = Mp.Map FilePath DirNode
 

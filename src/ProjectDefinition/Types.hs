@@ -11,7 +11,7 @@ import qualified Data.Aeson.Types as Ae
 import Data.Scientific (toRealFloat)
 
 import Template.Types (ScaffholdTempl, FileTempl)
-import FileSystem.Types (PathFiles, FileItem, FileKind)
+import FileSystem.Types (PathFiles, FileItem, FileWithPath, FileKind)
 
 
 
@@ -34,6 +34,8 @@ data ProjectDefinition = ProjectDefinition {
     , sourceContent :: PathFiles
   }
 
+
+{- TODO: remove if not used.
 defaultProjectDef :: FilePath -> String -> ProjectType -> ProjectDefinition
 defaultProjectDef baseDir pName pT = ProjectDefinition {
     baseDir = baseDir
@@ -41,6 +43,7 @@ defaultProjectDef baseDir pName pT = ProjectDefinition {
     , templates = []
     , sourceContent = mempty
    }
+-}
 
 
 data ProjectType =
@@ -49,18 +52,19 @@ data ProjectType =
   | LocalApp LocalAppType
 
 data SiteType =
-  Hugo HugoComponents
-  | NextStatic NextJSComponents
-  | WordPress WordPressComponents
+  Hugo
+  | NextStatic
+  | WordPress
 
 data WebAppType =
-  NextJS NextJSComponents
-  | Fuddle FuddleComponents
+  NextJS
+  | Fuddle
 
 data LocalAppType =
-  FuddApp LocalAppComponents
+  FuddApp
 
 
+-- TODO: Move these definitions to their respective modules.
 {- FUDDAPP -}
 data LocalAppComponents = LocalAppComponents {
     config :: String
@@ -72,30 +76,6 @@ data FuddleComponents = FuddleComponents {
     config :: String
     , components :: [ TmpItem ]
   }
-
-{- HUGO -}
-data HugoComponents = HugoComponents {
-    templCore :: HugoTemplCore
-    , config :: [ FileWithPath ]
-    , content :: [ FileWithPath ]
-    , public :: [ FileWithPath ]
-    , themes :: ThemeMap
-    , staticDest :: FilePath
-  }
-  deriving Show
-
-data HugoTemplCore = HugoTemplCore {
-    archetypes :: [ FileWithPath ]
-    , assets :: [ FileWithPath ]
-    , dataSet :: [ FileWithPath ]
-    , i18n :: [ FileWithPath ]
-    , layouts :: [ FileWithPath ]
-    , resource :: [ FileWithPath ]
-    , static :: [ FileWithPath ]
-    , projConfig :: [ FileWithPath ]
-    , miscs :: [ FileWithPath ]
-  }
-  deriving Show
 
 
 {- WORDPRESS -}
@@ -112,10 +92,8 @@ data DbConfig = DbConfig {
     , dbPass :: String
   }
 
-type FileWithPath = (FilePath, FileItem)
 type FileSet = (Mp.Map FileKind [FileWithPath], [FileWithPath])
 type OrgMap = Mp.Map String [FileWithPath]
-type ThemeMap = Mp.Map String HugoTemplCore
 
 {- NextJS -}
 
@@ -172,20 +150,4 @@ instance Ae.FromJSON DictEntry where
 
 {- TODO: Figure out what goes in the components of each project definition. -}
 data TmpItem
-
-{- Old Stuff -}
-
-newtype TmpFileDef = TmpFileDef { aPath :: FilePath }
-
-
-data ProjEntry = ProjEntry {
-    path :: FilePath
-  }
-
-data SiteVarMap a = Map Text (SiteVarTree a)
-
-
-data SiteVarTree a =
-  TermSO ProjEntry
-  | NodeSO ProjEntry [ SiteVarTree a ]
 

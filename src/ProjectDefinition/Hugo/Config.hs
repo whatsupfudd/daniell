@@ -1,12 +1,25 @@
+{-# LANGUAGE LambdaCase #-}
 module ProjectDefinition.Hugo.Config where
 
-import Data.Text (Text)
+import Control.Monad (foldM)
+import System.FilePath ((</>), dropExtension)
+
+import Data.Text (Text, pack)
+import qualified Data.Text.IO as T
 import qualified Data.Map as Mp
+
+import qualified Toml as Tm
+import qualified Data.Aeson as Ae
+import qualified Data.Yaml as Ym
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
 
+import Conclusion (GenError (..))
+import qualified FileSystem.Types as Fs
+import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types (DictEntry (..))
+import ProjectDefinition.Hugo.Types
 
 
 data LocaleConfig = LanguageConfig {
@@ -31,6 +44,158 @@ defaultLocale = LanguageConfig {
     , weight = 0
   }
 
+-- ***** Inspection and analysis logic *****
+analyzeConfig :: RunOptions -> (Maybe Fs.FileWithPath, Maybe Fs.FileWithPath, [ Fs.FileWithPath ]) -> IO (Either GenError AnalyzeContext)
+analyzeConfig rtOpts (topConfig, defaultConfig, otherConfigs) =
+  maybe (pure $ Right defaultContext) (parseTopConfig defaultContext rtOpts.baseDir) topConfig
+        >>= \case
+            Left err -> pure $ Left err
+            Right ctxt -> maybe (pure $ Right ctxt) (parseDefaultConfig ctxt rtOpts.baseDir) defaultConfig
+        >>= \case
+            Left err -> pure $ Left err
+            Right ctxt -> parseOtherConfigs ctxt rtOpts.baseDir otherConfigs
+        >>= \case
+            Left err -> pure $ Left err
+            Right ctxt -> pure $ Right ctxt
+        >>= \case
+            Left err -> pure $ Left err
+            Right ctxt -> pure $ mergeConfig ctxt
+  where
+  -- TODO: get the RugFlag for the contextDefaultOptions from somewhere (build vs server).
+  mergeConfig :: AnalyzeContext -> Either GenError AnalyzeContext
+  mergeConfig context =
+    let
+      mbHugoOpts = getHugoOpts rtOpts.techOpts
+      environment = case mbHugoOpts of
+        Nothing -> "production"
+        Just hugoOpts ->
+          case hugoOpts.environment of
+            Just envName -> envName
+            Nothing -> case Mp.lookup "environment" context.globalVars of
+              Just (StringDV globEnvName) -> globEnvName
+              _ -> case Mp.lookup "environment" context.defaultVars of
+                Just (StringDV defEnvName) -> defEnvName
+                _ -> "production"
+      configVars = if Mp.null context.globalVars then [] else [ context.globalVars ]
+                  <> case Mp.lookup environment context.otherVars of
+                       Nothing -> [] 
+                       Just envVars -> if Mp.null envVars then [] else [ envVars ]
+                  <> if Mp.null context.defaultVars then [] else [ context.defaultVars ]
+                  <> [ contextDefaultOptions BuildF ]
+      valueList = map (resolveConfig mbHugoOpts configVars) ctxtOptionKeys
+    in
+    Right context { mergedConfigs = Mp.fromList $ foldl (\accum v -> case v of Nothing -> accum ; Just aVal -> aVal : accum) [] valueList }
+    where
+    resolveConfig :: Maybe HugoBuildOptions -> [ Mp.Map Text DictEntry ] -> Text -> Maybe (Text, DictEntry)
+    resolveConfig mbHugoOpts configVars aKey =
+      let
+        mbValue = case mbHugoOpts of
+          Nothing -> Nothing
+          Just hugoOpts -> case checkBuildOptsForKey hugoOpts aKey of
+            Just aVal -> case aVal of
+              BoolBO aBool -> Just (aKey, BoolDV aBool)
+              StringBO aText -> Just (aKey, StringDV aText)
+            Nothing -> Nothing
+      in
+      case mbValue of
+        Just aVal -> mbValue
+        Nothing -> case findKeyInConfigs aKey configVars of
+          Just aVal -> Just (aKey, aVal)
+          Nothing -> case Mp.lookup aKey (contextDefaultOptions BuildF) of
+            Just aVal -> Just (aKey, aVal)
+            Nothing -> Nothing
+    findKeyInConfigs :: Text -> [ Mp.Map Text DictEntry ] -> Maybe DictEntry
+    findKeyInConfigs aKey configVars =
+      case configVars of
+        [] -> Nothing
+        aConfig : rest -> case Mp.lookup aKey aConfig of
+          Just aVal -> Just aVal
+          Nothing -> findKeyInConfigs aKey rest
+    {-
+      - then assemble an array of main config, environment config and default config,
+      - then iterate through the main config keys (ctxtOptionKeys):
+        - first check if the HugoBuildOptions has been specified,
+        - if not, then check for the 1st item of the config array,
+        - if not, then check for the 2nd item of the config array,
+        - if not, then check for the 3rd item of the config array,
+        - if not, use the default value.
+    -}
+
+  parseTopConfig :: AnalyzeContext -> FilePath -> Fs.FileWithPath -> IO (Either GenError AnalyzeContext)
+  parseTopConfig context rootDir aFile = do
+    eiRez <- parseConfigFile rootDir aFile
+    case eiRez of
+      Left err -> pure $ Left err
+      Right aConfig -> pure $ Right context { globalVars = aConfig }
+
+  parseDefaultConfig :: AnalyzeContext -> FilePath -> Fs.FileWithPath -> IO (Either GenError AnalyzeContext)
+  parseDefaultConfig context rootDir aFile = do
+    eiRez <- parseConfigFile rootDir aFile
+    case eiRez of
+      Left err -> pure $ Left err
+      Right aConfig -> pure $ Right context { defaultVars = aConfig }
+
+  parseOtherConfigs :: AnalyzeContext -> FilePath -> [ Fs.FileWithPath ] -> IO (Either GenError AnalyzeContext)
+  parseOtherConfigs context rootDir otherConfigs = do
+    -- putStrLn "Parsing other configs..."
+    foldM (\accum aFile@(dirPath, aFileItem) -> case accum of
+          Left err -> pure $ Left err
+          Right aCtxt -> case aFileItem of
+              Fs.KnownFile kind filePath ->
+                if kind == Fs.Toml || kind == Fs.Yaml || kind == Fs.Json then do
+                  eiRez <- parseConfigFile rootDir aFile
+                  case eiRez of
+                    Left err -> pure $ Left err
+                    Right aConfig -> pure $ Right aCtxt { otherVars = Mp.insertWith (<>) (pack $ dropExtension filePath) aConfig aCtxt.otherVars }
+                else
+                  pure $ Right aCtxt
+              _ -> pure $ Left $ SimpleMsg "Misc file in other configs."
+        ) (Right context) otherConfigs
+
+
+parseConfigFile :: FilePath -> Fs.FileWithPath -> IO (Either GenError (Mp.Map Text DictEntry))
+parseConfigFile rootDir (dirPath, Fs.KnownFile kind filePath) = do
+  let
+    fullPath = rootDir </> "config" </> dirPath </> filePath
+  -- putStrLn $ "@[parseDefaultConfig] reading: " <> fullPath
+  -- putStrLn $ "@[parseDefaultConfig] analyzing: " <> fullPath
+  case kind of
+    Fs.Toml -> do
+      srcText <- T.readFile fullPath
+      case Tm.parse srcText of
+        Left err -> do
+          putStrLn $ "@[parseDefaultConfig] error parsing TOML: " <> show err
+          pure . Left $ SimpleMsg ("TOML err: " <> pack (show err))
+        Right tomlVal ->
+          -- putStrLn $ "@[parseDefaultConfig] parsed TOML: " <> show tomlVal
+          pure $ case tomlToDict tomlVal of
+            Left err -> Left $ SimpleMsg ("TOML conversion err: " <> pack err)
+            Right aDict -> Right aDict
+    Fs.Yaml -> do
+      eiValue <- Ym.decodeFileEither fullPath :: IO (Either Ym.ParseException DictEntry)
+      case eiValue of
+        Left err ->
+          pure . Left . SimpleMsg $ "@[parseDefaultConfig] error in file " <> pack fullPath <> ", YAML err: " <> pack (show err)
+        Right aVal ->
+          case aVal of
+            DictDV aDict -> pure $ Right aDict
+            _ ->
+              pure . Left . SimpleMsg $ "@[parseDefaultConfig] error in file " <> pack fullPath <> ", YAML root is not a dictionary."
+    Fs.Json -> do
+      putStrLn "@[parseDefaultConfig] parsing JSON..."
+      eiJsonRez <- Ae.eitherDecodeFileStrict' fullPath :: IO (Either String Ae.Object)
+      case eiJsonRez of
+        Left err -> do
+          putStrLn $ "@[parseDefaultConfig] error parsing JSON: " <> err
+          pure . Left $ SimpleMsg ("JSON err: " <> pack err)
+        Right jsonVal -> do
+          putStrLn $ "@[parseDefaultConfig] parsed JSON: " <> show jsonVal
+          pure . Left $ SimpleMsg "JSON parsing not implemented yet."
+
+parseConfigFile rootDir (dirPath, Fs.MiscFile aPath) = do
+  putStrLn "@[parseConfigFile] misc file!"
+  pure . Left . SimpleMsg $ "@[parseConfigFile] error, trying to parse misc file " <> pack aPath
+
 
 -- ***** Utilities for extracting command line & runtime options *****
 getHugoOpts :: TechOptions -> Maybe HugoBuildOptions
@@ -41,11 +206,7 @@ setRunOptions :: RunOptions -> HugoBuildOptions -> RunOptions
 setRunOptions rtOpts buildOpts =
   rtOpts { techOpts = HugoOptions buildOpts }
 
-data RunFlag =
-  BuildF
-  | ServerF
-
-contextDefaultOptions :: RunFlag -> Mp.Map Text DictEntry
+contextDefaultOptions :: RunMode -> Mp.Map Text DictEntry
 contextDefaultOptions runFlag =
   Mp.fromList [
     ("archetypeDir", StringDV "archetypes")
@@ -58,7 +219,7 @@ contextDefaultOptions runFlag =
             , ("disableTags", BoolDV False)
             , ("enable", BoolDV False)
           ])
-        , ("cacheBusters", ListDV $ [
+        , ("cacheBusters", ListDV [
             DictDV $ Mp.fromList [
                 ("source", StringDV "(postcss|tailwind)\\.config\\.js")
               , ("target", StringDV "(css|styles|scss|sass)")
@@ -102,7 +263,7 @@ contextDefaultOptions runFlag =
       ])
     , ("canonifyURLs", BoolDV False)
     , ("capitalizeListTitles", BoolDV True)
-    , ("cascade", ListDV $ [])
+    , ("cascade", ListDV [])
         {- example of a cascade entry:
           DictDV $ Mp.fromList [
             ("_target", DictDV $ Mp.fromList [
@@ -133,7 +294,7 @@ contextDefaultOptions runFlag =
     , ("enableRobotsTXT", BoolDV False)
     , ("environment", StringDV (case runFlag of BuildF -> "production"; ServerF -> "development"))
     , ("frontmatter", DictDV $ Mp.fromList [
-          ("date", ListDV $ [StringDV "date", StringDV "publishdate", StringDV "pubdate", StringDV "published", StringDV "lastmod", StringDV "modified"])
+          ("date", ListDV [StringDV "date", StringDV "publishdate", StringDV "pubdate", StringDV "published", StringDV "lastmod", StringDV "modified"])
         , ("expiryDate", ListDV $ [StringDV "expiryDate", StringDV "unpublishdate"])
         , ("lastmod", ListDV $ [StringDV ":git", StringDV "lastmod", StringDV "modified", StringDV "date", StringDV "publishdate", StringDV "pubdate", StringDV "published"])
         , ("publishDate", ListDV $ [StringDV "publishDate", StringDV "pubdate", StringDV "published", StringDV "date"])

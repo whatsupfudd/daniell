@@ -1,4 +1,4 @@
-module ProjectDefinition.Scaffholding where
+module ProjectDefinition.Scaffolding where
 
 import Control.Monad (unless, when)
 import qualified Data.Foldable as Fld
