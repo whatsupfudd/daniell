@@ -1,25 +1,22 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module ProjectDefinition.Gatsby where
 
 import Options.Runtime (RunOptions (..))
 import Conclusion (GenError (..))
 import qualified FileSystem.Types as Fs
-import Generator.Types (WorkPlan, Engine, Context, WorkItem)
+import Generator.Types (ExecSystem (..), WorkPlan (..))
 
 type GbWorkPlan = WorkPlan GbEngine GbContext GbWorkItem
 data GbEngine = GbEngine
-instance Show GbEngine where
-  show _ = "@[gbEngine] "
-instance Engine GbEngine
-
+  deriving Show
 data GbContext = GbContext
-instance Context GbContext
-instance Show GbContext where
-  show _ = "@[gbContext] "
-
+  deriving Show
 data GbWorkItem = GbWorkItem
-instance WorkItem GbWorkItem
-instance Show GbWorkItem where
-  show _ = "@[gbWorkItem] "
+  deriving Show
+
+instance ExecSystem GbEngine GbContext GbWorkItem where
+  runWorkItem _ _ _ _ = pure $ Right GbContext
 
 analyseGatsbyProject :: RunOptions -> Fs.PathFiles -> IO (Either GenError GbWorkPlan)
 analyseGatsbyProject rtOpts pathFiles =

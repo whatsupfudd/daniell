@@ -1,7 +1,10 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module ProjectDefinition.Scaffolding where
 
 import Control.Monad (unless, when)
 import qualified Data.Foldable as Fld
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified System.Directory as SE
 
 import qualified Options.Types as Op
@@ -9,14 +12,20 @@ import qualified Options.Runtime as Op
 import Conclusion (Conclusion (..), GenError (..))
 import qualified FileSystem.Types as Fs
 
-import Generator.Types (WorkPlan (..), WorkItem (..), ScfWorkItem (..))
-import Generator.Work (ScfWorkPlan, ScfEngine (..), ScfContext (..), runGen)
+import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..), ScfWorkItem (..), ScfEngine (..), ScfContext (..))
+import Generator.Work (runItem)
 import Template.Types (ScaffoldTempl (..))
 import Template.FileTree (mergeTemplates, loadTree)
 
 import Utils (splitResults)
 
 import ProjectDefinition.Defaults (defaultLocations)
+
+
+instance ExecSystem ScfEngine ScfContext ScfWorkItem where
+  runWorkItem rtOpts engine context item = do
+    runItem rtOpts context.destDir context.scaffoldTempl item
+    pure $ Right context
 
 
 createScaffolding :: Op.RunOptions -> Op.NewOptions -> IO Conclusion
@@ -70,26 +79,34 @@ createFileTree rtOpts newOpts templates = do
   -- move template(s) info into a work plan.
   let
     mergedTemplate = mergeTemplates templates
-    workPlan = buildWorkPlan rtOpts newOpts mergedTemplate
-  -- pass the work plan to the generator.
-  destDirExist <- SE.doesDirectoryExist newOpts.rootDir
-  unless destDirExist $ SE.createDirectory newOpts.rootDir
-  runGen rtOpts mergedTemplate workPlan
+    eiWorkPlan = buildWorkPlan rtOpts newOpts mergedTemplate
+  case eiWorkPlan of
+    Right workPlan -> do
+      -- pass the work plan to the generator.
+      destDirExist <- SE.doesDirectoryExist newOpts.rootDir
+      unless destDirExist $ SE.createDirectory newOpts.rootDir
+      -- runGen rtOpts mergedTemplate workPlan
+      rezA <- runPlan rtOpts workPlan.engine workPlan.context workPlan.items
+      pure $ case rezA of
+        Left err -> Left err
+        Right _ -> Right ()
+    Left err -> pure $ Left err
 
 
-buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffoldTempl -> ScfWorkPlan
+buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffoldTempl -> Either GenError ScfWorkPlan
 buildWorkPlan rtOpts newOpts template =
   let
     structList = Fld.toList template.structure
     newDirs = map NewDirIfNotExist (extractDirs structList)
     workItems = concatMap analyzeSources structList
   in
-  WorkPlan {
-      destDir = newOpts.rootDir
-    , items = newDirs <> workItems
-    , engine = ScfEngine
-    , context = ScfContext
-  }
+  case newDirs <> workItems of
+    [] -> Left $ SimpleMsg "@[buildWorkPlan] no work items."
+    h : t -> Right $ WorkPlan {
+        items = h :| t
+        , engine = ScfEngine
+        , context = ScfContext template newOpts.rootDir
+      }
 
 
 extractDirs :: [ Fs.PathNode ] -> [ FilePath ]

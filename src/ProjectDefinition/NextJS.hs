@@ -1,3 +1,5 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module ProjectDefinition.NextJS where
 
 import Data.List (isPrefixOf)
@@ -9,25 +11,20 @@ import qualified FileSystem.Types as Fs
 
 import Options.Runtime (RunOptions (..))
 import Conclusion (GenError (..))
-import Generator.Types (WorkPlan (..), Engine (..), Context (..), WorkItem (..))
+import Generator.Types (ExecSystem (..), WorkPlan (..))
 import ProjectDefinition.Types
 
 
 type NxWorkPlan = WorkPlan NxEngine NxContext NxWorkItem
 data NxEngine = NxEngine
-instance Show NxEngine where
-  show _ = "@[nxEngine] "
-instance Engine NxEngine
-
+  deriving Show
 data NxContext = NxContext
-instance Context NxContext
-instance Show NxContext where
-  show _ = "@[nxContext] "
-
+  deriving Show
 data NxWorkItem = NxWorkItem
-instance WorkItem NxWorkItem
-instance Show NxWorkItem where
-  show _ = "@[nxWorkItem] "
+  deriving Show
+
+instance ExecSystem NxEngine NxContext NxWorkItem where
+  runWorkItem _ _ _ _ = pure $ Right NxContext
 
 defaultNextJS :: NextJSComponents
 defaultNextJS = NextJSComponents {

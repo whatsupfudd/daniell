@@ -1,4 +1,3 @@
-{-# LANGUAGE InstanceSigs #-}
 module Options  (
   module Options.Cli
   , module Fo
@@ -50,9 +49,9 @@ mergeOptions cli file env = do
     Nothing -> do
       eiHomeDir <- Cexc.try Sdir.getHomeDirectory :: IO (Either Serr.IOError FilePath)
       case eiHomeDir of
-        Left err -> pure $ ".fudd/daniell"
+        Left err -> pure ".fudd/daniell"
         Right aVal -> pure $ aVal <> "/.fudd/daniell"
-    Just aVal -> pure $ aVal
+    Just aVal -> pure aVal
   (result, runtimeOpts) <- runStateT (parseOptions cli file) (Rt.defaultRun danHome "http://localhost")
   case result of
     Left errMsg -> error errMsg

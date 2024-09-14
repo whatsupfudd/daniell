@@ -34,31 +34,17 @@ import qualified RunTime.Interpreter.Engine as Vm
 
 import Utils (splitResults)
 import Generator.Types
+import Data.List.NonEmpty (NonEmpty)
 
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
-type ScfWorkPlan = WorkPlan ScfEngine ScfContext ScfWorkItem
-data ScfEngine = ScfEngine
-instance Show ScfEngine where
-  show _ = "@[scfEngine] "
 
-instance Engine ScfEngine where
-  run _ = do
-    putStrLn "@[ScfEngine] running engine."
-    pure $ Left $ SimpleMsg "ScfEngine not implemented."
-
-data ScfContext = ScfContext
-instance Context ScfContext where
-  findItem _ _ = Nothing
-instance Show ScfContext where
-  show _ = "@[scfContext] "
-
-runGen :: RunOptions -> ScaffoldTempl -> ScfWorkPlan -> IO (Either GenError ())
-runGen rtOpts projTempl workPlan = do
+runGen :: RunOptions -> FilePath -> ScaffoldTempl -> NonEmpty ScfWorkItem -> IO (Either GenError ())
+runGen rtOpts destDir projTempl wItems = do
   mapM_ (\wi -> do
       putStrLn $ "@[runGen] wi: " <> show wi
-      runRez <- runItem rtOpts workPlan.destDir projTempl wi
+      runRez <- runItem rtOpts destDir projTempl wi
       case runRez of
         Left err -> do
           let
@@ -66,7 +52,7 @@ runGen rtOpts projTempl workPlan = do
           putStrLn errMsg
           pure $ Left err
         Right _ -> pure $ Right ()
-    ) workPlan.items
+    ) wItems
   pure $ Right ()
 
 

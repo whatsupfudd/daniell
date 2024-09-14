@@ -36,13 +36,41 @@ import qualified RunTime.Interpreter as Ri
 import qualified RunTime.Interpreter.Context as Vm
 import qualified RunTime.Interpreter.Engine as Vm
 
-import Generator.Types
+import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..))
+import qualified Generator.Types as Scf
 
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
-data GenericPlan =
-  ScfPlan Scf.ScfWorkPlan
+
+{-
+doPlan :: RunOptions -> SpecPlan -> IO (Either GenError GenericContext)
+doPlan rtOpts plan =
+  case plan of
+    ScfPlan scfPlan -> (ScfContext <$>) <$> runWP rtOpts scfPlan
+    GatsbyPlan gbPlan -> (GatsbyContext <$>) <$> runWP rtOpts gbPlan
+    HugoPlan hgPlan -> (HugoContext <$>) <$> runWP rtOpts hgPlan
+    NextPlan nxPlan ->  (NextContext <$>) <$> runWP rtOpts nxPlan
+    FuddlePlan fdPlan -> (FuddleContext <$>) <$> runWP rtOpts fdPlan
+  where
+  runWP :: (Engine e, Context c, Show c, WorkItem w) => RunOptions -> WorkPlan e c w -> IO (Either GenError c)
+  runWP rtOpts workPlan = do
+    putStrLn $ "@[run] workPlan: " <> show workPlan
+    runEng rtOpts workPlan.engine workPlan.context workPlan.items
+  work :: (Engine e, Context c, WorkItem w) => RunOptions -> e -> c -> [ w ] -> IO (Either GenError c)
+  work rtOpts engine context =
+    foldM (\eiCtxt aItem -> case eiCtxt of
+        Left err -> pure $ Left err
+        Right aCtxt -> execItem rtOpts engine aCtxt aItem
+      ) (Right context)
+  execItem :: (Engine e, Context c, WorkItem w) => RunOptions -> e -> c -> w -> IO (Either GenError c)
+  execItem rtOpts engine context item = do
+    run engine context
+    pure $ Right context
+-}
+
+data SpecPlan =
+  ScfPlan ScfWorkPlan
   | GatsbyPlan Gb.GbWorkPlan
   | HugoPlan Hu.HgWorkPlan
   | NextPlan Nx.NxWorkPlan
@@ -79,11 +107,42 @@ buildSite rtOpts siteOpts = do
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
         Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
     _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
+
   case eiWorkPlan of
     Left err -> pure $ Left err
-    Right workPlan -> do
-      putStrLn $ "@[buildSite] workPlan: " <> show workPlan
-      pure $ Right ()
+    Right techPlan -> do
+      putStrLn $ "@[buildSite] workPlan: " <> show techPlan
+      case techPlan of
+        ScfPlan scfPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show scfPlan
+          rezA <- runPlan rtOpts scfPlan.engine scfPlan.context scfPlan.items
+          case rezA of
+            Left err -> pure $ Left err
+            Right _ -> pure $ Right ()
+        GatsbyPlan gbPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show gbPlan
+          rezA <- runPlan rtOpts gbPlan.engine gbPlan.context gbPlan.items
+          case rezA of
+            Left err -> pure $ Left err
+            Right _ -> pure $ Right ()
+        HugoPlan hgPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show hgPlan
+          rezA <- runPlan rtOpts hgPlan.engine hgPlan.context hgPlan.items
+          case rezA of
+            Left err -> pure $ Left err
+            Right _ -> pure $ Right ()
+        NextPlan nxPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show nxPlan
+          rezA <- runPlan rtOpts nxPlan.engine nxPlan.context nxPlan.items
+          case rezA of
+            Left err -> pure $ Left err
+            Right _ -> pure $ Right ()
+        FuddlePlan fdPlan -> do
+          putStrLn $ "@[buildSite] workPlan: " <> show fdPlan
+          rezA <- runPlan rtOpts fdPlan.engine fdPlan.context fdPlan.items
+          case rezA of
+            Left err -> pure $ Left err
+            Right _ -> pure $ Right ()
 
 
 createProject :: RunOptions -> NewOptions -> IO Conclusion

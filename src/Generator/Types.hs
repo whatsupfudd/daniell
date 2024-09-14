@@ -1,38 +1,55 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-{-# LANGUAGE InstanceSigs #-}
 module Generator.Types where
 
 import Data.Text (Text, pack)
 
-import FileSystem.Types (FileItem, FileKind)
 import Conclusion (GenError (..))
+import Options.Runtime (RunOptions (..))
+import FileSystem.Types (FileItem, FileKind)
+import Template.Types (ScaffoldTempl)
+import Data.HashMap.Internal.Array (run)
+import Control.Monad (foldM)
+import Data.List.NonEmpty (NonEmpty)
 
-class Show engineT => Engine engineT where
-  run :: engineT -> IO (Either GenError ())
-  run engine = do
-    pure . Left . SimpleMsg $ pack (show engine) <> " not implemented."
 
-class Context contextT where
-  findItem :: contextT -> Text -> Maybe FileItem
-  findItem _ _ = Nothing
+data ContextValue =
+  TemplItem ScaffoldTempl
+  | FileItem FileItem
+  | PathItem FilePath
+  deriving Show
 
-class Show workitemT => WorkItem workitemT where
-  process :: workitemT -> IO (Either GenError ())
-  process workItem = do
-    pure . Left . SimpleMsg $ pack (show workItem) <> " process not implemented."
 
-data (Engine eT, Context cT, WorkItem wiT) => WorkPlan eT cT wiT =
-  WorkPlan {
-    -- TODO: add a 'project' field to hold the project definition -> context for execution with params for
-    -- driving the logic and supplying data in VM exec context.
-    destDir :: FilePath
-    , items :: [ wiT ]
-    , engine :: eT
-    , context :: cT
+-- WorkPlan data type
+data WorkPlan e c w = WorkPlan { 
+      engine :: e
+    , context :: c
+    , items :: NonEmpty w
   }
   deriving Show
 
+
+class ExecSystem e c w where
+  runWorkItem :: RunOptions -> e -> c -> w -> IO (Either GenError c)
+
+  runPlan :: RunOptions -> e -> c -> NonEmpty w -> IO (Either GenError c)
+  runPlan rtOpts engine context = foldM (runItem engine) (Right context)
+    where
+    runItem :: (ExecSystem e c w) => e -> Either GenError c -> w -> IO (Either GenError c)
+    runItem _ (Left err) item = pure $ Left err
+    runItem engine (Right ctxt) item = runWorkItem rtOpts engine ctxt item
+
+
+type ScfWorkPlan = WorkPlan ScfEngine ScfContext ScfWorkItem
+
+data ScfEngine = ScfEngine
+  deriving Show
+
+data ScfContext = ScfContext {
+    scaffoldTempl :: ScaffoldTempl
+  , destDir :: FilePath
+  }
+  deriving Show
 
 data ScfWorkItem =
   NewDirIfNotExist FilePath
@@ -45,25 +62,3 @@ data ScfWorkItem =
   | RunTemplateToDest FileKind FilePath FileItem FilePath
   | ConfigWith FileItem
   deriving Show
-
-
-instance WorkItem ScfWorkItem where
-  process = \case
-    NewDirIfNotExist dirPath -> do
-      putStrLn $ "@[runItem] NewDirIfNotExist: " <> dirPath
-      pure . Left . SimpleMsg $ "NewDirIfNotExist not implemented."
-    DupFromSource fItem srcPath destPath -> do
-      putStrLn $ "@[runItem] DupFromSource: " <> srcPath <> " -> " <> destPath
-      pure . Left . SimpleMsg $ "DupFromSource not implemented."
-    CloneSource srcPath destPath -> do
-      putStrLn $ "@[runItem] CloneSource: " <> srcPath <> " -> " <> destPath
-      pure . Left . SimpleMsg $ "CloneSource not implemented."
-    RunTemplate path -> do
-      putStrLn $ "@[runItem] RunTemplate: " <> path
-      pure . Left . SimpleMsg $ "RunTemplate not implemented."
-    RunTemplateToDest kind dir src dest -> do
-      putStrLn $ "@[runItem] RunTemplateToDest: " <> show kind <> " " <> dir <> " " <> show src <> " " <> dest
-      pure . Left . SimpleMsg $ "RunTemplateToDest not implemented."
-    ConfigWith fItem -> do
-      putStrLn $ "@[runItem] ConfigWith: " <> show fItem
-      pure . Left . SimpleMsg $ "ConfigWith not implemented."
