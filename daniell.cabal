@@ -51,6 +51,8 @@ library
       Options.Types
       ProjectDefinition.AssocRules
       ProjectDefinition.Defaults
+      ProjectDefinition.Fuddle
+      ProjectDefinition.Gatsby
       ProjectDefinition.Hugo
       ProjectDefinition.Hugo.Config
       ProjectDefinition.Hugo.Types

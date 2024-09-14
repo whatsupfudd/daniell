@@ -2,6 +2,7 @@
 module Generator.Logic where
 
 import Control.Monad (foldM, forM, forM_)
+import Control.Monad.IO.Class (liftIO)
 
 import qualified Data.ByteString as BS
 import qualified Data.Map as Mp
@@ -19,40 +20,98 @@ import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
-import ProjectDefinition.Hugo.Config (setRunOptions)
+import qualified ProjectDefinition.Hugo.Config as Hu
 import qualified ProjectDefinition.NextJS as Nx
-import qualified ProjectDefinition.Scaffolding as Scf
-import ProjectDefinition.Defaults (defaultLocations)
+import qualified ProjectDefinition.Gatsby as Gb
+import qualified ProjectDefinition.Fuddle as Fd
+import qualified Generator.Work as Scf
+import ProjectDefinition.Scaffolding (createScaffolding)
+import ProjectDefinition.Gatsby (analyseGatsbyProject)
+import ProjectDefinition.Fuddle (analyseFuddleProject)
 import Template.Haskell (tsParseHaskell)
 import qualified Template.Parser as Tmpl
-import Template.Types (ScaffholdTempl (..), FileTempl (..), Function (..), Code (..))
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import qualified RunTime.Interpreter as Ri
 import qualified RunTime.Interpreter.Context as Vm
 import qualified RunTime.Interpreter.Engine as Vm
 
-import Utils (splitResults)
 import Generator.Types
 
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
+data GenericPlan =
+  ScfPlan Scf.ScfWorkPlan
+  | GatsbyPlan Gb.GbWorkPlan
+  | HugoPlan Hu.HgWorkPlan
+  | NextPlan Nx.NxWorkPlan
+  | FuddlePlan Fd.FdWorkPlan
+  deriving Show
 
-{- First draft of logic: -}
+buildSite :: RunOptions -> SiteOptions -> IO (Either GenError ())
+buildSite rtOpts siteOpts = do
+  putStrLn $ "@[buildSite] starting, root: " <> rtOpts.baseDir
+  {- TODO: revise this approach to:
+    - define runtime options for the tech based on cli/conf-file/env vars.
+    - do a first pass at loading the project definition (normally, only scan for config files in the main dir as they can define other locations to use).
+    - analyse the project completely, producing a work plan.
+    - configure an output context.
+    - execute the work plan.
+    - report on errors that occured during the whole process.
+  -}
+  eiWorkPlan <- case siteOpts of
+    FuddleSS -> (FuddlePlan <$>) <$> analyseFuddleProject rtOpts True Seq.empty
+    GatsbySS -> (GatsbyPlan <$>) <$> analyseGatsbyProject rtOpts Seq.empty
+    HugoSS hugoOpts ->
+      let
+        newRtOpts = Hu.setRunOptions rtOpts hugoOpts
+      in do
+      eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
+      putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
+      case eiSiteDef of
+        Left err -> pure . Left $ SimpleMsg (pack . show $ err)
+        Right dirTree -> (HugoPlan <$>) <$> Hu.analyseProject newRtOpts dirTree
+    NextSS -> do
+      eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
+      putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
+      case eiSiteDef of
+        Left err -> pure . Left $ SimpleMsg (pack . show $ err)
+        Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
+    _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
+  case eiWorkPlan of
+    Left err -> pure $ Left err
+    Right workPlan -> do
+      putStrLn $ "@[buildSite] workPlan: " <> show workPlan
+      pure $ Right ()
 
-createSite :: RunOptions -> IO (Either GenError ())
-createSite rtOpts = do
+
+createProject :: RunOptions -> NewOptions -> IO Conclusion
+createProject rtOpts newOpts =
+  case newOpts.projKind of
+    SitePK -> do
+      putStrLn "@[createProject] Site project."
+      pure NilCcl
+    WebAppPK -> do
+      putStrLn "@[createProject] WebApp project."
+      pure NilCcl
+    LocalAppPK ->
+      createScaffolding rtOpts newOpts
+
+
+{- Early stage testing of stuff: -}
+
+serveSite :: RunOptions -> IO (Either GenError ())
+serveSite rtOpts = do
   putStrLn $ "@[createSite] starting, root: " <> rtOpts.baseDir
   -- explore the folder for the site -> flat list of all dirs and files.
-  -- eiSiteDef <- Fs.buildDirTree rtOpts
   eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
   -- extract the content pages, turn them into with Markup.parseContent to [ MarkupPage ]
   case eiSiteDef of
     Left err -> pure . Left $ SimpleMsg (pack . show $ err)
     Right dirTree ->
       let
-        contentPages = []   -- Fs.getContentPages siteDef
+        contentPages = []
         siteDef = ProjectDefinition rtOpts.baseDir (Site Hugo) [] dirTree
       in do
         listEiGen <- mapM (Mrkp.parseContent rtOpts rtOpts.baseDir) contentPages
@@ -147,96 +206,3 @@ countItems fTrees =
       ) 0 fTrees
   in
   putStrLn $ "@[countItems] total: " <> show totalItems <> "."
-
-{- New stuff 24.09.02 -}
-buildSite :: RunOptions -> SiteOptions -> IO (Either GenError ())
-buildSite rtOpts siteOpts = do
-  putStrLn $ "@[buildSite] starting, root: " <> rtOpts.baseDir
-  -- explore the folder for the site -> flat list of all dirs and files.
-  -- eiSiteDef <- Fs.buildDirTree rtOpts
-  -- TODO: need to check the HugoBuildOptions (configDir, dataDir, ...) and
-  --   assemble the file list based on a loadFolderTree of these locations.
-  eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
-  putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
-  -- extract the content pages, turn them into with Markup.parseContent to [ MarkupPage ]
-  case eiSiteDef of
-    Left err -> pure . Left $ SimpleMsg (pack . show $ err)
-    Right dirTree -> do
-      -- TODO: move the dirTree analysis in ProjectDefinition.Logic.
-      eiWorkPlan <-
-         case siteOpts of
-          FuddleSS -> pure $ analyseFuddleProject rtOpts True dirTree
-          GatsbySS -> pure $ analyseGatsbyProject rtOpts dirTree
-          HugoSS hugoOpts ->
-            let
-              newRtOpts = setRunOptions rtOpts hugoOpts
-            in
-            Hu.analyseProject newRtOpts dirTree
-          NextSS -> pure $ Nx.analyseNextJsProject rtOpts True dirTree
-          _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
-      case eiWorkPlan of
-        Left err -> pure $ Left err
-        Right workPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show workPlan
-          pure $ Right ()
-
-
--- TODO: move all the analyse... logic to their respective module in ProjectDefinition.
-
-analyseGatsbyProject :: RunOptions -> Fs.PathFiles -> Either GenError WorkPlan
-analyseGatsbyProject rtOpts pathFiles =
-  -- TODO:
-  Left $ SimpleMsg "Gatsby project not implemented yet."
-
-analyseFuddleProject :: RunOptions -> Bool -> Fs.PathFiles -> Either GenError WorkPlan
-analyseFuddleProject rtOpts isStatic pathFiles =
-  -- TODO:
-  Left $ SimpleMsg "Fuddle project not implemented yet."
-
-
-{- 2nd draft: reorg and based on WorkPlan. -}
-
-createProject :: RunOptions -> NewOptions -> IO Conclusion
-createProject rtOpts newOpts =
-  case newOpts.projKind of
-    SitePK -> do
-      putStrLn "@[createProject] Site project."
-      pure NilCcl
-    WebAppPK -> do
-      putStrLn "@[createProject] WebApp project."
-      pure NilCcl
-    LocalAppPK ->
-      createScaffolding rtOpts newOpts
-
-
-createScaffolding :: RunOptions -> NewOptions -> IO Conclusion
-createScaffolding rtOpts newOpts = do
-  rezTemplates <- mapM (Scf.parseFileTree rtOpts) newOpts.templates
-  let
-    (errTemplates, userTemplates) = splitResults rezTemplates
-  case errTemplates of
-    -- No errors, keep going.
-    [] -> do
-      -- putStrLn $ "Parsed templates: " <> show userTemplates
-      -- if there's no 'no-default template' instruction in the specified templates, load the default template.
-      rezA <-
-        -- TODO: figure out when to not scan the defaultLocations...
-        --  if False then pure $ Right userTemplates else
-        do
-        rezB <- Scf.parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
-        case rezB of
-          Left errMsg -> pure . Left $ show errMsg
-          Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
-      case rezA of
-        Left errMsg -> pure $ ErrorCcl $ "@[newCmd] error loading default template: " <> show errMsg
-        Right allTemplates -> do
-          rezB <- Scf.createFileTree rtOpts newOpts allTemplates
-          case rezB of
-            Left errMsg -> pure $ ErrorCcl $ "@[newCmd] error creating project: " <> show errMsg
-            Right _ -> pure NilCcl
-    -- Errors while reading templates, abort.
-    _ -> do
-      putStrLn $ "@[newCmd] Template loading error: " <> show errTemplates
-      pure $ ErrorCcl $ "@[newCmd] error loading templates: " <> show errTemplates
-
-

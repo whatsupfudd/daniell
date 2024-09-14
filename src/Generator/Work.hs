@@ -25,7 +25,7 @@ import qualified ProjectDefinition.NextJS as Nx
 import ProjectDefinition.Defaults (defaultLocations)
 import Template.Haskell (tsParseHaskell)
 import qualified Template.Parser as Tmpl
-import Template.Types (ScaffholdTempl (..), FileTempl (..), Function (..), Code (..))
+import Template.Types (ScaffoldTempl (..), FileTempl (..), Function (..), Code (..))
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import qualified RunTime.Interpreter as Ri
@@ -38,8 +38,23 @@ import Generator.Types
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
+type ScfWorkPlan = WorkPlan ScfEngine ScfContext ScfWorkItem
+data ScfEngine = ScfEngine
+instance Show ScfEngine where
+  show _ = "@[scfEngine] "
 
-runGen :: RunOptions -> ScaffholdTempl -> WorkPlan -> IO (Either GenError ())
+instance Engine ScfEngine where
+  run _ = do
+    putStrLn "@[ScfEngine] running engine."
+    pure $ Left $ SimpleMsg "ScfEngine not implemented."
+
+data ScfContext = ScfContext
+instance Context ScfContext where
+  findItem _ _ = Nothing
+instance Show ScfContext where
+  show _ = "@[scfContext] "
+
+runGen :: RunOptions -> ScaffoldTempl -> ScfWorkPlan -> IO (Either GenError ())
 runGen rtOpts projTempl workPlan = do
   mapM_ (\wi -> do
       putStrLn $ "@[runGen] wi: " <> show wi
@@ -55,7 +70,7 @@ runGen rtOpts projTempl workPlan = do
   pure $ Right ()
 
 
-runItem :: RunOptions -> FilePath -> ScaffholdTempl -> WorkItem -> IO (Either GenError ())
+runItem :: RunOptions -> FilePath -> ScaffoldTempl -> ScfWorkItem -> IO (Either GenError ())
 runItem rtOpts destDir projTempl = \case
   NewDirIfNotExist dirPath -> do
     let fullDirPath = destDir <> "/" <> dirPath

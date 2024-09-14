@@ -13,7 +13,7 @@ import qualified Options.Runtime as Op
 import Template.Types
 
 
-loadTree :: Op.RunOptions -> FilePath -> IO (Either Text ScaffholdTempl)
+loadTree :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
 loadTree rtOpts path = do
   if isSuffix ".dtmpl" path then
       loadTreeLogic rtOpts path
@@ -35,27 +35,27 @@ loadTree rtOpts path = do
   , logic :: Function
 -}
 
-loadTreeLogic :: Op.RunOptions -> FilePath -> IO (Either Text ScaffholdTempl)
+loadTreeLogic :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
 loadTreeLogic rtOpts path =
   -- TODO: load the template file, and create a ScaffholdTempl from it.
-  pure . Right $ ScaffholdTempl path Nothing Nothing mempty mempty Noop
+  pure . Right $ ScaffoldTempl path Nothing Nothing mempty mempty Noop
 
 
-loadTreeContent :: Op.RunOptions -> FilePath -> IO (Either Text ScaffholdTempl)
+loadTreeContent :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
 loadTreeContent rtOpts path = do
   eiTree <- Exp.loadFolderTree path
   case eiTree of
     Left err -> pure . Left $ pack err
     Right fTree -> do
       -- putStrLn $ "fTree: " <> show fTree
-      pure $ Right $ ScaffholdTempl path Nothing Nothing fTree mempty Noop
+      pure $ Right $ ScaffoldTempl path Nothing Nothing fTree mempty Noop
 
 
-mergeTemplates :: [ScaffholdTempl] -> ScaffholdTempl
+mergeTemplates :: [ScaffoldTempl] -> ScaffoldTempl
 mergeTemplates =
   foldl1 mergeTemplate
   where
     -- TODO: define how two project templates are merged together.
-    mergeTemplate :: ScaffholdTempl -> ScaffholdTempl -> ScaffholdTempl
+    mergeTemplate :: ScaffoldTempl -> ScaffoldTempl -> ScaffoldTempl
     mergeTemplate a b = a
 

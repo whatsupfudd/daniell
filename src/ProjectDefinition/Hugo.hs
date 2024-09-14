@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 {-# HLINT ignore "Use second" #-}
@@ -23,7 +24,7 @@ import Options.Types (HugoBuildOptions (..))
 import Conclusion (GenError (..))
 import qualified FileSystem.Types as Fs
 import FileSystem.Types (FileWithPath)
-import Generator.Types (WorkPlan (..), WorkItem (..))
+import Generator.Types (WorkPlan (..), WorkItem (..), Engine (..), Context (..))
 import Markup.Types (MarkupPage (..), Content (..), ContentEncoding (..), FrontMatter (..), FMEncoding (..), Definition (..))
 import Markup.Page (parseContent)
 import ProjectDefinition.Paraml (tomlToDict)
@@ -31,6 +32,7 @@ import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
+import Control.Lens (Simple)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -55,9 +57,40 @@ defaultComponents = HugoComponents {
     , staticDest = "public"
   }
 
+
+type HgWorkPlan = WorkPlan HgEngine HgContext HgWorkItem
+
+newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
+instance Engine HgEngine
+instance Show HgEngine where
+  show _ = "HgEngine"
+
+newtype HgContext = HgContext { mergedConfigs :: Mp.Map Text DictEntry }
+instance Context HgContext where
+  findItem _ _ = Nothing
+instance Show HgContext where
+  show _ = "HgContext"
+
+data HgWorkItem =
+  ExecTmplForContent { kind :: Fs.FileKind, dirPath :: FilePath, fileItem :: Fs.FileItem, template :: FilePath }
+  | ExecTmplForRoute { dirPath :: FilePath }
+
+instance Show HgWorkItem where
+  show _ = "HgWorkItem"
+
+instance WorkItem HgWorkItem where
+  process = \case
+    ExecTmplForContent aKind aDirPath aFileItem aTemplate -> do
+      putStrLn $ "@[HgWorkItem] ExecTmplForContent: " <> show aKind <> " " <> aDirPath <> " " <> show aFileItem <> " " <> aTemplate
+      pure . Left $ SimpleMsg "ExecTmplForContent not implemented."
+    ExecTmplForRoute aDirPath -> do
+      putStrLn $ "@[HgWorkItem] ExecTmplForRoute: " <> aDirPath
+      pure . Left $ SimpleMsg "ExecTmplForContent not implemented."
+
+
 -- ***** Logic for dealing with a project work (create, build) *****
 
-analyseProject :: RunOptions -> Fs.PathFiles -> IO (Either GenError WorkPlan)
+analyseProject :: RunOptions -> Fs.PathFiles -> IO (Either GenError HgWorkPlan)
 analyseProject rtOpts pathFiles =
   case getHugoOpts rtOpts.techOpts of
     Nothing -> pure $ Left $ SimpleMsg "@[analyseProject] not a Hugo project."
@@ -70,7 +103,7 @@ analyseProject rtOpts pathFiles =
 
 
 
-analyseContent :: (RunOptions, HugoBuildOptions) -> ProjectDefinition -> HugoComponents -> IO (Either GenError WorkPlan)
+analyseContent :: (RunOptions, HugoBuildOptions) -> ProjectDefinition -> HugoComponents -> IO (Either GenError HgWorkPlan)
 analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] pathFiles) components =
   -- TODO: analyze the configs first to confirm where the content/data/... files come from (implicit location or explicitly defined directories).
   --    Then load the file trees for each of these directories to assemble the correct list of files to analyze.
@@ -114,12 +147,14 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
                               (dirPath, fileItem) = aPage.item
                               mbWorkItem = case aTmpl of
                                 FileRef (templPath, Fs.KnownFile aKind filePath) -> 
-                                  Just $ RunTemplateToDest aKind dirPath fileItem (templPath </> filePath)
+                                  Just $ ExecTmplForContent aKind dirPath fileItem (templPath </> filePath)
                                 _ -> Nothing
                             in
                             maybe accum (: accum) mbWorkItem
                           ) [] pairs
-                      in pure $ Right WorkPlan { destDir = "", items = workItems }
+                        engineHg = HgEngine { hugoOpts = hugoOpts }
+                        contextHg = HgContext { mergedConfigs = context.mergedConfigs }
+                      in pure $ Right WorkPlan { destDir = "", items = workItems, engine = engineHg, context = contextHg }
 
 
 maybesToArray :: (Maybe a, Maybe a) -> [ a ]

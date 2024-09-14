@@ -16,7 +16,7 @@ import qualified RunTime.Interpreter.Context as Vm
  project creation.
 -}
 
-data ScaffholdTempl = ScaffholdTempl {
+data ScaffoldTempl = ScaffoldTempl {
   path :: FilePath
   , hasPrefix :: Maybe FilePath
   , description :: Maybe Text

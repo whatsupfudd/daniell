@@ -6,16 +6,51 @@ import qualified System.Directory as SE
 
 import qualified Options.Types as Op
 import qualified Options.Runtime as Op
-import Conclusion (GenError (..))
+import Conclusion (Conclusion (..), GenError (..))
 import qualified FileSystem.Types as Fs
 
-import Generator.Types (WorkPlan (..), WorkItem (..))
-import Generator.Work (runGen)
-import Template.Types (ScaffholdTempl (..))
+import Generator.Types (WorkPlan (..), WorkItem (..), ScfWorkItem (..))
+import Generator.Work (ScfWorkPlan, ScfEngine (..), ScfContext (..), runGen)
+import Template.Types (ScaffoldTempl (..))
 import Template.FileTree (mergeTemplates, loadTree)
 
+import Utils (splitResults)
 
-parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffholdTempl)
+import ProjectDefinition.Defaults (defaultLocations)
+
+
+createScaffolding :: Op.RunOptions -> Op.NewOptions -> IO Conclusion
+createScaffolding rtOpts newOpts = do
+  rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
+  let
+    (errTemplates, userTemplates) = splitResults rezTemplates
+  case errTemplates of
+    -- No errors, keep going.
+    [] -> do
+      -- putStrLn $ "Parsed templates: " <> show userTemplates
+      -- if there's no 'no-default template' instruction in the specified templates, load the default template.
+      rezA <-
+        -- TODO: figure out when to not scan the defaultLocations...
+        --  if False then pure $ Right userTemplates else
+        do
+        rezB <- parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
+        case rezB of
+          Left errMsg -> pure . Left $ show errMsg
+          Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
+      case rezA of
+        Left errMsg -> pure $ ErrorCcl $ "@[createScaffolding] error loading default template: " <> show errMsg
+        Right allTemplates -> do
+          rezB <- createFileTree rtOpts newOpts allTemplates
+          case rezB of
+            Left errMsg -> pure $ ErrorCcl $ "@[createScaffolding] error creating project: " <> show errMsg
+            Right _ -> pure NilCcl
+    -- Errors while reading templates, abort.
+    _ -> do
+      putStrLn $ "@[createScaffolding] Template loading error: " <> show errTemplates
+      pure $ ErrorCcl $ "@[createScaffolding] error loading templates: " <> show errTemplates
+
+
+parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffoldTempl)
 parseFileTree rtOpts tPath =
   let
     (fullPath, mbPrefix) = case tPath of
@@ -29,7 +64,7 @@ parseFileTree rtOpts tPath =
     Right aTempl -> pure $ Right aTempl { hasPrefix = mbPrefix }
 
 
-createFileTree :: Op.RunOptions -> Op.NewOptions -> [ScaffholdTempl] -> IO (Either GenError ())
+createFileTree :: Op.RunOptions -> Op.NewOptions -> [ScaffoldTempl] -> IO (Either GenError ())
 createFileTree rtOpts newOpts templates = do
   putStrLn "@[createFileTree] starting."
   -- move template(s) info into a work plan.
@@ -42,21 +77,26 @@ createFileTree rtOpts newOpts templates = do
   runGen rtOpts mergedTemplate workPlan
 
 
-buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffholdTempl -> WorkPlan
+buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffoldTempl -> ScfWorkPlan
 buildWorkPlan rtOpts newOpts template =
   let
     structList = Fld.toList template.structure
     newDirs = map NewDirIfNotExist (extractDirs structList)
     workItems = concatMap analyzeSources structList
   in
-  WorkPlan newOpts.rootDir $ newDirs <> workItems
+  WorkPlan {
+      destDir = newOpts.rootDir
+    , items = newDirs <> workItems
+    , engine = ScfEngine
+    , context = ScfContext
+  }
 
 
 extractDirs :: [ Fs.PathNode ] -> [ FilePath ]
 extractDirs = map fst . filter ((/= "") . fst)
 
 
-analyzeSources :: Fs.PathNode -> [ WorkItem ]
+analyzeSources :: Fs.PathNode -> [ ScfWorkItem ]
 analyzeSources (dir, srcs) =
     foldl (\accum src ->
       case workForSource dir src of
@@ -65,7 +105,7 @@ analyzeSources (dir, srcs) =
     ) [] srcs
 
 
-workForSource :: FilePath -> Fs.FileItem -> Maybe WorkItem
+workForSource :: FilePath -> Fs.FileItem -> Maybe ScfWorkItem
 workForSource dir src =
   case src of
     Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)

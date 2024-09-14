@@ -3,14 +3,14 @@ module Commands.Server where
 import Control.Monad (forM_, forM)
 
 import qualified Options.Runtime as Rto
-import Generator.Logic (createSite)
+import Generator.Logic (serveSite)
 import qualified Conclusion as Ccl
 import qualified WebServer.Servant as WSrv
 
 
 serverCmd :: Rto.RunOptions -> IO Ccl.Conclusion
 serverCmd rtOpts = do
-  mbStaticSite <- createSite rtOpts
+  mbStaticSite <- serveSite rtOpts
   case mbStaticSite of
     Left genErr ->
       putStrLn $ "@[serverHu] err: " <> show genErr

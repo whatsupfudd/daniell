@@ -9,10 +9,25 @@ import qualified FileSystem.Types as Fs
 
 import Options.Runtime (RunOptions (..))
 import Conclusion (GenError (..))
-import Generator.Types (WorkPlan (..))
+import Generator.Types (WorkPlan (..), Engine (..), Context (..), WorkItem (..))
 import ProjectDefinition.Types
 
 
+type NxWorkPlan = WorkPlan NxEngine NxContext NxWorkItem
+data NxEngine = NxEngine
+instance Show NxEngine where
+  show _ = "@[nxEngine] "
+instance Engine NxEngine
+
+data NxContext = NxContext
+instance Context NxContext
+instance Show NxContext where
+  show _ = "@[nxContext] "
+
+data NxWorkItem = NxWorkItem
+instance WorkItem NxWorkItem
+instance Show NxWorkItem where
+  show _ = "@[nxWorkItem] "
 
 defaultNextJS :: NextJSComponents
 defaultNextJS = NextJSComponents {
@@ -40,8 +55,8 @@ defaultNextJS = NextJSComponents {
   }
 
 
-analyseNextJsProject :: RunOptions -> Bool -> Fs.PathFiles -> Either GenError WorkPlan
-analyseNextJsProject rtOpts isStatic pathFiles =
+analyseProject :: RunOptions -> Bool -> Fs.PathFiles -> IO (Either GenError NxWorkPlan)
+analyseProject rtOpts isStatic pathFiles =
   {- TODO:
     -- go through all the pathFile and build a ProjectDefinition.
       -> ProjectDefinition rtOpts.baseDir (WebApp (NextJS defaultNextJS)) [] pathFiles
@@ -141,19 +156,19 @@ organizeFiles (knownFiles, miscFiles) =
     | "deploy" `isPrefixOf` dirPath = Mp.insertWith (<>) "deploy" [(drop 7 dirPath, aFile)] orgMap
     | otherwise = Mp.insertWith (<>) "miscs" [(dirPath, aFile)] orgMap
 
-analyseStaticProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> Either GenError WorkPlan
+analyseStaticProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> IO (Either GenError NxWorkPlan)
 analyseStaticProject rtOpts (ProjectDefinition baseDir (Site NextStatic) [] pathFiles) content =
   let
     dbgContent = "NextJS Site project definition: " <> pack (show content)
   in
-  Left $ SimpleMsg dbgContent
+  pure . Left $ SimpleMsg dbgContent
   -- Right $ WorkPlan { destDir = "", items = [] }
 
 
-analyseWebAppProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> Either GenError WorkPlan
+analyseWebAppProject :: RunOptions -> ProjectDefinition -> NextJSComponents -> IO (Either GenError NxWorkPlan)
 analyseWebAppProject rtOpts (ProjectDefinition baseDir (WebApp NextJS) [] pathFiles) content =
   let
     dbgContent = "NextJS WebApp project definition: " <> pack (show content)
   in
-  Left $ SimpleMsg dbgContent
+  pure . Left $ SimpleMsg dbgContent
   -- Right $ WorkPlan { destDir = "", items = [] }
