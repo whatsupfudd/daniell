@@ -8,6 +8,7 @@
 module ProjectDefinition.Hugo where
 
 import Control.Monad (foldM)
+import Control.Exception (try)
 
 import qualified Data.ByteString as Bs
 import Data.Int (Int32)
@@ -38,9 +39,10 @@ import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
-import Control.Lens (Simple)
-import Control.Exception (try)
-import Template.Golang.Compiler (compileStatements)
+import qualified RunTime.Interpreter.Context as VM
+
+import Template.Golang.Compiler (compileStatements, CompContext (..))
+import qualified RunTime.Interpreter.Engine as VM
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -139,10 +141,29 @@ instance ExecSystem HgEngine HgContext HgWorkItem where
                     Right rezC -> do
                       putStrLn "@[runWorkItem.HgEngine] convertElements: "
                       Cnl.showStatements rezC
-                      let
-                        compileCode = compileStatements rezC
-                      putStrLn $ "@[runWorkItem.HgEngine] compileCode: " <> show compileCode
-                      pure . Right $ context { compTemplates = Mp.insert tmplPath rezC context.compTemplates }
+                      case compileStatements "$main" rezC of
+                        Left err -> do
+                          putStrLn $ "@[runWorkItem.HgEngine] compileCode err: " <> show err
+                          pure . Left . SimpleMsg $ "@[runWorkItem.HgEngine] compileCode err: " <> pack (show err)
+                        Right compiledCode -> do
+                          putStrLn $ "@[runWorkItem.HgEngine] compileCode: " <> show compiledCode
+                          let
+                            vmModule = VM.VMModule {
+                                functions = Vc.fromList . map (\(fctDef, fID) -> case fctDef.name of
+                                  "$main" -> fctDef
+                                  _ -> fctDef { VM.name = "$" <> fctDef.name }
+                                  
+                                  ) $ Mp.elems compiledCode.functions
+                              , constants = Vc.fromList . map fst $ Mp.elems compiledCode.constants
+                              , externModules = Mp.empty
+                            }
+                          rezE <- VM.execModule vmModule
+                          case rezE of
+                            Left errMsg -> do
+                              putStrLn $ "@[runWorkItem.HgEngine] execModule err: " <> errMsg
+                            Right (VM.ExecResult vmCtxt) -> do
+                              putStrLn $ "@[runWorkItem.HgEngine] exec rez: " <> show vmCtxt
+                          pure . Right $ context { compTemplates = Mp.insert tmplPath rezC context.compTemplates }
           Just stmts -> do
             putStrLn $ "@[runWorkItem.HgEngine] template already parsed: " <> tmplPath
             pure $ Right context

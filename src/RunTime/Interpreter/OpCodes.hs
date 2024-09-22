@@ -6,6 +6,7 @@ where
 import Data.Char (ord)
 import Data.Int (Int32, Int64)
 import Data.Text (Text)
+import qualified Data.Vector as V
 
 import RunTime.Interpreter.Memory
 import Template.Golang.Parser (callExpr)
@@ -465,3 +466,21 @@ toInstr DUP_1 = [81]
 toInstr (CALL_METHOD a1) = [82, a1]
 toInstr REDUCE_DYN = [83]
 toInstr a = error $ "fromEnum: bad argument" <> show a
+
+
+dissassemble :: V.Vector Int32 -> String
+dissassemble instrs =
+  if V.null instrs then
+    ""
+  else
+  let
+    instr = V.head instrs
+    rest = V.tail instrs
+    symbInstr = toEnum $ fromIntegral instr
+    instrName = takeWhile (/= ' ') (show symbInstr)
+    argCount = opParCount symbInstr
+    args = V.toList $ V.take argCount rest
+    remain = V.drop argCount rest
+    oneLine = "  " <> instrName <> concatMap (\a -> " " <> show a) args
+  in
+  oneLine <> "\n" <> dissassemble remain

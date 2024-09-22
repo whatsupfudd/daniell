@@ -223,24 +223,35 @@ doOpcode context frame opWithArgs =
                   pure $ Right (context { outStream = newStream }, newFrame, True)
           n ->
             let
-              fakeType = case n of
-                2 -> StringSV   -- jwkDefaultLocation
-                3 -> IntSV      -- serverPortDefault
-                4 -> BoolSV     -- hasWebServer
-                5 -> StringSV   -- appName
-                6 -> StringSV   -- appConfEnvVar
-                _ -> IntSV
-              heapPos = fromIntegral $ V.length frame.heap
-              (newStack, newHeap) = case fakeType of
-                BoolSV ->
-                  ((BoolSV, 1) : frame.stack, frame.heap)
-                IntSV ->
-                  ((IntSV, 1) : frame.stack, frame.heap)
-                StringSV ->
-                  ((HeapRefSV, heapPos) : frame.stack, frame.heap V.++ V.singleton (StringCte "test-string"))
-            in do
-            putStrLn $ "@[doOpcode] unknown fct:" <> show n <> ", arity: " <> show arity <> "."
-            pure $ Right (context, frame { stack = newStack, heap = newHeap }, True)
+              curModule = context.modules V.! 0
+            in
+            if V.length curModule.functions > fromIntegral n then
+              let
+                newFct = curModule.functions V.! fromIntegral n
+                newStack = drop (fromIntegral $ fromJust arity) frame.stack
+                newFrame = frame { function = newFct, stack = newStack, pc = 0 }
+              in
+              pure $ Right (context, newFrame, True)
+            else
+              let
+                fakeType = case n of
+                  2 -> StringSV   -- jwkDefaultLocation
+                  3 -> IntSV      -- serverPortDefault
+                  4 -> BoolSV     -- hasWebServer
+                  5 -> StringSV   -- appName
+                  6 -> StringSV   -- appConfEnvVar
+                  _ -> IntSV
+                heapPos = fromIntegral $ V.length frame.heap
+                (newStack, newHeap) = case fakeType of
+                  BoolSV ->
+                    ((BoolSV, 1) : frame.stack, frame.heap)
+                  IntSV ->
+                    ((IntSV, 1) : frame.stack, frame.heap)
+                  StringSV ->
+                    ((HeapRefSV, heapPos) : frame.stack, frame.heap V.++ V.singleton (StringCte "test-string"))
+              in do
+              putStrLn $ "@[doOpcode] unknown fct:" <> show n <> ", arity: " <> show arity <> "."
+              pure $ Right (context, frame { stack = newStack, heap = newHeap }, True)
     -- Heap management (save new heap ID to register):
     ARR_CONCAT ->
       let
@@ -263,6 +274,10 @@ doOpcode context frame opWithArgs =
           pure $ Right (context, postFrame { stack = newStack, heap = newHeap }, True)
 
     HALT -> pure $ Right (context { status = Halted }, frame, False)
+    GET_FIELD ->
+      -- TODO: implement GET_FIELD. For, fake a value.
+      pure $ Right (context, frame { stack = (IntSV, 1) : frame.stack }, True)
+ 
     _ -> pure . Left $ UnimplementedOpCode opcode
 
 

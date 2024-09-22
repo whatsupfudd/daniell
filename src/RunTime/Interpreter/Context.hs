@@ -9,7 +9,7 @@ import qualified Data.Vector as V
 import qualified Data.ByteString as BS
 import qualified Data.Map as Mp
 
-import RunTime.Interpreter.OpCodes (OpCode (..))
+import RunTime.Interpreter.OpCodes (OpCode (..), dissassemble)
 import RunTime.Interpreter.Memory (IntM)
 
 
@@ -105,7 +105,12 @@ data FunctionDef = FunctionDef {
     , heapDef :: Int32
     , body :: FunctionCode
   }
-  deriving Show
+
+instance Show FunctionDef where
+  show (FunctionDef n a h b) = "FunctionDef " <> show n <> "\n  , code: "
+      <> case b of
+           NativeCode -> "native."
+           ByteCode code -> dissassemble code
 
 
 data FunctionCode =
