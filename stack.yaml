@@ -20,7 +20,9 @@ extra-deps:
   - servant-errors-0.1.7.0@sha256:a36a8bf86a7bd96201308dfaf5f16b07b6743defe41a8ceaf9845ad467cd163c,2627
   - servant-auth-server-0.4.8.0@sha256:b9137bebf5ca56e4fd20402680e71f5734a6f511f0464e8eff6577aa9947ce35,5521
   # - ../LocalPkgs/ginger-0.10.4.1
-  - ../LocalPkgs/cannelle
+  # - ../LocalPkgs/cannelle
+  - github: whatsupfudd/cannelle
+    commit: 7cd3c2d2e61d254626d500575cdab3cb6590439e
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter-haskell
 
