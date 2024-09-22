@@ -6,7 +6,7 @@ resolver:
 
 # User packages to be built.
 #
-packages: 
+packages:
 - .
 # Dependency packages to be pulled from upstream that are not in the resolver.
 # These entries can reference officially published versions as well as
@@ -19,7 +19,8 @@ extra-deps:
   - validation-selective-0.1.0.2@sha256:c878846bfffeba69efa3b4866025f249656e0e0a129fed6d446eb602382d328b,3856
   - servant-errors-0.1.7.0@sha256:a36a8bf86a7bd96201308dfaf5f16b07b6743defe41a8ceaf9845ad467cd163c,2627
   - servant-auth-server-0.4.8.0@sha256:b9137bebf5ca56e4fd20402680e71f5734a6f511f0464e8eff6577aa9947ce35,5521
-  - ../LocalPkgs/ginger-0.10.4.1
+  # - ../LocalPkgs/ginger-0.10.4.1
+  - ../LocalPkgs/cannelle
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter-haskell
 

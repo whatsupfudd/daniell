@@ -111,34 +111,34 @@ buildSite rtOpts siteOpts = do
   case eiWorkPlan of
     Left err -> pure $ Left err
     Right techPlan -> do
-      putStrLn $ "@[buildSite] workPlan: " <> show techPlan
+      -- putStrLn $ "@[buildSite] workPlan: " <> show techPlan
       case techPlan of
         ScfPlan scfPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show scfPlan
+          putStrLn $ "@[buildSite] scaffold workPlan: " <> show scfPlan
           rezA <- runPlan rtOpts scfPlan.engine scfPlan.context scfPlan.items
           case rezA of
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
         GatsbyPlan gbPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show gbPlan
+          putStrLn $ "@[buildSite] gatsby workPlan: " <> show gbPlan
           rezA <- runPlan rtOpts gbPlan.engine gbPlan.context gbPlan.items
           case rezA of
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
         HugoPlan hgPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show hgPlan
+          putStrLn $ "@[buildSite] hugo workPlan: " <> show hgPlan
           rezA <- runPlan rtOpts hgPlan.engine hgPlan.context hgPlan.items
           case rezA of
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
         NextPlan nxPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show nxPlan
+          putStrLn $ "@[buildSite] nextjs workPlan: " <> show nxPlan
           rezA <- runPlan rtOpts nxPlan.engine nxPlan.context nxPlan.items
           case rezA of
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
         FuddlePlan fdPlan -> do
-          putStrLn $ "@[buildSite] workPlan: " <> show fdPlan
+          putStrLn $ "@[buildSite] fuddle workPlan: " <> show fdPlan
           rezA <- runPlan rtOpts fdPlan.engine fdPlan.context fdPlan.items
           case rezA of
             Left err -> pure $ Left err

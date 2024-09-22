@@ -25,7 +25,7 @@ import Template.Golang.Ast
 
 
 A <value> is called a *pipeline* in golang *template/text* library.  It is defined as:
-  
+
     <pipelines> ::= <pipeline> | "(" <pipeline> ")"
     <pipeline> ::= <args> | <call>
     <call> ::= <function> [ <args> ] [ "|" <call> ]
@@ -57,7 +57,7 @@ goStmt =
       , elseStmt
       , endStmt
       , breakStmt
-      , continueSttmt
+      , continueStmt
       , partialStmt
       , templateStmt
       -- , varDefStmt
@@ -110,7 +110,7 @@ breakStmt = do
   M.string "break"
   pure BreakST
 
-continueSttmt = do
+continueStmt = do
   M.string "continue"
   pure ContinueST
 

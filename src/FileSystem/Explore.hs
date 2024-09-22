@@ -30,17 +30,20 @@ loadFolderTree rootPath = do
 
 filesAnalyser :: Int -> FilePath -> [FilePath] -> [[Char]] -> IO PathFiles
 filesAnalyser prefixLength root dirs files =
-  let
-    items = foldl (\accum file ->
-                    case itemMaker file of
-                      Nothing -> accum
-                      Just anItem -> accum <> [anItem]
-                    ) [] files
-  in
-  if length items > 0 then
-    pure $ Seq.singleton (drop prefixLength root, items)
-  else
+  if ".git" `elem` splitDirectories root then
     pure Seq.empty
+  else
+    let
+      items = foldl (\accum file ->
+                      case itemMaker file of
+                        Nothing -> accum
+                        Just anItem -> accum <> [anItem]
+                      ) [] files
+    in
+    if length items > 0 then
+      pure $ Seq.singleton (drop prefixLength root, items)
+    else
+      pure Seq.empty
 
 
 itemMaker :: FilePath -> Maybe FileItem

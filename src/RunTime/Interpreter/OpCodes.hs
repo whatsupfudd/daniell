@@ -21,8 +21,8 @@ data OpCode =
   -- Heap access:
   | SET_VAR VarID
   | GET_VAR VarID
-  | GET_FIELD FieldID
-  | SET_FIELD FieldID
+  | GET_FIELD
+  | SET_FIELD
   -- Register access:
   | SET_REG_BOOL RegID BoolM
   | SET_REG_CHAR RegID CharM
@@ -106,8 +106,15 @@ data OpCode =
   | ARR_CONCAT
   | ARR_ADD
   -- Control flow:
-  | RETURN
+  | RETURN Int32
   | HALT
+  -- v 240922:
+  | FORCE_TO_STRING
+  | IINC_1
+  | SET_VAR_IM1 Int32
+  | DUP_1
+  | CALL_METHOD Int32
+  | REDUCE_DYN
   deriving (Show)
 
 
@@ -116,8 +123,8 @@ instance Enum OpCode where
   fromEnum NOP = 0
   fromEnum (SET_VAR _) = 1
   fromEnum (GET_VAR _) = 2
-  fromEnum (GET_FIELD _) = 3
-  fromEnum (SET_FIELD _) = 4
+  fromEnum GET_FIELD = 3
+  fromEnum SET_FIELD = 4
   fromEnum (SET_REG_BOOL _ _) = 5
   fromEnum (SET_REG_CHAR _ _) = 6
   fromEnum (SET_REG_INT _ _) = 7
@@ -189,16 +196,22 @@ instance Enum OpCode where
   fromEnum BNOT = 73
   fromEnum ARR_CONCAT = 74
   fromEnum ARR_ADD = 75
-  fromEnum RETURN = 76
+  fromEnum (RETURN _) = 76
   fromEnum HALT = 77
+  fromEnum FORCE_TO_STRING = 78
+  fromEnum IINC_1 = 79
+  fromEnum (SET_VAR_IM1 _) = 80
+  fromEnum DUP_1 = 81
+  fromEnum (CALL_METHOD _) = 82
+  fromEnum REDUCE_DYN = 83
   fromEnum a = error $ "fromEnum: bad argument" <> show a
 
   toEnum :: Int -> OpCode
   toEnum 0 = NOP
   toEnum 1 = SET_VAR 0
   toEnum 2 = GET_VAR 0
-  toEnum 3 = GET_FIELD 0
-  toEnum 4 = SET_FIELD 0
+  toEnum 3 = GET_FIELD
+  toEnum 4 = SET_FIELD
   toEnum 5 = SET_REG_BOOL 0 False
   toEnum 6 = SET_REG_CHAR 0 ' '
   toEnum 7 = SET_REG_INT 0 0
@@ -270,16 +283,22 @@ instance Enum OpCode where
   toEnum 73 = BNOT
   toEnum 74 = ARR_CONCAT
   toEnum 75 = ARR_ADD
-  toEnum 76 = RETURN
+  toEnum 76 = RETURN 0
   toEnum 77 = HALT
+  toEnum 78 = FORCE_TO_STRING
+  toEnum 79 = IINC_1
+  toEnum 80 = SET_VAR_IM1 0
+  toEnum 81 = DUP_1
+  toEnum 82 = CALL_METHOD 0
+  toEnum 83 = REDUCE_DYN
   toEnum _ = error "toEnum: bad argument"
 
 opParCount :: OpCode -> Int
 opParCount NOP = 0
 opParCount (SET_VAR _) = 1
 opParCount (GET_VAR _) = 1
-opParCount (GET_FIELD _) = 1
-opParCount (SET_FIELD _) = 1
+opParCount GET_FIELD = 0
+opParCount SET_FIELD = 0
 opParCount (SET_REG_BOOL _ _) = 2
 opParCount (SET_REG_CHAR _ _) = 2
 opParCount (SET_REG_INT _ _) = 2
@@ -351,15 +370,21 @@ opParCount BXOR = 0
 opParCount BNOT = 0
 opParCount ARR_CONCAT = 0
 opParCount ARR_ADD = 0
-opParCount RETURN = 0
+opParCount (RETURN _) = 0
 opParCount HALT = 0
+opParCount FORCE_TO_STRING = 0
+opParCount IINC_1 = 0
+opParCount (SET_VAR_IM1 _) = 1
+opParCount DUP_1 = 0
+opParCount (CALL_METHOD _) = 1
+opParCount REDUCE_DYN = 0
 
 toInstr :: OpCode -> [Int32]
 toInstr NOP = [0]
 toInstr (SET_VAR a1) = [1, a1]
 toInstr (GET_VAR a1) = [2, a1]
-toInstr (GET_FIELD a1) = [3, a1]
-toInstr (SET_FIELD a1) = [4, a1]
+toInstr GET_FIELD = [3]
+toInstr SET_FIELD = [4]
 toInstr (SET_REG_BOOL a1 a2) = [5, a1, if a2 then 1 else 0]
 toInstr (SET_REG_CHAR a1 a2) = [6, a1, fromIntegral . ord $ a2]
 toInstr (SET_REG_INT a1 a2) = [7, a1, a2]
@@ -431,6 +456,12 @@ toInstr BXOR = [72]
 toInstr BNOT = [73]
 toInstr ARR_CONCAT = [74]
 toInstr ARR_ADD = [75]
-toInstr RETURN = [76]
+toInstr (RETURN a1) = [76, a1]
 toInstr HALT = [77]
+toInstr FORCE_TO_STRING = [78]
+toInstr IINC_1 = [79]
+toInstr (SET_VAR_IM1 a1) = [80, a1]
+toInstr DUP_1 = [81]
+toInstr (CALL_METHOD a1) = [82, a1]
+toInstr REDUCE_DYN = [83]
 toInstr a = error $ "fromEnum: bad argument" <> show a

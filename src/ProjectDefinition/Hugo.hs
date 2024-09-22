@@ -10,6 +10,7 @@ module ProjectDefinition.Hugo where
 import Control.Monad (foldM)
 
 import qualified Data.ByteString as Bs
+import Data.Int (Int32)
 import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe, isJust, isNothing)
@@ -20,6 +21,9 @@ import qualified Data.Vector as Vc
 import System.FilePath ((</>), splitDirectories)
 
 import Data.LanguageCodes (fromChars)
+
+import qualified Text.Cannelle.Hugo.Parse as Cnl
+import qualified Text.Cannelle.Hugo.AST as Cnl
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
@@ -35,6 +39,8 @@ import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
 import Control.Lens (Simple)
+import Control.Exception (try)
+import Template.Golang.Compiler (compileStatements)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -66,17 +72,80 @@ newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
   deriving Show
 data HgContext = HgContext {
       mergedConfigs :: Mp.Map Text DictEntry
-    , destDir :: FilePath 
+    , pathPrefixes :: Mp.Map Int32 FilePath
+    , compTemplates :: Mp.Map FilePath [Cnl.Statement]
   }
   deriving Show
 
 data HgWorkItem =
-  ExecTmplForContent { kind :: Fs.FileKind, dirPath :: FilePath, fileItem :: Fs.FileItem, template :: FilePath }
+  ExecTmplForContent CTPair
   | ExecTmplForRoute { dirPath :: FilePath }
+
+data CTPair = CTPair {
+    kind :: Fs.FileKind
+    , contentPrefix :: Int32
+    , section :: FilePath
+    , content :: Fs.FileItem
+    , themePrefix :: Int32
+    , template :: FilePath
+  }
   deriving Show
 
+instance Show HgWorkItem where
+  show wi = case wi of
+    ExecTmplForContent ctp -> "ExecTmplForContent> dirPath: " <> ctp.section <> ", content" <> show ctp.content <> ", template: " <> ctp.template
+    ExecTmplForRoute aDirPath -> "ExecTmplForRoute> dirPath: " <> aDirPath
+
 instance ExecSystem HgEngine HgContext HgWorkItem where
-  runWorkItem _ _ _ _ = pure $ Right HgContext { mergedConfigs = Mp.empty, destDir = "" }
+  runWorkItem rtOpts engine context wItem = do
+    case wItem of
+      ExecTmplForRoute dirPath -> do
+        putStrLn $ "@[runWorkItem.HgEngine] src: " <> show wItem
+        pure $ Right context
+      ExecTmplForContent ctp ->
+        let
+          contentPath = context.pathPrefixes Mp.! ctp.contentPrefix
+          themePath = context.pathPrefixes Mp.! ctp.themePrefix
+          mkPath = contentPath </> ctp.section </> Fs.getItemPath ctp.content
+          tmplPath = themePath </> ctp.template
+        in do
+        putStrLn $ "@[runWorkItem.HgEngine] content: " <> mkPath <> ", template: " <> tmplPath
+        case Mp.lookup tmplPath context.compTemplates of
+          Nothing -> do
+            eiTemplSource <- try $ Bs.readFile tmplPath :: IO (Either IOError Bs.ByteString)
+            case eiTemplSource of
+              Left err ->
+                let
+                  errMsg =  "@[runWorkItem.HgEngine] readFile err: " <> show err
+                in do
+                putStrLn errMsg
+                pure . Left . SimpleMsg $ pack errMsg
+              Right templSource -> do
+                rezB <- Cnl.parseTemplateSource (Just tmplPath) templSource
+                case rezB of
+                  Left errMsg ->
+                    let
+                      nErrMsg = "@[runWorkItem.HgEngine] parseTemplateSource err: " <> errMsg
+                    in do
+                    putStrLn nErrMsg
+                    pure . Left . SimpleMsg $ pack nErrMsg
+                  Right templateElements -> case Cnl.convertElements templateElements of
+                    Left errMsg ->
+                      let
+                        nErrMsg = "@[runWorkItem.HgEngine] convertElements err: " <> errMsg
+                      in do
+                      putStrLn nErrMsg
+                      pure . Left . SimpleMsg $ pack nErrMsg
+                    Right rezC -> do
+                      putStrLn "@[runWorkItem.HgEngine] convertElements: "
+                      Cnl.showStatements rezC
+                      let
+                        compileCode = compileStatements rezC
+                      putStrLn $ "@[runWorkItem.HgEngine] compileCode: " <> show compileCode
+                      pure . Right $ context { compTemplates = Mp.insert tmplPath rezC context.compTemplates }
+          Just stmts -> do
+            putStrLn $ "@[runWorkItem.HgEngine] template already parsed: " <> tmplPath
+            pure $ Right context
 
 -- ***** Logic for dealing with a project work (create, build) *****
 
@@ -100,8 +169,10 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
   let
     globConfig = scanForGlobConfig hugoOpts.environment components.config
     markupFiles = extractMarkup components.content
+    fakePrefixes_0 = Mp.singleton 0 $ baseDir </> "content"
     -- dbgContent = "NextJS Site project definition: " <> pack (show markupFiles)
   in do
+  putStrLn $ "@[analyseContent] markupFiles: " <> show markupFiles
   runConfigs <- analyzeConfig rtOpts globConfig
   case runConfigs of
     Left err -> pure $ Left err
@@ -118,9 +189,9 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
             Right aLabel ->
               let
                 mbProjLayout = if null components.templCore.layouts then Nothing else Just $ buildTemplateFromCore components.templCore
-                mbTheme = case Mp.lookup (unpack aLabel) components.themes of
-                  Nothing -> Nothing
-                  Just aTmplCore -> Just $ buildTemplateFromCore aTmplCore
+                (mbTheme, fakePrefix_1) = case Mp.lookup (unpack aLabel) components.themes of
+                  Nothing -> (Nothing, fakePrefixes_0)
+                  Just aTmplCore -> (Just $ buildTemplateFromCore aTmplCore, Mp.insert 1 (baseDir </> "themes" </> unpack aLabel </> "layouts") fakePrefixes_0)
               in
               case (mbTheme, mbProjLayout) of
                 (Nothing, Nothing) -> pure . Left . SimpleMsg $ "@[analyseContent] no theme directory (" <> aLabel <> ") nor site layout available."
@@ -132,25 +203,38 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
                     Left err -> pure $ Left err
                     Right pairs ->
                       let
+                        prefix_TODO_content = 0
+                        prefix_TODO_template = 1
                         mbWorkItems = case pairs of
                           [] -> Nothing
                           h : t -> Just $ foldl (\accum aPair ->
-                              accum <> mkWorkItem aPair
-                            ) (mkWorkItem h) t
+                              accum <> mkWorkItem prefix_TODO_content prefix_TODO_template aPair
+                            ) (mkWorkItem prefix_TODO_content prefix_TODO_template h) t
                         engineHg = HgEngine { hugoOpts = hugoOpts }
-                        contextHg = HgContext { mergedConfigs = context.mergedConfigs, destDir = rtOpts.baseDir }
+                        contextHg = HgContext {
+                              mergedConfigs = context.mergedConfigs
+                            , pathPrefixes = fakePrefix_1
+                            , compTemplates = Mp.empty
+                          }
                       in
                       pure $ case mbWorkItems of
                         Nothing -> Left $ SimpleMsg "@[analyseContent] no work items to process."
                         Just workItems -> Right WorkPlan { items = workItems, engine = engineHg, context = contextHg }
   where
-  mkWorkItem :: (MarkupPage, PageTmpl) -> NonEmpty HgWorkItem
-  mkWorkItem (aPage, aTmpl) =
+  mkWorkItem :: Int32 -> Int32 -> (MarkupPage, PageTmpl) -> NonEmpty HgWorkItem
+  mkWorkItem ctPrefix thPrefix (aPage, aTmpl) =
     let
       (dirPath, fileItem) = aPage.item
     in
     case aTmpl of
-      FileRef (templPath, Fs.KnownFile aKind filePath) -> ExecTmplForContent aKind dirPath fileItem (templPath </> filePath) :| []
+      FileRef (templPath, Fs.KnownFile aKind filePath) -> ExecTmplForContent (CTPair {
+            kind = aKind
+          , contentPrefix = ctPrefix
+          , section = dirPath
+          , content = fileItem
+          , themePrefix = thPrefix
+          , template = templPath </> filePath
+        }) :| [] 
       _ -> ExecTmplForRoute dirPath :| []
 
 
@@ -268,7 +352,7 @@ assignContentToTheme context components themes markupPages =
           in
           if isIso639 $ head allDirs then
             (head allDirs, tail allDirs)
-          else           
+          else
             ("", allDirs)
         mbPage = findPageTmpl themes (locale, sections) aPage
       in
@@ -342,7 +426,7 @@ assignContentToTheme context components themes markupPages =
   findInKind categMap kind (locale, section) mkPage =
     case Mp.lookup (pack section) categMap of
       Just aSubMap -> findAtTop aSubMap kind locale mkPage
-      Nothing -> Nothing 
+      Nothing -> Nothing
 
 
   isMarkdown :: ContentEncoding -> Bool
@@ -352,7 +436,7 @@ assignContentToTheme context components themes markupPages =
 
 
 isIso639 :: String -> Bool
-isIso639 aStr = 
+isIso639 aStr =
   case aStr of
     [ a, b ] -> isJust $ fromChars a b
     _ -> False
@@ -515,7 +599,7 @@ analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.MiscFile filePath) = do
 {-
   - config folder: contains sections of configuration, _default and others (eg 'production).
       The main config should be 'hugo.<ext>', a change in v0.109.0 from 'config.<ext>' (still supported).
-  
+
 - root configuration keys: build, caches, cascade, deployment, frontmatter, imaging, languages, markup, mediatypes, menus, minify, module, outputformats, outputs, params, permalinks, privacy, related, security, segments, server, services, sitemap, taxonomies.
   Each one can become a separate config file (eg build.toml, params.toml).
   Subfolders (eg config/staging/hugo.toml) will be used in conjunction with the --environment param (or HUGO_ENVIRONMENT env var).
@@ -616,114 +700,114 @@ taxonomies:
 
 
 The entire set of config values are:
-archetypeDir 
+archetypeDir
 (string) The directory where Hugo finds archetype files (content templates). Default is archetypes. Also see Module Mounts Config for an alternative way to configure this directory (from Hugo 0.56).
 
-assetDir 
+assetDir
 (string) The directory where Hugo finds asset files used in Hugo Pipes. Default is assets. Also see Module Mounts Config for an alternative way to configure this directory (from Hugo 0.56).
 
-baseURL 
+baseURL
 (string) The absolute URL (protocol, host, path, and trailing slash) of your published site (e.g., https://www.example.org/docs/).
 
-build 
+build
 See Configure Build.
 
-buildDrafts 
+buildDrafts
 (bool) Include drafts when building. Default is false.
 
-buildExpired 
+buildExpired
 (bool) Include content already expired. Default is false.
 
-buildFuture 
+buildFuture
 (bool) Include content with a future publication date. Default is false.
 
-caches 
+caches
 See Configure File Caches.
 
-canonifyURLs 
+canonifyURLs
 (bool) See details before enabling this feature. Default is false.
 
-capitalizeListTitles 
+capitalizeListTitles
 New in v0.123.3
 (bool) Whether to capitalize automatic list titles. Applicable to section, taxonomy, and term pages. Default is true. You can change the capitalization style in your site configuration to one of ap, chicago, go, firstupper, or none. See details.
 
-cascade 
+cascade
 Pass down default configuration values (front matter) to pages in the content tree. The options in site config is the same as in page front matter, see Front Matter Cascade.
 
 For a website in a single language, define the [[cascade]] in Front Matter. For a multilingual website, define the [[cascade]] in Site Config.
 
 To remain consistent and prevent unexpected behavior, do not mix these strategies.
 
-cleanDestinationDir 
+cleanDestinationDir
 (bool) When building, removes files from destination not found in static directories. Default is false.
 
-contentDir 
+contentDir
 (string) The directory from where Hugo reads content files. Default is content. Also see Module Mounts Config for an alternative way to configure this directory (from Hugo 0.56).
 
-copyright 
+copyright
 (string) Copyright notice for your site, typically displayed in the footer.
 
-dataDir 
+dataDir
 (string) The directory from where Hugo reads data files. Default is data. Also see Module Mounts Config for an alternative way to configure this directory (from Hugo 0.56).
 
-defaultContentLanguage 
+defaultContentLanguage
 (string) Content without language indicator will default to this language. Default is en.
 
-defaultContentLanguageInSubdir 
+defaultContentLanguageInSubdir
 (bool) Render the default content language in subdir, e.g. content/en/. The site root / will then redirect to /en/. Default is false.
 
-disableAliases 
+disableAliases
 (bool) Will disable generation of alias redirects. Note that even if disableAliases is set, the aliases themselves are preserved on the page. The motivation with this is to be able to generate 301 redirects in an .htaccess, a Netlify _redirects file or similar using a custom output format. Default is false.
 
-disableHugoGeneratorInject 
+disableHugoGeneratorInject
 (bool) Hugo will, by default, inject a generator meta tag in the HTML head on the home page only. You can turn it off, but we would really appreciate if you don’t, as this is a good way to watch Hugo’s popularity on the rise. Default is false.
 
-disableKinds 
+disableKinds
 (string slice) Disable rendering of the specified page kinds, any of 404, home, page, robotstxt, rss, section, sitemap, taxonomy, or term.
 
-disableLanguages 
+disableLanguages
 See disable a language.
 
-disableLiveReload 
+disableLiveReload
 (bool) Disable automatic live reloading of browser window. Default is false.
 
-disablePathToLower 
+disablePathToLower
 (bool) Do not convert the url/path to lowercase. Default is false.
 
-enableEmoji 
+enableEmoji
 (bool) Enable Emoji emoticons support for page content; see the emoji shortcode quick reference guide. Default is false.
 
-enableGitInfo 
+enableGitInfo
 (bool) Enable .GitInfo object for each page (if the Hugo site is versioned by Git). This will then update the Lastmod parameter for each page using the last git commit date for that content file. Default is false.
 
-enableMissingTranslationPlaceholders 
+enableMissingTranslationPlaceholders
 (bool) Show a placeholder instead of the default value or an empty string if a translation is missing. Default is false.
 
-enableRobotsTXT 
+enableRobotsTXT
 (bool) Enable generation of robots.txt file. Default is false.
 
-environment 
+environment
 (string) Build environment. Default is production when running hugo and development when running hugo server. See Configuration directory.
 
-frontmatter 
+frontmatter
 See Front matter Configuration.
 
-hasCJKLanguage 
+hasCJKLanguage
 (bool) If true, auto-detect Chinese/Japanese/Korean Languages in the content. This will make .Summary and .WordCount behave correctly for CJK languages. Default is false.
 
-ignoreCache 
+ignoreCache
 (bool) Ignore the cache directory. Default is false.
 
-ignoreLogs 
+ignoreLogs
 (string slice) A slice of message identifiers corresponding to warnings and errors you wish to suppress. See erroridf and warnidf.
 
-ignoreVendorPaths 
+ignoreVendorPaths
 (string) Ignore vendored modules that match the given Glob pattern within the _vendor directory.
 
-imaging 
+imaging
 See image processing configuration.
 
-languageCode 
+languageCode
 (string) A language tag as defined by RFC 5646. This value is used to populate:
 
 The <language> element in the embedded RSS template
@@ -731,135 +815,135 @@ The lang attribute of the <html> element in the embedded alias template
 The og:locale meta element in the embedded Open Graph template
 When present in the root of the configuration, this value is ignored if one or more language keys exists. Please specify this value independently for each language key.
 
-languages 
+languages
 See Configure Languages.
 
-layoutDir 
+layoutDir
 (string) The directory that contains templates. Default is layouts.
 
-markup 
+markup
 See Configure Markup.
 
-mediaTypes 
+mediaTypes
 See Configure Media Types.
 
-menus 
+menus
 See Menus.
 
-minify 
+minify
 See Configure Minify.
 
-module 
+module
 Module configuration see module configuration.
 
-newContentEditor 
+newContentEditor
 (string) The editor to use when creating new content.
 
-noBuildLock 
+noBuildLock
 (bool) Don’t create .hugo_build.lock file. Default is false.
 
-noChmod 
+noChmod
 (bool) Don’t sync permission mode of files. Default is false.
 
-noTimes 
+noTimes
 (bool) Don’t sync modification time of files. Default is false.
 
-outputFormats 
+outputFormats
 See custom output formats.
 
-page 
+page
 See configure page.
 
-pagination 
+pagination
 See configure pagination.
 
-panicOnWarning 
+panicOnWarning
 (bool) Whether to panic on first WARNING. Default is false.
 
-permalinks 
+permalinks
 See Content Management.
 
-pluralizeListTitles 
+pluralizeListTitles
 (bool) Whether to pluralize automatic list titles. Applicable to section pages. Default is true.
 
-printI18nWarnings 
+printI18nWarnings
 (bool) Whether to log WARNINGs for each missing translation. Default is false.
 
-printPathWarnings 
+printPathWarnings
 (bool) Whether to log WARNINGs when Hugo publishes two or more files to the same path. Default is false.
 
-printUnusedTemplates 
+printUnusedTemplates
 (bool) Whether to log WARNINGs for each unused template. Default is false.
 
-publishDir 
+publishDir
 (string) The directory to where Hugo will write the final static site (the HTML files etc.). Default is public.
 
-refLinksErrorLevel 
+refLinksErrorLevel
 (string) When using ref or relref to resolve page links and a link cannot be resolved, it will be logged with this log level. Valid values are ERROR (default) or WARNING. Any ERROR will fail the build (exit -1). Default is ERROR.
 
-refLinksNotFoundURL 
+refLinksNotFoundURL
 (string) URL to be used as a placeholder when a page reference cannot be found in ref or relref. Is used as-is.
 
-related 
+related
 See Related Content.
 
-relativeURLs 
+relativeURLs
 (bool) See details before enabling this feature. Default is false.
 
-removePathAccents 
+removePathAccents
 (bool) Removes non-spacing marks from composite characters in content paths. Default is false.
 
 content/post/hügó.md → https://example.org/post/hugo/
-renderSegments 
+renderSegments
 New in v0.124.0
 (string slice) A list of segments to render. If not set, everything will be rendered. This is more commonly set in a CLI flag, e.g. hugo --renderSegments segment1,segment2. The segment names must match the names in the segments configuration.
 
-sectionPagesMenu 
+sectionPagesMenu
 See Menus.
 
-security 
+security
 See Security Policy.
 
-segments 
+segments
 See Segments.
 
-sitemap 
+sitemap
 Default sitemap configuration.
 
-summaryLength 
+summaryLength
 (int) Applicable to automatic summaries, the minimum number of words to render when calling the Summary method on a Page object. In this case the Summary method returns the content, truncated to the paragraph closest to the summaryLength.
 
-taxonomies 
+taxonomies
 See Configure Taxonomies.
 
-templateMetrics 
+templateMetrics
 (bool) Whether to print template execution metrics to the console. Default is false. See Template metrics.
 
-templateMetricsHints 
+templateMetricsHints
 (bool) Whether to print template execution improvement hints to the console. Applicable when templateMetrics is true. Default is false. See Template metrics.
 
-theme 
+theme
 See module configuration for how to import a theme.
 
-themesDir 
+themesDir
 (string) The directory where Hugo reads the themes from. Default is themes.
 
-timeout 
+timeout
 (string) Timeout for generating page contents, specified as a duration or in seconds. Note: this is used to bail out of recursive content generation. You might need to raise this limit if your pages are slow to generate (e.g., because they require large image processing or depend on remote contents). Default is 30s.
 
-timeZone 
+timeZone
 (string) The time zone (or location), e.g. Europe/Oslo, used to parse front matter dates without such information and in the time function. The list of valid values may be system dependent, but should include UTC, Local, and any location in the IANA Time Zone database.
 
-title 
+title
 (string) Site title.
 
-titleCaseStyle 
+titleCaseStyle
 (string) Default is ap. See Configure Title Case.
 
-uglyURLs 
+uglyURLs
 (bool) When enabled, creates URL of the form /filename.html instead of /filename/. Default is false.
 
-watch 
+watch
 (bool) Watch filesystem for changes and recreate as needed. Default is false.
 
 

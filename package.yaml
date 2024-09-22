@@ -25,7 +25,8 @@ dependencies:
   - exceptions
   - filepath
   - pathwalk
-  - ginger >= 0.10.4.1
+  # - ginger >= 0.10.4.1
+  - cannelle
   - gitrev
   # For //, /: of http content types in accept HTML:
   - http-media
@@ -37,7 +38,7 @@ dependencies:
   # For syntax parsing:
   - megaparsec
   - parser-combinators
-  # For Markdown content: 
+  # For Markdown content:
   - mmark
   # For Ginger demo:
   - mtl
@@ -98,7 +99,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -O2  
+    - -O2
     dependencies:
     - base
     - daniell
