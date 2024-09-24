@@ -2,6 +2,8 @@ module RunTime.Interpreter.Engine
 where
 
 import qualified Data.ByteString as BS
+import Data.List.NonEmpty (NonEmpty (..), (<|))
+import qualified Data.List.NonEmpty as Ne
 import Data.Int (Int32)
 import Data.Text (Text, unpack, pack)
 import qualified Data.Text.Encoding as TE
@@ -30,14 +32,20 @@ execModule vmModule =
   let
     fakeFrame = Frame { stack = [], heap = V.empty
         , pc = 0, flags = NoFlag
-        , function = FunctionDef { name = "$fake", args = [], heapDef = 0, body = NativeCode }
+        , function = FunctionDef {
+            moduleID = 0
+            , fname = "$fake"
+            , args = Nothing
+            , returnType = FirstOrderSO StringTO
+            , body = NativeCode "fake-fct"
+          }
         , returnValue = (Nothing, Nothing)
       }
-    ctxt = VmContext { status = Init, frame = fakeFrame, frameStack = [], outStream = BS.empty, modules = V.singleton vmModule, constants = vmModule.constants }
+    ctxt = VmContext { status = Init, frameStack = fakeFrame :| [], outStream = BS.empty, modules = V.singleton vmModule, constants = vmModule.constants }
     entryPoint = "$main"
     moduleID = 0
     -- TODO: have a proper selection for modules.
-    mbFctID = V.findIndex (\f -> f.name ==  entryPoint) vmModule.functions
+    mbFctID = V.findIndex (\f -> f.fname ==  entryPoint) vmModule.functions
   in
   case mbFctID of
     Nothing -> pure . Left $ "@[execModule] function " <> unpack entryPoint <> " not found in module."
@@ -69,8 +77,8 @@ execCodeOnFunctionID ctxt (moduleID, fctID) =
         Running -> do
           eiRez <-
             case fctDef.body of
-              NativeCode ->
-                pure . Left $ "@[execCodeWithStack] native functions are not yet supported."
+              NativeCode ref ->
+                pure . Left $ "@[execCodeWithStack] native functions are not yet supported: " <> ref <> "."
               ByteCode _ ->
                 doVM ctxt
           case eiRez of
@@ -85,7 +93,7 @@ execCodeOnFunctionID ctxt (moduleID, fctID) =
                 , pc = 0, flags = NoFlag
                 , function = fctDef, returnValue = (Nothing, Nothing)
               }
-            newContext = ctxt { status = Running, frame = newFrame, frameStack = ctxt.frame : ctxt.frameStack }
+            newContext = ctxt { status = Running, frameStack = newFrame <| ctxt.frameStack }
           in
           doVM newContext
         Halted -> pure $ Right ctxt
@@ -93,10 +101,13 @@ execCodeOnFunctionID ctxt (moduleID, fctID) =
 
 doVM :: VmContext -> IO (Either String VmContext)
 doVM context =
-  case context.frame.function.body of
-    NativeCode -> pure . Left $ "@[doVM] trying to run a native function."
+  let
+    curFrame = Ne.head context.frameStack
+  in
+  case curFrame.function.body of
+    NativeCode ref -> pure . Left $ "@[doVM] trying to run a native function: " <> ref <> "."
     ByteCode opcodes ->
-      doByteCodeVM context context.frame opcodes
+      doByteCodeVM context curFrame opcodes
   where
   doByteCodeVM :: VmContext -> Frame -> V.Vector Int32 -> IO (Either String VmContext)
   doByteCodeVM inCtxt frame opcodes =
@@ -113,7 +124,7 @@ doVM context =
             let
               -- TODO: find a better way to manage the frame/context updates.
               newFrame = retFrame { pc = frame.pc + opLength }
-              nCtxt = retCtxt { frame = frame }
+              nCtxt = retCtxt { frameStack =  newFrame <| retCtxt.frameStack }
             -- in
             if isRunning then
               doByteCodeVM nCtxt newFrame opcodes
@@ -235,20 +246,20 @@ doOpcode context frame opWithArgs =
             else
               let
                 fakeType = case n of
-                  2 -> StringSV   -- jwkDefaultLocation
-                  3 -> IntSV      -- serverPortDefault
-                  4 -> BoolSV     -- hasWebServer
-                  5 -> StringSV   -- appName
-                  6 -> StringSV   -- appConfEnvVar
-                  _ -> IntSV
+                  2 -> FirstOrderSO StringTO   -- jwkDefaultLocation
+                  3 -> FirstOrderSO IntTO      -- serverPortDefault
+                  4 -> FirstOrderSO BoolTO     -- hasWebServer
+                  5 -> FirstOrderSO StringTO   -- appName
+                  6 -> FirstOrderSO StringTO   -- appConfEnvVar
+                  _ -> FirstOrderSO IntTO
                 heapPos = fromIntegral $ V.length frame.heap
                 (newStack, newHeap) = case fakeType of
-                  BoolSV ->
+                  FirstOrderSO BoolTO ->
                     ((BoolSV, 1) : frame.stack, frame.heap)
-                  IntSV ->
+                  FirstOrderSO IntTO ->
                     ((IntSV, 1) : frame.stack, frame.heap)
-                  StringSV ->
-                    ((HeapRefSV, heapPos) : frame.stack, frame.heap V.++ V.singleton (StringCte "test-string"))
+                  FirstOrderSO StringTO ->
+                    ((HeapRefSV, heapPos) : frame.stack, frame.heap V.++ V.singleton (StringHE "test-string"))
               in do
               putStrLn $ "@[doOpcode] unknown fct:" <> show n <> ", arity: " <> show arity <> "."
               pure $ Right (context, frame { stack = newStack, heap = newHeap }, True)
@@ -268,7 +279,7 @@ doOpcode context frame opWithArgs =
           let
             concatStr = sndStr <> fstStr -- operand positions are reversed in the stack.
             heapPos = fromIntegral $ V.length frame.heap
-            newHeap = frame.heap V.++ V.singleton (StringCte concatStr)
+            newHeap = frame.heap V.++ V.singleton (StringHE concatStr)
             newStack = (HeapRefSV, heapPos) : postFrame.stack
           in
           pure $ Right (context, postFrame { stack = newStack, heap = newHeap }, True)
@@ -302,7 +313,9 @@ popString context frame =
             Just aConst ->
               case aConst of
                 StringCte aStr -> Right (frame { stack = newStack }, aStr, True)
-                VerbatimCte aStr -> Right (frame { stack = newStack }, aStr, False)
+                VerbatimCte cmprFlag aStr ->
+                  -- TODO: if cmprFlag is true, then decompress the string.
+                  Right (frame { stack = newStack }, aStr, False)
                 _ ->
                   Left . StackError $ "@[popString] constant ID " <> show constID <> " is not a string."
         (HeapRefSV, heapID) ->
@@ -311,7 +324,7 @@ popString context frame =
               Left . StackError $ "@[popString] heap ID " <> show heapID <> " not found."
             Just aHeapValue ->
               case aHeapValue of
-                StringCte aStr -> Right (frame { stack = newStack }, aStr, True)
+                StringHE aStr -> Right (frame { stack = newStack }, aStr, True)
                 _ ->
                   Left . StackError $ "@[popString] , heap ID " <> show heapID <> " is not a string."
         (IntSV, anInt) ->

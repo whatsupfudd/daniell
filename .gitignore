@@ -1,4 +1,5 @@
 .stack-work
 *.lock
 ._*
+.DS_Store
 

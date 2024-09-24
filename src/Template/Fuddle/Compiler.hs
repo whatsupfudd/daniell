@@ -16,8 +16,8 @@ import qualified Crypto.Hash.MD5 as Cr
 import qualified Data.Text.Encoding as TE
 
 import Conclusion (GenError (..))
-import RunTime.Interpreter.OpCodes (OpCode (..), toInstr, opParCount)
-import RunTime.Interpreter.Context (VMModule (..), FunctionDef (..), ConstantValue (..), ModuledDefinition (..), FunctionCode (..))
+import RunTime.Interpreter.OpCodes (OpCode (..), toInstr, opParCount, PcPtrT (..))
+import RunTime.Interpreter.Context (VMModule (..), FunctionDef (..), ConstantValue (..), ModuledDefinition (..), FunctionCode (..), SecondOrderType (..), FirstOrderType (..))
 import Template.Fuddle.Ast
 
 
@@ -65,12 +65,15 @@ data CompileUnit = CompileUnit {
   }
 
 
-initContext preludeMods = CompContext {
+initContext preludeMods =
+  let
+    fctName = "$main"
+  in CompContext {
   idents = Mp.empty
   , imports = []
   , constants = Mp.empty
   , constantMap = Mp.empty
-  , bindings = Mp.fromList [ ("$main", FunctionDef "$main" [] 0 (ByteCode Vc.empty)) ]
+  , bindings = Mp.fromList [ (fctName, initFctDef fctName) ]
   , referredIdentifiers = Mp.empty
   , modules = preludeMods
   , hasFailed = Nothing
@@ -81,6 +84,14 @@ initContext preludeMods = CompContext {
   , spitFunction = 0
 }
 
+initFctDef :: Text -> FunctionDef
+initFctDef name = FunctionDef {
+  moduleID = 0
+  , fname = name
+  , args = Nothing
+  , returnType = FirstOrderSO StringTO
+  , body = ByteCode Vc.empty
+}
 
 type CompileResult = State CompContext ()
 
@@ -129,7 +140,13 @@ compileAstTree nTree =
         Just err -> Left err
         Nothing ->
           let
-            tmpMain = FunctionDef "$main" [] 0 (ByteCode $ Vc.fromList $ concatMap toInstr rezContext.bytecode)
+            tmpMain = FunctionDef {
+              moduleID = 0
+              , fname = "$main"
+              , args = Nothing
+              , returnType = FirstOrderSO StringTO
+              , body = ByteCode $ Vc.fromList $ concatMap toInstr rezContext.bytecode
+            }
             keyVals = sortBy (\(ak, av) (bk, bv) -> if av == bv then EQ else if av < bv then LT else GT ) $ Mp.toList rezContext.constantMap
           in
           Right $ VMModule {
@@ -162,7 +179,7 @@ resolveLabel label = do
         (before, after) = splitAt (fromIntegral aPos) s.bytecode
         afterSize = sum . map (\i -> 1 + opParCount i) $ after
       in
-      s { bytecode = before <> [JUMP_ABS $ fromIntegral afterSize] <> after }
+      s { bytecode = before <> {- [JUMP_ABS $ fromIntegral afterSize] <> -} after }
 
 
 addStringConstant :: ByteString -> State CompContext Int32
@@ -171,7 +188,7 @@ addStringConstant newConst =
 
 addVerbatimConstant :: ByteString -> State CompContext Int32
 addVerbatimConstant newConst =
-  addTypedConstant (VerbatimCte newConst) $ Cr.hash newConst
+  addTypedConstant (VerbatimCte False newConst) $ Cr.hash newConst
 
 
 addTypedConstant :: ConstantValue -> ByteString -> State CompContext Int32
@@ -238,7 +255,7 @@ compileStmt ast children =
       else do
         compileExpr cond
         emitOp CMP_BOOL_IMM
-        emitOp $ JUMP_TRUE 2
+        emitOp $ JUMP_TRUE (I32Pc 2)
         nextLabel <- newLabel
         mapM_ compileNode children
         resolveLabel nextLabel
@@ -254,7 +271,7 @@ compileStmt ast children =
         -- instead of the double-jump approach proposed by Copilot.
         -- Also take care of args and children compilation block.
         emitOp CMP_BOOL_IMM
-        emitOp $ JUMP_TRUE 2    -- move PC over the jump+distance if false, ie execute the block.
+        emitOp $ JUMP_TRUE (I32Pc 2)    -- move PC over the jump+distance if false, ie execute the block.
         nextLabel <- newLabel   -- skip the block.
         mapM_ compileNode children
         resolveLabel nextLabel  -- resolve the distance and insert the jump instruction at label position.
@@ -359,12 +376,13 @@ compileBinOper oper exprA exprB = do
     BitShiftRightOP -> emitOp ISHR
     OrOP -> emitOp BOR
     AndOP -> emitOp BAND
-    EqOP -> emitOp CMP_INT_IMM
-    NeOP -> emitOp CMP_INT_IMM
-    LtOP -> emitOp CMP_INT_IMM
-    LeOP -> emitOp CMP_INT_IMM
-    GeOP -> emitOp CMP_INT_IMM
-    GtOP -> emitOp CMP_INT_IMM
+    -- TODO: figure out the right kind of comparison system.
+    EqOP -> emitOp $ CMP_INT 0 0
+    NeOP -> emitOp $ CMP_INT 0 0
+    LtOP -> emitOp $ CMP_INT 0 0
+    LeOP -> emitOp $ CMP_INT 0 0
+    GeOP -> emitOp $ CMP_INT 0 0
+    GtOP -> emitOp $ CMP_INT 0 0
     ConcatOP -> emitOp ARR_CONCAT
     CarAddOP -> emitOp ARR_ADD
     -- TODO: array ops (concat, car-add).

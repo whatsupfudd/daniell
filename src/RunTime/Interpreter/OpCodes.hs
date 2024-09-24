@@ -16,6 +16,10 @@ type VarID = Int32
 type FieldID = Int32
 type RegID = Int32
 
+data PcPtrT =
+  I32Pc Int32
+  | LabelRef Int32
+  deriving Show
 
 data OpCode =
   NOP
@@ -39,15 +43,15 @@ data OpCode =
   | CMP_DOUBLE RegID RegID
   | CMP_BOOL_IMM
   | CMP_CHAR_IMM
-  | CMP_INT_IMM
+  | CMP_INT_IMM Int32
   | CMP_FLOAT_IMM
   | CMP_DOUBLE_IMM
   -- PC ops:
-  | JUMP_ABS PcPtrM
-  | JUMP_REL Int32
+  | JUMP_ABS PcPtrT
+  | JUMP_REL PcPtrT
   | JUMP_INDEX RegID
-  | JUMP_TRUE PcPtrM
-  | JUMP_FALSE PcPtrM
+  | JUMP_TRUE PcPtrT
+  | JUMP_FALSE PcPtrT
   -- Stack Access:
   | PUSH_BOOL RegID
   | PUSH_CHAR RegID
@@ -116,6 +120,8 @@ data OpCode =
   | DUP_1
   | CALL_METHOD Int32
   | REDUCE_DYN
+  -- throw_err errID
+  | THROW_ERR Int32
   deriving (Show)
 
 
@@ -139,7 +145,7 @@ instance Enum OpCode where
   fromEnum (CMP_DOUBLE _ _) = 15
   fromEnum CMP_BOOL_IMM = 16
   fromEnum CMP_CHAR_IMM = 17
-  fromEnum CMP_INT_IMM = 18
+  fromEnum (CMP_INT_IMM _) = 18
   fromEnum CMP_FLOAT_IMM = 19
   fromEnum CMP_DOUBLE_IMM = 20
   fromEnum (JUMP_ABS _) = 21
@@ -205,6 +211,7 @@ instance Enum OpCode where
   fromEnum DUP_1 = 81
   fromEnum (CALL_METHOD _) = 82
   fromEnum REDUCE_DYN = 83
+  fromEnum (THROW_ERR _) = 84
   fromEnum a = error $ "fromEnum: bad argument" <> show a
 
   toEnum :: Int -> OpCode
@@ -226,14 +233,14 @@ instance Enum OpCode where
   toEnum 15 = CMP_DOUBLE 0 0
   toEnum 16 = CMP_BOOL_IMM
   toEnum 17 = CMP_CHAR_IMM
-  toEnum 18 = CMP_INT_IMM
+  toEnum 18 = CMP_INT_IMM 0
   toEnum 19 = CMP_FLOAT_IMM
   toEnum 20 = CMP_DOUBLE_IMM
-  toEnum 21 = JUMP_ABS 0
-  toEnum 22 = JUMP_REL 0
+  toEnum 21 = JUMP_ABS (I32Pc 0)
+  toEnum 22 = JUMP_REL (I32Pc 0)
   toEnum 23 = JUMP_INDEX 0
-  toEnum 24 = JUMP_TRUE 0
-  toEnum 25 = JUMP_FALSE 0
+  toEnum 24 = JUMP_TRUE (I32Pc 0)
+  toEnum 25 = JUMP_FALSE (I32Pc 0)
   toEnum 26 = PUSH_BOOL 0
   toEnum 27 = PUSH_CHAR 0
   toEnum 28 = PUSH_FLOAT 0
@@ -292,6 +299,7 @@ instance Enum OpCode where
   toEnum 81 = DUP_1
   toEnum 82 = CALL_METHOD 0
   toEnum 83 = REDUCE_DYN
+  toEnum 84 = THROW_ERR 0
   toEnum _ = error "toEnum: bad argument"
 
 opParCount :: OpCode -> Int
@@ -313,7 +321,7 @@ opParCount (CMP_FLOAT _ _) = 2
 opParCount (CMP_DOUBLE _ _) = 2
 opParCount CMP_BOOL_IMM = 0
 opParCount CMP_CHAR_IMM = 0
-opParCount CMP_INT_IMM = 0
+opParCount (CMP_INT_IMM _)= 0
 opParCount CMP_FLOAT_IMM = 0
 opParCount CMP_DOUBLE_IMM = 0
 opParCount (JUMP_ABS _) = 1
@@ -399,14 +407,14 @@ toInstr (CMP_FLOAT a1 a2) = [14, a1, a2]
 toInstr (CMP_DOUBLE a1 a2) = [15, a1, a2]
 toInstr CMP_BOOL_IMM = [16]
 toInstr CMP_CHAR_IMM = [17]
-toInstr CMP_INT_IMM = [18]
+toInstr (CMP_INT_IMM a1) = [18, a1]
 toInstr CMP_FLOAT_IMM = [19]
 toInstr CMP_DOUBLE_IMM = [20]
-toInstr (JUMP_ABS a1) = [21, a1]
-toInstr (JUMP_REL a1) = [22, a1]
+toInstr (JUMP_ABS a1) = case a1 of I32Pc x -> [21, x]; LabelRef _ -> [21, 0]
+toInstr (JUMP_REL a1) = case a1 of I32Pc x -> [22, x]; LabelRef _ -> [22, 0]
 toInstr (JUMP_INDEX a1) = [23, a1]
-toInstr (JUMP_TRUE a1) = [24, a1]
-toInstr (JUMP_FALSE a1) = [25, a1]
+toInstr (JUMP_TRUE a1) = case a1 of I32Pc x -> [24, x]; LabelRef _ -> [24, 0]
+toInstr (JUMP_FALSE a1) = case a1 of I32Pc x -> [25, x]; LabelRef _ -> [25, 0]
 toInstr (PUSH_BOOL a1) = [26, a1]
 toInstr (PUSH_CHAR a1) = [27, a1]
 toInstr (PUSH_FLOAT a1) = [28, a1]

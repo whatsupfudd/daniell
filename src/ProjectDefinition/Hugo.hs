@@ -17,6 +17,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import qualified Data.Map as Mp
 import Data.Text (Text, pack, unpack)
+import qualified Data.Text.Encoding as T
 import qualified Data.Vector as Vc
 
 import System.FilePath ((</>), splitDirectories)
@@ -41,7 +42,9 @@ import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
 import qualified RunTime.Interpreter.Context as VM
 
-import Template.Golang.Compiler (compileStatements, CompContext (..))
+import RunTime.Compiler.Types (CompContext (..), CompFunction (..))
+import RunTime.Compiler.Assembler (assemble)
+import Template.Golang.Compiler (compileStatements, FullCompContext (..))
 import qualified RunTime.Interpreter.Engine as VM
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
@@ -149,10 +152,18 @@ instance ExecSystem HgEngine HgContext HgWorkItem where
                           putStrLn $ "@[runWorkItem.HgEngine] compileCode: " <> show compiledCode
                           let
                             vmModule = VM.VMModule {
-                                functions = Vc.fromList . map (\(fctDef, fID) -> case fctDef.name of
-                                  "$main" -> fctDef
-                                  _ -> fctDef { VM.name = "$" <> fctDef.name }
-                                  
+                                functions = Vc.fromList . map (\(compFct, fID) -> 
+                                    VM.FunctionDef {
+                                      moduleID = 0
+                                      , fname = T.decodeUtf8 $ case compFct.name of
+                                          "$main" -> compFct.name
+                                          _ -> "$" <> compFct.name
+                                      , args = Nothing
+                                      , returnType = VM.FirstOrderSO VM.IntTO
+                                      , body = case assemble compFct of
+                                          Left err -> VM.ByteCode Vc.empty
+                                          Right compiled -> VM.ByteCode compiled
+                                    }
                                   ) $ Mp.elems compiledCode.functions
                               , constants = Vc.fromList . map fst $ Mp.elems compiledCode.constants
                               , externModules = Mp.empty
@@ -383,6 +394,7 @@ assignContentToTheme context components themes markupPages =
     else
       Left . SimpleMsg $ "@[assignContentToTheme] markup encoding " <> pack (show aPage.content.encoding) <> " not supported yet."
 
+  -- TODO: create multi-template associations (eg [baseof.html, single.html]) that represent a hierarchy of templates.
   findPageTmpl :: [ Template ] -> (FilePath, [FilePath]) -> MarkupPage -> Maybe PageTmpl
   findPageTmpl templates (locale, sections) mkPage =
     case templates of
