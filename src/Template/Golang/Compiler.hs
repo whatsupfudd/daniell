@@ -15,264 +15,62 @@ import qualified Data.Vector as V
 
 import qualified Crypto.Hash.MD5 as Cr
 
-import Conclusion (GenError (..))
-import RunTime.Interpreter.Context (ConstantValue (..), FunctionDef (..), FunctionCode (..))
-import RunTime.Interpreter.OpCodes (OpCode (..), opParCount, toInstr)
+import RunTime.Compiler.Types (CompError (..), CompContext (..), GenCompileResult (..), MainText, CompType (..), SimpleType (..))
+import qualified RunTime.Compiler.Types as C
+import qualified RunTime.Compiler.Common as C
+import RunTime.Interpreter.OpCodes
 import Text.Cannelle.Hugo.AST
 
-
-type MainText = Bs.ByteString
-
-data CompContext = CompContext {
-    constants :: Mp.Map MainText (ConstantValue, Int32)
-    , functions :: Mp.Map MainText (FunctionDef, Int32)
-    , hasFailed :: Maybe GenError
-    , labels :: Mp.Map Int32 Int32
-    , unitCounter :: Int32
-    , spitFctID :: Int32
-    , iterLabels :: [(Int32, Int32)]
-    , curFctDef :: [ CompFunction ]
-  }
-
-instance Show CompContext where
-  show c = "CompContext {\n    constants = ["
-      <> concatMap (\cte -> "\n      , " <> show cte) (L.sortOn snd $ Mp.elems c.constants)
-      <> "\n]  , functions = [" <> concatMap (\c -> "\n      , " <> show c) c.functions
-      <> "\n]  , hasFailed = " <> show c.hasFailed
-      <> "\n  , labels = " <> show c.labels <> ", unitCounter = " <> show c.unitCounter <> ", spitFctID = " <> show c.spitFctID <> ", iterLabels = " <> show c.iterLabels <> ", curFctDef = " <> show c.curFctDef <> "\n}"
-
-data CompFunction = CompFunction {
-    name :: MainText
-    , args :: [ (MainText, VarType) ]
-    , heapDef :: Int32
-    , bytecode :: V.Vector OpCode
+data HugoCompileCtxt = HugoCompileCtxt {
+    internalTemplates :: Mp.Map MainText Int32
+    , externalTemplates :: Mp.Map MainText Int32
+    , blocks :: Mp.Map MainText Int32
   }
   deriving Show
 
-
-newtype CompError = CompError [(Int32, String)]
-  deriving Show
-
-
-data VarType =
-  SimpleTypeVT SimpleType
-  | MonadicTypeVT MainText [ VarType ]    -- Eg [ Int ], Maybe String, etc.
-  | VarTypeVT
-  deriving Show
+type FullCompContext = CompContext HugoCompileCtxt
+type CompileResult = GenCompileResult HugoCompileCtxt
 
 
-data SimpleType =
-  IntST
-  | FloatST
-  | BoolST
-  | StringST
-  | StructST MainText
-  deriving Show
-
-
-type CompileResult = State CompContext (Either CompError ())
-
-
-initCompContext :: MainText ->CompContext
-initCompContext funcLabel = CompContext {
-  constants = Mp.empty
-  , functions = Mp.empty
-  , hasFailed = Nothing
-  , labels = Mp.empty
-  , unitCounter = 0
-  , spitFctID = 0
-  , iterLabels = []
-  , curFctDef = [initCompFunction funcLabel]
+--- *** Utility functions *** ---
+initHugoCompileCtxt :: HugoCompileCtxt
+initHugoCompileCtxt = HugoCompileCtxt {
+  internalTemplates = Mp.empty
+  , externalTemplates = Mp.empty
+  , blocks = Mp.empty
 }
 
-
-initCompFunction :: MainText -> CompFunction
-initCompFunction aLabel = CompFunction {
-      name = aLabel
-    , args = []
-    , heapDef = 0
-    , bytecode = V.empty
-  }
-
-
-concatErrors :: [Either CompError a] -> Maybe CompError
-concatErrors = foldl (\accum eiErr -> case eiErr of
-    Left err@(CompError nList) -> case accum of
-        Nothing -> Just err
-        Just (CompError accumList) -> Just $ CompError (accumList <> nList)
-    _ -> accum
-  ) Nothing
-
-
-emitOp :: OpCode -> CompileResult
-emitOp instr = do
-  ctx <- get
-  case ctx.curFctDef of
-    [] -> pure . Left $ CompError [(0, "No function available for emitting op code.")]
-    fctDef : tDefs ->
-      let
-        newS = fctDef { bytecode = fctDef.bytecode <> V.fromList [instr] }
-      in do
-      put ctx { curFctDef = newS : tDefs }
-      pure $ Right ()
-
-
-newLabel :: State CompContext (Either CompError Int32)
-newLabel = do
-    ctx <- get
-    let
-      labelID = fromIntegral $ Mp.size ctx.labels
-    case ctx.curFctDef of
-      [] -> pure $ Left $ CompError [(0, "No function available for tagging new label.")]
-      h : _ -> do
-        put ctx { labels = Mp.insert labelID (fromIntegral $ V.length h.bytecode) ctx.labels }
-        pure $ Right labelID
-
-
-resolveLabel :: Int32 -> CompileResult
-resolveLabel labelID = do
-  ctx <- get
-  case Mp.lookup labelID ctx.labels of
-    Nothing ->
-      let
-        errMsg = "@[resolveLabel] label " <> show labelID <> " not found."
-      in do
-      put ctx { hasFailed = Just . SimpleMsg . pack $ errMsg }
-      pure . Left $ CompError [(0, errMsg)]
-    Just aPos -> 
-      case ctx.curFctDef of
-        [] -> pure $ Left $ CompError [(0, "@[resolveLabel] no function available for emitting op code at label " <> show labelID)]
-        fctDef : tDefs ->
-          let
-            (before, after) = V.splitAt (fromIntegral aPos) fctDef.bytecode
-            afterSize = sum . V.map (\i -> 1 + opParCount i) $ after
-            newFctDef = fctDef { bytecode = before <> V.fromList [JUMP_ABS $ fromIntegral afterSize] <> after }
-          in do
-          put ctx { curFctDef = newFctDef : tDefs, labels = Mp.delete labelID ctx.labels }
-          pure $ Right ()
-
-
-addStringConstant :: MainText -> State CompContext Int32
-addStringConstant newConst =
-  addTypedConstant (StringCte newConst) $ Cr.hash newConst
-
-addVerbatimConstant :: MainText -> State CompContext Int32
-addVerbatimConstant newConst =
-  addTypedConstant (VerbatimCte newConst) $ Cr.hash newConst
-
-
-addTypedConstant :: ConstantValue -> MainText -> State CompContext Int32
-addTypedConstant newConst md5Hash = do
-    ctx <- get
-    let
-      existing = Mp.lookup md5Hash ctx.constants
-    case existing of
-      Just (value, index) -> pure index
-      Nothing ->
-        let
-          index = fromIntegral $ Mp.size ctx.constants
-        in do
-        put ctx { constants = Mp.insert md5Hash (newConst, index) ctx.constants }
-        pure index
-
-
 -- TODO: implement.
-registerVariable :: Variable -> VarType -> State CompContext Int32
+registerVariable :: Variable -> CompType -> State FullCompContext Int32
 registerVariable (Variable varKind label) varType = pure 1
 -- VarKind = LocalK ($aVar) | MethodK (.aMethod) | LocalMethodK ($.aMethod)
 
 -- TODO: implement.
-dereferVariable :: Variable -> State CompContext (Maybe Int32)
+dereferVariable :: Variable -> State FullCompContext (Maybe Int32)
 dereferVariable label = pure Nothing
 
--- TODO: implement; it returns the index of a new local variable that will hold the localContext within the
--- with-block. These can work as a stack.
-registerWithContext :: VarType -> State CompContext Int32
-registerWithContext varType = pure 1
-
-setIterationLabel :: (Int32, Int32) -> CompileResult
-setIterationLabel (iterLabel, endLabel) = do
-  modify $ \ctx -> ctx { iterLabels = (iterLabel, endLabel) : ctx.iterLabels }
-  pure $ Right ()
-
-clearIterationLabel :: CompileResult
-clearIterationLabel = do
-  modify $ \ctx -> ctx { iterLabels = tail ctx.iterLabels }
-  pure $ Right ()
-
-getIterationLabel :: State CompContext (Maybe (Int32, Int32))
-getIterationLabel = do
-  ctx <- get
-  case ctx.iterLabels of
-    [] -> pure Nothing
-    h : _ -> pure $ Just h
-
--- TODO: proper implementation.
-registerFunction :: MainText -> State CompContext (Maybe Int32)
-registerFunction funcName = do
-  ctx <- get
-  case Mp.lookup funcName ctx.functions of
-    Just (funcDef, funcID) -> pure Nothing
-    Nothing -> do
-      let
-        functionID = fromIntegral $ Mp.size ctx.functions
-      put ctx { functions = Mp.insert funcName (FunctionDef (T.decodeUtf8 funcName) [] 0 NativeCode, functionID) ctx.functions }
-      pure $ Just functionID
-
-getFunctionID :: MainText -> State CompContext (Maybe Int32)
-getFunctionID funcName = do
-  ctx <- get
-  case Mp.lookup funcName ctx.functions of
-    Just (_, funcID) -> pure $ Just funcID
-    Nothing -> pure Nothing
-
-
-startFunctionComp :: MainText -> CompileResult
-startFunctionComp label = do
-  ctx <- get
-  -- TODO: check that the label exists in the functions map.
-  put ctx { curFctDef = initCompFunction label : ctx.curFctDef }
-  pure $ Right ()
-
-
-endFunctionComp :: CompileResult
-endFunctionComp = do
-  ctx <- get
-  case ctx.curFctDef of
-    [] -> pure . Left $ CompError [(0, "Closing function comp context on an empty list.")]
-    hFct : tFcts ->
-      let
-        newDef = FunctionDef { name = T.decodeUtf8 hFct.name,  args = [], heapDef = 0, body = ByteCode . V.fromList $ concatMap toInstr hFct.bytecode }
-        newFctID = fromIntegral $ Mp.size ctx.functions
-      in do
-      put ctx { curFctDef = tFcts, functions = Mp.insert hFct.name (newDef, newFctID) ctx.functions }
-      pure $ Right ()
-
 -- TODO: implement.
-registerBlock :: MainText -> State CompContext Int32
+registerBlock :: MainText -> State FullCompContext Int32
 registerBlock label = pure 0
 
 -- TODO: implement.
-setFunctionContext :: Int32 -> CompileResult
-setFunctionContext funcID = pure $ Right ()
-
--- TODO: implement.
-getInternalTemplate :: MainText -> State CompContext Int32
+getInternalTemplate :: MainText -> State FullCompContext Int32
 getInternalTemplate label = pure 0
 
 -- TODO: implement.
-getExternalTemplate :: MainText -> State CompContext Int32
+getExternalTemplate :: MainText -> State FullCompContext Int32
 getExternalTemplate label = pure 0
 
 
-compileStatements :: MainText -> [Statement] -> Either CompError CompContext
+-- *** AST to OpCodes logic *** ---
+compileStatements :: MainText -> [Statement] -> Either CompError FullCompContext
 compileStatements funcName stmts =
   -- TODO: find out how to detect errors and pass on to caller.
   let
-    newCtx = initCompContext funcName
+    newCtx = C.initCompContext funcName initHugoCompileCtxt
     (rezA, finalState) = runState (mapM compileStmt stmts) newCtx
   in
-  case concatErrors rezA of
+  case C.concatErrors rezA of
     Nothing -> Right finalState
     Just errs -> Left errs
 
@@ -286,160 +84,147 @@ compileStmt (VarAssignST assgnKind var expr) = do
         -- TODO: carry the line number into the statements so they can show up in error messages.
         Just varID -> pure . Left $ CompError [(0, "Variable already defined: " <> show var)]
         -- TODO: extract type expected from the variable.
-        Nothing -> Right <$> registerVariable var (SimpleTypeVT IntST)
+        Nothing -> Right <$> registerVariable var UnknownVT
   case eiVarID of
     Left err -> pure $ Left err
     Right varID -> do
       compileExpression expr
-      emitOp $ SET_VAR varID
+      C.emitOp $ SET_VAR varID
 
 
 compileStmt (VerbatimST text) = do
-  cteID <- addVerbatimConstant text
-  emitOp $ PUSH_CONST cteID
+  cteID <- C.addVerbatimConstant text
+  C.emitOp $ PUSH_CONST cteID
   ctx <- get
-  emitOp $ REDUCE ctx.spitFctID 1
+  C.emitOp $ REDUCE ctx.spitFctID 1
 
 
 compileStmt (IfST condExpr thenStmt elseStmt) = do
+  elseLabel <- C.newLabel
+  endLabel <- C.newLabel
   compileExpression condExpr
-  emitOp CMP_BOOL_IMM
-  emitOp $ JUMP_TRUE 2
-  eiElseLabel <- newLabel
-  case eiElseLabel of
-    Right elseLabel -> do
-      compileStmt thenStmt
-      eiEndLabel <- newLabel
-      case eiEndLabel of
-        Right endLabel -> do
-          resolveLabel elseLabel
-          compileStmt elseStmt
-          resolveLabel endLabel
-        _ -> pure $ Left $ CompError [(0, "Error creating end label for if statement.")]
-    _ -> pure $ Left $ CompError [(0, "Error creating else label for if statement.")]
+  C.emitOp CMP_BOOL_IMM
+  C.emitOp $ JUMP_FALSE (LabelRef elseLabel)
+  compileStmt thenStmt
+  C.emitOp $ JUMP_ABS (LabelRef endLabel)
+  C.setLabelPos elseLabel
+  compileStmt elseStmt
+  C.setLabelPos endLabel
     
 
 compileStmt (RangeST mbVars expr thenStmt elseStmt) = do
   mbValIDs <- case mbVars of
     Just (RangeVars valVar mbIdxVar) -> do
       -- TODO: extract type expected from the variable.
-      valID <- registerVariable valVar (SimpleTypeVT IntST)
+      valID <- registerVariable valVar UnknownVT
       mbIdxID <- case mbIdxVar of
         Nothing -> pure Nothing
-        Just aVar -> Just <$> registerVariable aVar (SimpleTypeVT IntST)
+        Just aVar -> Just <$> registerVariable aVar (SimpleVT IntST)
       pure $ Just (valID, mbIdxID)
     Nothing -> pure Nothing
-  eiIterLabel <- newLabel
-  eiElseLabel <- newLabel
-  eiEndLabel <- newLabel
-  case (eiIterLabel, eiElseLabel, eiEndLabel) of
-    (Right iterLabel, Right elseLabel, Right endLabel) -> do
-      -- TODO: figure out how to handle the iterator's implicit looping index variable.
-      compileIterator iterLabel mbValIDs expr
-      emitOp CMP_BOOL_IMM
-      emitOp $ JUMP_FALSE elseLabel
-      -- TODO: pass the iterLabel and endLabel to the compileStmt so a 'break' or 'continue' can be associated to the
-      --  right position in the bytecode.
-      setIterationLabel (iterLabel, endLabel)
-      compileStmt thenStmt
-      emitOp $ JUMP_ABS iterLabel
-      resolveLabel elseLabel
-      compileStmt elseStmt
-      resolveLabel endLabel
-      clearIterationLabel
-    (a,b,c) -> pure . Left . fromJust $ concatErrors [ a, b, c ]
+  iterLabel <- C.newLabel
+  elseLabel <- C.newLabel
+  endLabel <- C.newLabel
+  -- TODO: figure out how to handle the iterator's implicit looping index variable.
+  compileIterator iterLabel mbValIDs expr
+  C.emitOp CMP_BOOL_IMM
+  C.emitOp $ JUMP_FALSE (LabelRef elseLabel)
+  C.pushIterLabels (iterLabel, endLabel)
+  compileStmt thenStmt
+  C.emitOp $ JUMP_ABS (LabelRef iterLabel)
+  C.setLabelPos elseLabel
+  compileStmt elseStmt
+  C.setLabelPos endLabel
+  C.popIterLabels
 
 
 compileStmt (WithST expr thenStmt elseStmt) = do
-  -- TODO: extract type expected from the expr and use it to specialise the context variable type.
-  withCtxtID <- registerWithContext (SimpleTypeVT $ StructST "Anything")
-  eiElseLabel <- newLabel
-  eiEndLabel <- newLabel
-  case (eiElseLabel, eiEndLabel) of
-    (Right elseLabel, Right endLabel) -> do
-      compileExpression expr
-      emitOp DUP_1
-      emitOp CMP_BOOL_IMM
-      emitOp $ JUMP_FALSE elseLabel
-      emitOp $ SET_VAR withCtxtID
-      compileStmt thenStmt
-      emitOp $ JUMP_ABS endLabel
-      emitOp $ SET_VAR withCtxtID
-      resolveLabel elseLabel
-      compileStmt elseStmt
-      resolveLabel endLabel
-    (a, b) -> pure . Left . fromJust $ concatErrors [a, b]
+  -- TODO: extract type expected from the expr and use it to specialise the context variable type:
+  withCtxtID <- registerWithContext (StructVT [])
+  elseLabel <- C.newLabel
+  endLabel <- C.newLabel
+  compileExpression expr
+  C.emitOp DUP_1
+  C.emitOp CMP_BOOL_IMM
+  C.emitOp $ JUMP_FALSE (LabelRef elseLabel)
+  C.emitOp $ SET_VAR withCtxtID
+  compileStmt thenStmt
+  C.emitOp $ JUMP_ABS (LabelRef endLabel)
+  C.emitOp $ SET_VAR withCtxtID
+  C.setLabelPos elseLabel
+  compileStmt elseStmt
+  C.setLabelPos endLabel
+  where
+  -- TODO: implement; it returns the index of a new local variable that will hold the localContext within the
+  -- with-block. These can work as a stack.
+  registerWithContext :: CompType -> State FullCompContext Int32
+  registerWithContext varType = pure 1
 
 
 compileStmt (ReturnST expr) = do
   compileExpression expr
   -- TODO: put the right number of values to return.
-  emitOp $ RETURN 0
+  C.emitOp $ RETURN 0
 
 
 compileStmt ContinueST = do
-  mbIterLabels <- getIterationLabel
+  mbIterLabels <- C.getIterationLabel
   case mbIterLabels of
-    Just (iterLabel, endLabel) -> emitOp $ JUMP_ABS iterLabel
+    Just (iterLabel, endLabel) -> C.emitOp $ JUMP_ABS (LabelRef iterLabel)
     Nothing -> pure . Left $ CompError [(0, "No active loop to continue.")]
 
 
 compileStmt BreakST = do
-  mbIterLabels <- getIterationLabel
+  mbIterLabels <- C.getIterationLabel
   case mbIterLabels of
-    Just (iterLabel, endLabel) -> emitOp $ JUMP_ABS endLabel
+    Just (iterLabel, endLabel) -> C.emitOp $ JUMP_ABS (LabelRef endLabel)
 
 
 compileStmt (ExpressionST expr) = do
   ctx <- get
   compileExpression expr
-  emitOp FORCE_TO_STRING
-  emitOp $ REDUCE ctx.spitFctID 1
+  C.emitOp FORCE_TO_STRING
+  C.emitOp $ REDUCE ctx.spitFctID 1
 
 
 compileStmt (DefineST label body) = do
-  startFunctionComp label
+  C.pushFunctionComp label
   compileStmt body
   -- TODO: check if the define block returns a value.
   -- TODO: put the right number of values to return.
-  emitOp $ RETURN 0
-  endFunctionComp
-  mdFctID <- getFunctionID label
-  case mdFctID of
-    Just fctID ->
-      emitOp $ REDUCE fctID 0
-    Nothing -> pure . Left $ CompError [(0, "@[DefineST] function not found: " <> show label)]
+  C.emitOp $ RETURN 0
+  C.popFunctionComp
 
 
 compileStmt (BlockST label contextExpr stmt) = do
-  -- TODO: figure out if this makes sense.
-  startFunctionComp label
+  C.pushFunctionComp label
   blockID <- registerBlock label
-  localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
+  -- TODO: figure out how to implement the local context variable.
+  localCtx <- registerVariable (Variable LocalK "$blockCtx") (StructVT [])
   compileExpression contextExpr
-  emitOp $ SET_VAR localCtx
-  emitOp $ REDUCE blockID 1
-  setFunctionContext blockID
+  C.emitOp $ SET_VAR localCtx
+  C.emitOp $ REDUCE blockID 1
+  C.setFunctionContext blockID
   compileStmt stmt
   -- TODO: put the right number of values to return.
-  emitOp $ RETURN 0
-  endFunctionComp
+  C.emitOp $ RETURN 0
+  C.popFunctionComp
 
 compileStmt (IncludeST label expr) = do
   templateID <- getInternalTemplate label
   compileExpression expr
-  emitOp $ REDUCE templateID 1
+  C.emitOp $ REDUCE templateID 1
 
 
 compileStmt (PartialST label expr) = do
   templateID <- getExternalTemplate label
   compileExpression expr
-  emitOp $ REDUCE templateID 1
+  C.emitOp $ REDUCE templateID 1
 
 
 compileStmt (ListST stmts) = do
   rezA <- mapM compileStmt stmts
-  case concatErrors rezA of
+  case C.concatErrors rezA of
     Nothing -> pure $ Right ()
     Just err -> pure $ Left err
 
@@ -449,103 +234,123 @@ compileStmt NoOpST = pure $ Right ()
 
 compileIterator :: Int32 -> Maybe (Int32, Maybe Int32) -> Expression -> CompileResult
 compileIterator iterLabel Nothing expr = do
-  resolveLabel iterLabel
   compileExpression expr
+  -- TODO: implement the iterator over the initial expression.
+  C.setLabelPos iterLabel
 
-compileIterator iterLabel (Just (varID, Nothing)) expr = do
-  resolveLabel iterLabel
+compileIterator iterLabel (Just (idxVarID, Nothing)) expr = do
   compileExpression expr
-  emitOp DUP_1
-  emitOp $ SET_VAR varID
+  C.setLabelPos iterLabel
+  -- TODO: implement the iterator over the initial expression.
+  C.emitOp IINC_1
+  C.emitOp $ SET_VAR idxVarID
+  C.emitOp $ SET_VAR idxVarID
 
-compileIterator iterLabel (Just (varID, Just idxVarID)) expr = do
-  emitOp $ SET_VAR_IM1 idxVarID
-  resolveLabel iterLabel
+compileIterator iterLabel (Just (idxVarID, Just varID)) expr = do
+  C.emitOp $ SET_VAR_IM1 idxVarID
   compileExpression expr
-  emitOp DUP_1
-  emitOp $ SET_VAR varID
-  emitOp $ GET_VAR idxVarID
-  emitOp IINC_1
-  emitOp $ SET_VAR idxVarID
+  C.setLabelPos iterLabel
+  -- TODO: implement the iterator over the initial expression.
+  C.emitOp $ SET_VAR varID
+  C.emitOp $ GET_VAR idxVarID
+  C.emitOp IINC_1
+  C.emitOp $ SET_VAR idxVarID
 
 
 compileExpression :: Expression -> CompileResult
 compileExpression (ExprLiteral lit) = case lit of
     LitString s -> do
-      cteID <- addStringConstant s
-      emitOp $ PUSH_CONST cteID
-    LitNumber n -> emitOp $ PUSH_DOUBLE_IMM n
-    LitBool b -> emitOp $ PUSH_BOOL_IMM b
+      cteID <- C.addStringConstant s
+      C.emitOp $ PUSH_CONST cteID
+    LitNumber n -> C.emitOp $ PUSH_DOUBLE_IMM n
+    LitBool b -> C.emitOp $ PUSH_BOOL_IMM b
 
 
 compileExpression (ExprVariable var@(Variable kind label)) = do
   -- TODO: extract type expected from the variable.
   case kind of
     LocalK -> do
-      varID <- registerVariable var (SimpleTypeVT IntST)
-      emitOp $ GET_VAR varID
+      varID <- registerVariable var (SimpleVT IntST)
+      C.emitOp $ GET_VAR varID
     MethodK -> do
-      localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
-      emitOp $ GET_VAR localCtx
-      lID <- addStringConstant label
-      emitOp $ PUSH_CONST lID
-      emitOp GET_FIELD
+      C.emitOp $ GET_VAR 0
+      lID <- C.addStringConstant label
+      C.emitOp $ PUSH_CONST lID
+      C.emitOp GET_FIELD
     LocalMethodK -> do
       -- TODO: understand the difference between MethodK and LocalMethodK.
-      localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
-      emitOp $ GET_VAR localCtx
-      lID <- addStringConstant label
-      emitOp $ PUSH_CONST lID
-      emitOp GET_FIELD
+      mbGetLocalCtxID <- C.getImportedFunction "hugo.getLocalContext" []
+      case mbGetLocalCtxID of
+        Nothing -> pure . Left $ CompError [(0, "Function not found: " <> "hugo.getLocalContext")]
+        Just someFcts -> do
+          -- TODO: figure out what to do when the function is overloaded.
+          let
+            (fctDef, fctID) = head someFcts
+          C.emitOp $ REDUCE fctID 0
+          lID <- C.addStringConstant label
+          C.emitOp $ PUSH_CONST lID
+          C.emitOp GET_FIELD
 
 
-
+-- TODO: assess that the current context is always at the start of the heap.
 compileExpression ExprCurrentContext = do
-  localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
-  emitOp $ GET_VAR localCtx
+  C.emitOp $ GET_VAR 0
 
 
 compileExpression ExprParentContext = do
-  localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
-  emitOp $ GET_VAR localCtx
-  parentLabelID <- addStringConstant "$parentCtx"
-  emitOp $ PUSH_CONST parentLabelID
-  emitOp GET_FIELD 
+  contLabel <- C.newLabel
+  lID <- C.addStringConstant "$parentCtx"
+  C.emitOp $ GET_VAR 0
+  C.emitOp $ PUSH_CONST lID
+  C.emitOp GET_FIELD
+  C.emitOp $ JUMP_FALSE (LabelRef contLabel)
+  C.emitOp $ THROW_ERR 1
+  C.setLabelPos contLabel
 
 
 compileExpression (ExprMethodAccess fields values) = do
-  localCtx <- registerVariable (Variable LocalK "$localCtx") (SimpleTypeVT $ StructST "ExecContext")
-  emitOp $ GET_VAR localCtx
+  C.emitOp $ GET_VAR 0
   -- TODO: implement properly.
   mapM_ (\(Variable varKind varName) -> do
-      lID <- addStringConstant varName
-      emitOp $ PUSH_CONST lID
-      emitOp GET_FIELD
+      lID <- C.addStringConstant varName
+      C.emitOp $ PUSH_CONST lID
+      C.emitOp GET_FIELD
     ) fields
   mapM_ compileExpression values
-  emitOp $ CALL_METHOD (fromIntegral $ length fields)
+  C.emitOp $ CALL_METHOD (fromIntegral $ length values)
 
 
 compileExpression (ExprFunctionCall funcName args) = do
-  mbFunctionID <- getFunctionID funcName
-  case mbFunctionID of
-    Just functionID -> do
-      mapM_ compileExpression args
-      emitOp $ REDUCE functionID (fromIntegral $ length args)
-    Nothing -> pure $ Left $ CompError [(0, "Function not found: " <> show funcName)]
+  functionID <- C.getFunctionSlot funcName
+  rezA <- mapM compileExpression args
+  case splitResults rezA of
+    (Just err, _) -> pure $ Left err
+    (Nothing, argsIDs) ->
+      C.emitOp $ REDUCE functionID (fromIntegral $ length args)
 
 
 compileExpression (ExprPipeline expr functions) = do
   compileExpression expr
   rezB <- mapM (\(FunctionApplication funcName args) -> do
-      mbFunctionID <- getFunctionID funcName
-      case mbFunctionID of
-        Nothing -> pure $ Left $ CompError [(0, "Function not found: " <> show funcName)]
-        Just functionID -> do
-          -- TODO: check for errors in rezA.
-          rezA <- mapM_ compileExpression args
-          emitOp $ REDUCE functionID (1 + fromIntegral (length args))
+      functionID <- C.getFunctionSlot funcName
+      -- TODO: check for errors in rezA.
+      rezA <- mapM compileExpression args
+      case splitResults rezA of
+        (Just err, _) -> pure $ Left err
+        (Nothing, argsIDs) ->
+          C.emitOp $ REDUCE functionID (1 + fromIntegral (length args))
     ) functions
-  -- TODO: check for errors in rezB.
-  pure $ Right ()
+  case splitResults rezB of
+    (Just err, _) -> pure $ Left err
+    (Nothing, _) -> pure $ Right ()
 
+
+splitResults :: [Either CompError a] -> (Maybe CompError, [a])
+splitResults results =
+  let
+    (lefts, rights) = foldl (\(accE, accA) rez -> case rez of
+        Left err -> (Left err : accE, accA)
+        Right valA -> (accE, valA : accA)
+      ) ([], []) results
+  in
+  (C.concatErrors lefts, rights)

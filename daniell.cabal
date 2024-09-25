@@ -60,6 +60,9 @@ library
       ProjectDefinition.Paraml
       ProjectDefinition.Scaffolding
       ProjectDefinition.Types
+      RunTime.Compiler.Assembler
+      RunTime.Compiler.Common
+      RunTime.Compiler.Types
       RunTime.Interpreter
       RunTime.Interpreter.Context
       RunTime.Interpreter.Engine
@@ -72,6 +75,7 @@ library
       Template.Fuddle.Parser
       Template.Golang.Ast
       Template.Golang.Compiler
+      Template.Golang.Defines
       Template.Golang.Parser
       Template.Haskell
       Template.Jinja2
@@ -128,7 +132,7 @@ library
     , split
     , text
     , time
-    , tomland >=1.3.3.2
+    , tomland
     , tree-sitter
     , tree-sitter-haskell
     , unix
@@ -193,7 +197,7 @@ executable daniell
     , split
     , text
     , time
-    , tomland >=1.3.3.2
+    , tomland
     , tree-sitter
     , tree-sitter-haskell
     , unix

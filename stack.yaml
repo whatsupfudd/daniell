@@ -14,15 +14,22 @@ packages:
 #
 #
 extra-deps:
-  - ../LocalPkgs/tomland-1.3.3.2
-  # For tomland:
-  - validation-selective-0.1.0.2@sha256:c878846bfffeba69efa3b4866025f249656e0e0a129fed6d446eb602382d328b,3856
-  - servant-errors-0.1.7.0@sha256:a36a8bf86a7bd96201308dfaf5f16b07b6743defe41a8ceaf9845ad467cd163c,2627
-  - servant-auth-server-0.4.8.0@sha256:b9137bebf5ca56e4fd20402680e71f5734a6f511f0464e8eff6577aa9947ce35,5521
-  # - ../LocalPkgs/ginger-0.10.4.1
-  # - ../LocalPkgs/cannelle
+  - tomland-1.3.3.3@sha256:877635f30fc7eeebc7b79283baeec1b7904365973cc3fd98c86f9d147eeef575,9147
+
+  # For servant:
+  - servant-auth-server-0.4.9.0@sha256:dff8a46a1491b9102323094b3a715ceaaa0b2d450cb81e2e0784bd5c19a7199f,5397
+  - validation-selective-0.2.0.0@sha256:cc847f1a110e3b1bd437a5356f115881b61cafcb11781b570b180efd88bf0907,3917
+  - servant-0.20.2@sha256:a4613dc1caa40d1b8db7aff00417dc2d651a8d73a90add3d934218b1778df35c,5371
+  - servant-auth-0.4.2.0@sha256:5fa6b8c2b40deb542d9b2fc2d18ce0c90f7e4a26268f018dd933c8881c23db5f,2211
+  - servant-server-0.20.2@sha256:5a2d11959256fed8f4918f02f55cb597b61cc92191a672cd2d2228fadd5ee0ec,6226
+
+
   - github: whatsupfudd/cannelle
-    commit: 7cd3c2d2e61d254626d500575cdab3cb6590439e
+    commit: db07d9817c899097315f7461f89bad4ef8bf5fe3
+  # - github: whatsupfudd/haskell-tree-sitter
+  #     commit: 84444c6d9b44b0efd5589398e5675c77c9e466f7
+  #   - github: whatsupfudd/tree-sitter-haskell
+  #     commit: be090f983cd1b311cbd5483570eef07038fc9cd9
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter-haskell
 
@@ -36,6 +43,9 @@ extra-deps:
 # Control whether we use the GHC we find on the path
 system-ghc: true
 allow-newer: true
+allow-newer-deps:
+  - servant-docs 
+  - servant-foreign
 #
 # Extra directories used by stack for building
 # extra-include-dirs: [/path/to/dir]
