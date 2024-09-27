@@ -32,6 +32,7 @@ extra-deps:
   #     commit: be090f983cd1b311cbd5483570eef07038fc9cd9
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter
   - ../LocalPkgs/haskell-tree-sitter/tree-sitter-haskell
+  - ../LocalPkgs/haskell-tree-sitter/tree-sitter-php
 
 
 # Override default flag values for local packages and extra-deps

@@ -6,6 +6,7 @@ import Control.Monad (foldM)
 import qualified Data.ByteString as Bs
 import Data.Either (isRight)
 import Data.Int (Int32)
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List as L
 import qualified Data.Map as Mp
 import Data.Maybe (maybe, fromJust)
@@ -140,7 +141,7 @@ compileStmt (RangeST mbVars expr thenStmt elseStmt) = do
 
 compileStmt (WithST expr thenStmt elseStmt) = do
   -- TODO: extract type expected from the expr and use it to specialise the context variable type:
-  withCtxtID <- registerWithContext (StructVT [])
+  withCtxtID <- registerWithContext (StructVT (C.AnonymousSF UnknownVT :| []))
   elseLabel <- C.newLabel
   endLabel <- C.newLabel
   compileExpression expr
@@ -200,7 +201,7 @@ compileStmt (BlockST label contextExpr stmt) = do
   C.pushFunctionComp label
   blockID <- registerBlock label
   -- TODO: figure out how to implement the local context variable.
-  localCtx <- registerVariable (Variable LocalK "$blockCtx") (StructVT [])
+  localCtx <- registerVariable (Variable LocalK "$blockCtx") (StructVT (C.AnonymousSF UnknownVT :| []))
   compileExpression contextExpr
   C.emitOp $ SET_VAR localCtx
   C.emitOp $ REDUCE blockID 1

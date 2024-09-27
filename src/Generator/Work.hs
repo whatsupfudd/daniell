@@ -2,6 +2,9 @@
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Generator.Work where
 
+-- TODO: change the module's name and a few details to set this as the Haskell scaffold specialized logic, as there is the Hugo and NextJS logic.
+
+
 import Control.Monad (foldM, forM, forM_)
 
 import qualified Data.ByteString as BS

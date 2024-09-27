@@ -11,13 +11,13 @@ import qualified Data.Vector as V
 
 
 import Conclusion (GenError (..))
-import RunTime.Interpreter.Context (ConstantValue (..), FunctionDef (..), FunctionCode (..), HeapEntry (..), SecondOrderType)
+import RunTime.Interpreter.Context (ConstantValue (..))
 import RunTime.Interpreter.OpCodes (OpCode (..), opParCount, toInstr)
 
 type MainText = Bs.ByteString
 
 data (Show subCtxt) => CompContext subCtxt = CompContext {
-    constants :: Mp.Map MainText (ConstantValue, Int32)
+    constants :: Mp.Map MainText (CompConstant, Int32)
     -- functions: fully parsed functions.
     , functions :: Mp.Map MainText (CompFunction, Int32)
     , hasFailed :: Maybe GenError
@@ -29,12 +29,18 @@ data (Show subCtxt) => CompContext subCtxt = CompContext {
     , moduleMap :: Mp.Map Int32 (MainText, Maybe Int32)
     , revModuleMap :: Mp.Map MainText [(Int32, Maybe Int32)]
     , importedFcts :: Mp.Map MainText [ (FunctionDefComp, Int32) ]
+    , functionAlias :: Mp.Map MainText Int32
+    , appliedFcts :: Mp.Map MainText AppliedFunction
   }
 
+data AppliedFunction = AppliedFunction {
+    label :: NonEmpty MainText
+    , uid :: Int32
+  }
 
 -- TODO: move to the RunTime module:
 data FunctionRef =
-  ExternalFR MainText SecondOrderType
+  ExternalFR MainText Int32
   | InternalFR Int32
   | UnresolvedFR
   deriving Show
@@ -56,7 +62,7 @@ instance (Show subCtxt) => Show (CompContext subCtxt) where
 data CompFunction = CompFunction {
     name :: MainText
     , args :: [ (MainText, CompType) ]
-    , heapDef :: Mp.Map MainText (Int32, SecondOrderType)
+    , heapDef :: Mp.Map MainText (Int32, CompType)
     , varAssignments :: Mp.Map MainText Int32
     , opcodes :: V.Vector OpCode
     , returnType :: CompType
@@ -108,8 +114,8 @@ newtype CompError = CompError [(Int32, String)]
 -- Compilation-time types:
 data CompType =
   SimpleVT SimpleType
-  | MonadicVT [ CompType ]    -- Containers: array, map, slice.
-  | StructVT [ StructField ]
+  | MonadicVT ( NonEmpty CompType )    -- Containers: array, map, slice.
+  | StructVT (NonEmpty StructField)
   | LambdaVT CompType [ (MainText, CompType) ]
   -- Undecided yet during compilation:
   | UnknownVT
@@ -134,6 +140,14 @@ data StructField =
   | NamedSF MainText CompType
   deriving Show
 
+-- **** Compilation-time constants **** --
+data CompConstant =
+  IntC Int32
+  | FloatC Double
+  | BoolC Bool
+  | StringC MainText
+  | VerbatimC MainText
+  deriving Show
 
 -- **** Imported module/function definitions **** --
 data FunctionDefComp = FunDef {

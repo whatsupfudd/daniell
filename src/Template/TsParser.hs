@@ -69,11 +69,10 @@ tsParseFile parser path = do
           eicompiRez <- compileParseBlocks path tmplString tsTree
           case eicompiRez of
             Left err -> do
-              putStrLn "@[tsParseHaskell] compileParseBlocks err: "
+              putStrLn "@[tsParseFile] compileParseBlocks err: "
               print err
               pure $ Left err
             Right vmModule -> do
-              -- putStrLn $ "@[tsParseHaskell] vmCode: " ++ show vmModule
               {- serialize that info to the cache file for the template (same path minus name ext + .dtch) -}
               pure . Right $ FileTempl path Nothing Mp.empty [ Exec vmModule ] []
       else
@@ -303,7 +302,7 @@ analyzChild children pos = do
 
   case blockName of
     "dantempl" -> pure $ (childrenBlocks <> [Logic (pA, pB)], True)
-    _ -> pure $ (childrenBlocks <> [ Verbatim (pA, pB) ], childrenLogicF)
+    _ -> pure (childrenBlocks <> [ Verbatim (pA, pB) ], childrenLogicF)
 
 
 printChildren :: Ptr Node -> Int -> Int -> IO ()

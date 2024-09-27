@@ -80,6 +80,7 @@ library
       Template.Haskell
       Template.Jinja2
       Template.Parser
+      Template.PHP
       Template.TsParser
       Template.Types
       Utils
@@ -135,6 +136,7 @@ library
     , tomland
     , tree-sitter
     , tree-sitter-haskell
+    , tree-sitter-php
     , unix
     , unordered-containers
     , utf8-string
@@ -200,6 +202,7 @@ executable daniell
     , tomland
     , tree-sitter
     , tree-sitter-haskell
+    , tree-sitter-php
     , unix
     , unordered-containers
     , utf8-string

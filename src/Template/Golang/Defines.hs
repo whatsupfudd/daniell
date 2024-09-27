@@ -86,48 +86,48 @@ impFunctions =
     hugoFcts = [
       -- cast:
       -- ToFloat, ToInt, ToString.
-        FunDef 1 "ToFloat" (MonoDef (SgnS (Just (("input", DynamicVT) :| [])) [] Nothing (MonadicVT [DynamicVT])))
+        FunDef 1 "ToFloat" (MonoDef (SgnS (Just (("input", DynamicVT) :| [])) [] Nothing (MonadicVT (DynamicVT :| []))))
       , FunDef 1 "ToInt" (MonoDef (SgnS (Just (("input", DynamicVT) :| [])) [] Nothing (SimpleVT IntST)))
       , FunDef 1 "ToString" (MonoDef (SgnS (Just (("input", DynamicVT) :| [])) [] Nothing (SimpleVT StringST)))
       -- collections:
       -- After, Append, Apply, Complement, Delimit, Dictionnary, First, Group, In, Index, Intersect, IsSet, KeyVals, Last, Merge, NewScratch, Querify, Reverse, Seq, Shuffle, Slice, Sort, SymDiff, Union, Uniq, Where.
-      , FunDef 2 "After" (MonoDef (SgnS (Just (("index", SimpleVT IntST) :| [("collection", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT])))
+      , FunDef 2 "After" (MonoDef (SgnS (Just (("index", SimpleVT IntST) :| [("collection", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| []))))
       , FunDef 2 "Append" (PolyDef [
-            SgnS (Just (("element", DynamicVT) :| [("arrayElement", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT])
-          , SgnS (Just (("collection1", MonadicVT [DynamicVT]) :| [("collection2", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT])
+            SgnS (Just (("element", DynamicVT) :| [("arrayElement", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| []))
+          , SgnS (Just (("collection1", MonadicVT (DynamicVT :| [])) :| [("collection2", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| []))
         ])
-      , FunDef 2 "Apply" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("function", SimpleVT StringST)])) [] (Just ("args", DynamicVT)) (MonadicVT [DynamicVT])))
-      , FunDef 2 "Complement" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [])) [] (Just ("others", MonadicVT [DynamicVT])) (MonadicVT [DynamicVT])))
-      , FunDef 2 "Delimit" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("delimiter", SimpleVT StringST)])) [("last", SimpleVT StringST)] Nothing (SimpleVT StringST)))
-      , FunDef 2 "Dictionnary" (MonoDef (SgnS (Just (("value", MonadicVT [DynamicVT]) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- returns mapany; alias dict.
-      , FunDef 2 "First" (MonoDef (SgnS (Just (("n", SimpleVT IntST) :| [("collection", MonadicVT [DynamicVT])])) [] Nothing DynamicVT))
-      , FunDef 2 "Group" (MonoDef (SgnS (Just (("key", SimpleVT StringST) :| [("collection", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT]))) -- collection: PAGES; returns any (in collection?); alias group.
+      , FunDef 2 "Apply" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("function", SimpleVT StringST)])) [] (Just ("args", DynamicVT)) (MonadicVT (DynamicVT :| []))))
+      , FunDef 2 "Complement" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [])) [] (Just ("others", MonadicVT (DynamicVT :| []))) (MonadicVT (DynamicVT :| []))))
+      , FunDef 2 "Delimit" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("delimiter", SimpleVT StringST)])) [("last", SimpleVT StringST)] Nothing (SimpleVT StringST)))
+      , FunDef 2 "Dictionnary" (MonoDef (SgnS (Just (("value", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns mapany; alias dict.
+      , FunDef 2 "First" (MonoDef (SgnS (Just (("n", SimpleVT IntST) :| [("collection", MonadicVT (DynamicVT :| []))])) [] Nothing DynamicVT))
+      , FunDef 2 "Group" (MonoDef (SgnS (Just (("key", SimpleVT StringST) :| [("collection", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- collection: PAGES; returns any (in collection?); alias group.
       , FunDef 2 "In" (MonoDef (SgnS (Just (("set", DynamicVT) :| [("value", DynamicVT)])) [] Nothing (SimpleVT BoolST))) -- alias in.
-      , FunDef 2 "Index" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("key", DynamicVT)])) [] Nothing DynamicVT))  -- returns any; alias index.
-      , FunDef 2 "Intersect" (MonoDef (SgnS (Just (("set1", MonadicVT [DynamicVT]) :| [("set2", MonadicVT [DynamicVT])])) [] Nothing DynamicVT)) -- returns any (collection?); alias intersect.
-      , FunDef 2 "IsSet" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("key", DynamicVT)])) [] Nothing (SimpleVT BoolST)))  -- alias isSet.
-      , FunDef 2 "KeyVals" (MonoDef (SgnS (Just (("key", DynamicVT) :| [])) [] (Just ("value", DynamicVT)) (MonadicVT [DynamicVT])))  -- returns types.KeyValues; alias keyVals.
-      , FunDef 2 "Last" (MonoDef (SgnS (Just (("key", SimpleVT IntST) :| [("collection", MonadicVT [DynamicVT])])) [] Nothing (DynamicVT))) -- returns any; alias last.
-      , FunDef 2 "Merge" (MonoDef (SgnS (Just (("map1", MonadicVT [DynamicVT]) :| [])) [] (Just ("map2", MonadicVT [DynamicVT])) (MonadicVT [DynamicVT]))) -- returns any; alias merge.
-      , FunDef 2 "NewScratch" (MonoDef (SgnS Nothing [] Nothing (MonadicVT [DynamicVT]))) -- returns maps.Scratch; alias newScratch.
+      , FunDef 2 "Index" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("key", DynamicVT)])) [] Nothing DynamicVT))  -- returns any; alias index.
+      , FunDef 2 "Intersect" (MonoDef (SgnS (Just (("set1", MonadicVT (DynamicVT :| [])) :| [("set2", MonadicVT (DynamicVT :| []))])) [] Nothing DynamicVT)) -- returns any (collection?); alias intersect.
+      , FunDef 2 "IsSet" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("key", DynamicVT)])) [] Nothing (SimpleVT BoolST)))  -- alias isSet.
+      , FunDef 2 "KeyVals" (MonoDef (SgnS (Just (("key", DynamicVT) :| [])) [] (Just ("value", DynamicVT)) (MonadicVT (DynamicVT :| []))))  -- returns types.KeyValues; alias keyVals.
+      , FunDef 2 "Last" (MonoDef (SgnS (Just (("key", SimpleVT IntST) :| [("collection", MonadicVT (DynamicVT :| []))])) [] Nothing (DynamicVT))) -- returns any; alias last.
+      , FunDef 2 "Merge" (MonoDef (SgnS (Just (("map1", MonadicVT (DynamicVT :| [])) :| [])) [] (Just ("map2", MonadicVT (DynamicVT :| []))) (MonadicVT (DynamicVT :| [])))) -- returns any; alias merge.
+      , FunDef 2 "NewScratch" (MonoDef (SgnS Nothing [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns maps.Scratch; alias newScratch.
       , FunDef 2 "Querify" (MonoDef (SgnS Nothing [] (Just ("value", DynamicVT)) (SimpleVT StringST))) -- alias querify.
-      , FunDef 2 "Reverse" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any.
+      , FunDef 2 "Reverse" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any.
       , FunDef 2 "Seq" (PolyDef [
-            SgnS (Just (("last", SimpleVT IntST) :| [])) [] Nothing (MonadicVT [SimpleVT IntST])
-            , SgnS (Just (("first", SimpleVT IntST) :| [("last", SimpleVT IntST)])) [] Nothing (MonadicVT [SimpleVT IntST])
-            , SgnS (Just (("first", SimpleVT IntST) :| [("increment", SimpleVT IntST), ("last", SimpleVT IntST)])) [] Nothing (MonadicVT [SimpleVT IntST])
+            SgnS (Just (("last", SimpleVT IntST) :| [])) [] Nothing (MonadicVT (SimpleVT IntST :| []))
+            , SgnS (Just (("first", SimpleVT IntST) :| [("last", SimpleVT IntST)])) [] Nothing (MonadicVT (SimpleVT IntST :| []))
+            , SgnS (Just (("first", SimpleVT IntST) :| [("increment", SimpleVT IntST), ("last", SimpleVT IntST)])) [] Nothing (MonadicVT (SimpleVT IntST :| []))
           ])  -- returns []int; alias seq.
       -- TODO: Continue the proper typing (currently fake signature defined by AI auto-completer).
-      , FunDef 2 "Shuffle" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any;alias shuffle.
-      , FunDef 2 "Slice" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("start", SimpleVT IntST), ("end", SimpleVT IntST)])) [] Nothing (MonadicVT [DynamicVT]))) -- -- returns any; alias slice.
-      , FunDef 2 "Sort" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("key", SimpleVT StringST), ("order", SimpleVT StringST)])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any; alias sort.
-      , FunDef 2 "SymDiff" (MonoDef (SgnS (Just (("collection1", MonadicVT [DynamicVT]) :| [("collection2", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any; alias symdiff.
-      , FunDef 2 "Union" (MonoDef (SgnS (Just (("set1", MonadicVT [DynamicVT]) :| [("set2", MonadicVT [DynamicVT])])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any; alias union.
-      , FunDef 2 "Uniq" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- returns any; alias uniq.
-      , FunDef 2 "Where" (MonoDef (SgnS (Just (("collection", MonadicVT [DynamicVT]) :| [("key", DynamicVT), ("value", DynamicVT)])) [("operator", SimpleVT StringST)] Nothing (MonadicVT [DynamicVT]))) -- opt operator is in between key / value; returns any; alias where.
+      , FunDef 2 "Shuffle" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any;alias shuffle.
+      , FunDef 2 "Slice" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("start", SimpleVT IntST), ("end", SimpleVT IntST)])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- -- returns any; alias slice.
+      , FunDef 2 "Sort" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("key", SimpleVT StringST), ("order", SimpleVT StringST)])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any; alias sort.
+      , FunDef 2 "SymDiff" (MonoDef (SgnS (Just (("collection1", MonadicVT (DynamicVT :| [])) :| [("collection2", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any; alias symdiff.
+      , FunDef 2 "Union" (MonoDef (SgnS (Just (("set1", MonadicVT (DynamicVT :| [])) :| [("set2", MonadicVT (DynamicVT :| []))])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any; alias union.
+      , FunDef 2 "Uniq" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- returns any; alias uniq.
+      , FunDef 2 "Where" (MonoDef (SgnS (Just (("collection", MonadicVT (DynamicVT :| [])) :| [("key", DynamicVT), ("value", DynamicVT)])) [("operator", SimpleVT StringST)] Nothing (MonadicVT (DynamicVT :| [])))) -- opt operator is in between key / value; returns any; alias where.
       -- compare:
       -- Conditional, Default, Eq, Ge, Gt, Le, Lt, Ne.
-      , FunDef 3 "Conditional" (MonoDef (SgnS (Just (("condition", SimpleVT BoolST) :| [("value1", DynamicVT), ("value2", DynamicVT)])) [] Nothing (MonadicVT [DynamicVT]))) -- alias cond.
+      , FunDef 3 "Conditional" (MonoDef (SgnS (Just (("condition", SimpleVT BoolST) :| [("value1", DynamicVT), ("value2", DynamicVT)])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- alias cond.
       , FunDef 3 "Default" (MonoDef (SgnS (Just (("value", DynamicVT) :| [("default", DynamicVT)])) [] Nothing DynamicVT)) -- alias default.
       , FunDef 3 "Eq" (MonoDef (SgnS (Just (("value1", DynamicVT) :| [("value2", DynamicVT)])) [] Nothing (SimpleVT BoolST))) -- alias eq.
       , FunDef 3 "Ge" (MonoDef (SgnS (Just (("value1", DynamicVT) :| [("value2", DynamicVT)])) [] Nothing (SimpleVT BoolST))) -- alias ge.
@@ -149,8 +149,8 @@ impFunctions =
       , FunDef 5 "TailwindCSS" (MonoDef (SgnS (Just (("input", SimpleVT StringST) :| [("options", SimpleVT StringST)])) [] Nothing (SimpleVT StringST))) -- alias tailwindcss.
       -- data:
       -- GetCSV, GetJSON.
-      , FunDef 6 "GetCSV" (MonoDef (SgnS (Just (("path", SimpleVT StringST) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- alias getcsv.
-      , FunDef 6 "GetJSON" (MonoDef (SgnS (Just (("path", SimpleVT StringST) :| [])) [] Nothing (MonadicVT [DynamicVT]))) -- alias getjson.
+      , FunDef 6 "GetCSV" (MonoDef (SgnS (Just (("path", SimpleVT StringST) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- alias getcsv.
+      , FunDef 6 "GetJSON" (MonoDef (SgnS (Just (("path", SimpleVT StringST) :| [])) [] Nothing (MonadicVT (DynamicVT :| [])))) -- alias getjson.
       -- debug:
       -- Dump, Timer.
       , FunDef 7 "Dump" (MonoDef (SgnS (Just (("value", DynamicVT) :| [])) [] Nothing DynamicVT)) -- alias dump.
@@ -167,22 +167,22 @@ impFunctions =
       -- Errorf, Erroridf, Print, Printf, Println, Warnf, Warnidf.
       , FunDef 10 "Errorf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("a", DynamicVT)])) [] Nothing (SimpleVT StringST))) -- alias errorf.
       , FunDef 10 "Erroridf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("a", DynamicVT)])) [] Nothing (SimpleVT StringST))) -- alias erroridf.
-      , FunDef 10 "Print" (MonoDef (SgnS (Just (("values", MonadicVT [DynamicVT]) :| [])) [] Nothing DynamicVT)) -- alias print.
-      , FunDef 10 "Printf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("values", MonadicVT [DynamicVT])])) [] Nothing (SimpleVT StringST))) -- alias printf.
-      , FunDef 10 "Println" (MonoDef (SgnS (Just (("values", MonadicVT [DynamicVT]) :| [])) [] Nothing (SimpleVT StringST))) -- alias println.
+      , FunDef 10 "Print" (MonoDef (SgnS (Just (("values", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing DynamicVT)) -- alias print.
+      , FunDef 10 "Printf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("values", MonadicVT (DynamicVT :| []))])) [] Nothing (SimpleVT StringST))) -- alias printf.
+      , FunDef 10 "Println" (MonoDef (SgnS (Just (("values", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (SimpleVT StringST))) -- alias println.
       , FunDef 10 "Warnf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("a", DynamicVT)])) [] Nothing (SimpleVT StringST))) -- alias warnf.
       , FunDef 10 "Warnidf" (MonoDef (SgnS (Just (("format", SimpleVT StringST) :| [("a", DynamicVT)])) [] Nothing (SimpleVT StringST))) -- alias warnidf.
       -- global:
       -- page, site.
-      , FunDef 11 "page" (MonoDef (SgnS Nothing [] Nothing (MonadicVT [DynamicVT]))) -- alias page.
-      , FunDef 11 "site" (MonoDef (SgnS Nothing [] Nothing (MonadicVT [DynamicVT]))) -- alias site.
+      , FunDef 11 "page" (MonoDef (SgnS Nothing [] Nothing (MonadicVT (DynamicVT :| [])))) -- alias page.
+      , FunDef 11 "site" (MonoDef (SgnS Nothing [] Nothing (MonadicVT (DynamicVT :| [])))) -- alias site.
       -- go template:
       -- and, len, not, or, urlquery.
       , FunDef 12 "and" (MonoDef (SgnS (Just (("value1", SimpleVT BoolST) :| [("value2", SimpleVT BoolST)])) [] Nothing (SimpleVT BoolST))) -- alias and.
       , FunDef 12 "len" (MonoDef (SgnS (Just (("value", DynamicVT) :| [])) [] Nothing (SimpleVT IntST))) -- alias len.
       , FunDef 12 "not" (MonoDef (SgnS (Just (("value", SimpleVT BoolST) :| [])) [] Nothing (SimpleVT BoolST))) -- alias not.
       , FunDef 12 "or" (MonoDef (SgnS (Just (("value1", SimpleVT BoolST) :| [("value2", SimpleVT BoolST)])) [] Nothing (SimpleVT BoolST))) -- alias or.
-      , FunDef 12 "urlquery" (MonoDef (SgnS (Just (("values", MonadicVT [DynamicVT]) :| [])) [] Nothing (SimpleVT StringST))) -- alias urlquery.
+      , FunDef 12 "urlquery" (MonoDef (SgnS (Just (("values", MonadicVT (DynamicVT :| [])) :| [])) [] Nothing (SimpleVT StringST))) -- alias urlquery.
       -- hash:
       -- FNV32a, XxHash.
       , FunDef 13 "FNV32a" (MonoDef (SgnS (Just (("input", SimpleVT StringST) :| [])) [] Nothing (SimpleVT IntST))) -- alias fnv32a.

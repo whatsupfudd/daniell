@@ -42,10 +42,11 @@ import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
 import qualified RunTime.Interpreter.Context as VM
 
-import RunTime.Compiler.Types (CompContext (..), CompFunction (..))
-import RunTime.Compiler.Assembler (assemble)
+import RunTime.Compiler.Types (CompContext (..), CompFunction (..), CompConstant (..))
+import RunTime.Compiler.Assembler (assemble, convertCompCteToTempl)
 import Template.Golang.Compiler (compileStatements, FullCompContext (..))
 import qualified RunTime.Interpreter.Engine as VM
+import RunTime.Interpreter.Context (ConstantValue)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -165,7 +166,7 @@ instance ExecSystem HgEngine HgContext HgWorkItem where
                                           Right compiled -> VM.ByteCode compiled
                                     }
                                   ) $ Mp.elems compiledCode.functions
-                              , constants = Vc.fromList . map fst $ Mp.elems compiledCode.constants
+                              , constants = Vc.fromList . map (convertCompCteToTempl . fst) $ Mp.elems compiledCode.constants
                               , externModules = Mp.empty
                             }
                           rezE <- VM.execModule vmModule

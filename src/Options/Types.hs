@@ -45,6 +45,7 @@ data SiteOptions =
   | NextSS
   | FuddleSS
   | GatsbySS
+  | PhpSS PhpBuildOptions
   deriving Show
 
 data WebAppOptions =
@@ -95,5 +96,10 @@ data HugoBuildOptions = HugoBuildOptions {
     , trace :: Maybe Text
     , verbose :: Maybe Bool
     , watch :: Maybe Bool
+  }
+  deriving Show
+
+newtype PhpBuildOptions = PhpBuildOptions {
+    srcDir :: Maybe Text
   }
   deriving Show

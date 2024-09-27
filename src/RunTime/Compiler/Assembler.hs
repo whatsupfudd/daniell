@@ -6,6 +6,7 @@ import qualified Data.Vector as V
 
 import RunTime.Interpreter.OpCodes
 import RunTime.Compiler.Types
+import RunTime.Interpreter.Context (ConstantValue (..))
 import Control.Monad (foldM)
 
 
@@ -72,3 +73,11 @@ derefLabels opCodes symbLabels =
         case eiNewPos of
           Left err -> Left err
           Right newPos -> Right ((label, newPos) : accum, V.drop sLength opCodes, newPos)
+
+
+convertCompCteToTempl :: CompConstant -> ConstantValue
+convertCompCteToTempl (IntC a) = IntCte (fromIntegral a)
+convertCompCteToTempl (FloatC a) = FloatCte (realToFrac a)
+convertCompCteToTempl (BoolC a) = IntCte (if a then 1 else 0)
+convertCompCteToTempl (StringC a) = StringCte a
+convertCompCteToTempl (VerbatimC a) = VerbatimCte False a

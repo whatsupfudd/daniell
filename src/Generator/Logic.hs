@@ -14,7 +14,7 @@ import qualified System.Directory as SE
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..))
+import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..), PhpBuildOptions (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
@@ -29,6 +29,7 @@ import ProjectDefinition.Scaffolding (createScaffolding)
 import ProjectDefinition.Gatsby (analyseGatsbyProject)
 import ProjectDefinition.Fuddle (analyseFuddleProject)
 import Template.Haskell (tsParseHaskell)
+import Template.PHP (tsParsePhp)
 import qualified Template.Parser as Tmpl
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
@@ -106,6 +107,11 @@ buildSite rtOpts siteOpts = do
       case eiSiteDef of
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
         Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
+    PhpSS phpOpts -> case phpOpts.srcDir of
+      Nothing -> pure . Left . SimpleMsg . pack $ "@[buildSite] no srcDir for Php project."
+      Just aText -> do
+        tsParsePhp $ unpack aText
+        pure . Left $ SimpleMsg "TEST DONE."
     _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
 
   case eiWorkPlan of

@@ -185,7 +185,12 @@ buildOpts = do
   -}
 
 siteOpts :: Parser SiteOptions
-siteOpts = subparser (command "hugo" (info (HugoSS <$> hugoOpts <**> helper) (progDesc "Build a Hugo project.")))
+siteOpts = 
+  subparser (
+      command "hugo" (info (HugoSS <$> hugoOpts <**> helper) (progDesc "Build a Hugo project."))
+    <> command "php" (info (PhpSS <$> phpOpts <**> helper) (progDesc "Build a PHP project."))
+  )
+
 
 hugoOpts :: Parser HugoBuildOptions
 hugoOpts =
@@ -230,6 +235,11 @@ hugoOpts =
   <*> optional (strOption (long "trace" <> help "(file) write trace to file (not useful in general)"))
   <*> optional (switch (long "verbose" <> short 'v' <> help "verbose output"))
   <*> optional (switch (long "watch" <> short 'w' <> help "watch filesystem for changes and recreate as needed"))
+
+
+phpOpts :: Parser PhpBuildOptions
+phpOpts =
+  PhpBuildOptions <$> optional (strOption (long "srcDir" <> help "(string) filesystem path to read files relative from"))
 
 
 paramParser :: ReadM ParameterTpl

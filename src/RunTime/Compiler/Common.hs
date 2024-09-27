@@ -32,6 +32,8 @@ initCompContext funcLabel subCtxt = CompContext {
   , moduleMap = impModules
   , revModuleMap = impRevModules
   , importedFcts = impFunctions
+  , functionAlias = Mp.empty
+  , appliedFcts = Mp.empty
 }
 
 
@@ -49,13 +51,15 @@ initCompFunction aLabel = CompFunction {
     , symbols = Mp.empty
   }
 
-initHeapDef :: Mp.Map MainText (Int32, SecondOrderType)
+
+initHeapDef :: Mp.Map MainText (Int32, CompType)
 initHeapDef =
-  Mp.singleton "$local" (0, StructSO $ NamedSE (
-        ( "$parentCtx", FirstOrderSO StringTO )
-        :| []
-      )
-    )
+  let
+    parentType = StructVT (NamedSF "$parentCtx" (StructVT (NamedSF "someField" (SimpleVT IntST) :| [])) :| [])
+    localType = StructVT (NamedSF "$local" parentType :| [])
+  in
+    Mp.singleton "$local" (0, parentType)
+
 
 concatErrors :: [Either CompError a] -> Maybe CompError
 concatErrors = foldl (\accum eiErr -> case eiErr of
@@ -110,14 +114,14 @@ setLabelPos labelID = do
 
 addStringConstant :: (Show sc) => MainText -> State (CompContext sc) Int32
 addStringConstant newConst =
-  addTypedConstant (StringCte newConst) $ Cr.hash newConst
+  addTypedConstant (StringC newConst) $ Cr.hash newConst
 
 addVerbatimConstant :: (Show sc) => MainText -> State (CompContext sc) Int32
 addVerbatimConstant newConst =
-  addTypedConstant (VerbatimCte False newConst) $ Cr.hash newConst
+  addTypedConstant (VerbatimC newConst) $ Cr.hash newConst
 
 
-addTypedConstant :: (Show sc) => ConstantValue -> MainText -> State (CompContext sc) Int32
+addTypedConstant :: (Show sc) => CompConstant -> MainText -> State (CompContext sc) Int32
 addTypedConstant newConst md5Hash = do
     ctx <- get
     let
