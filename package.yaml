@@ -84,6 +84,9 @@ dependencies:
   - scientific
   # For language 2-letters definitions (hugo configs):
   - iso639
+  # For PHP ScannerB:
+  - deepseq
+
 
 default-extensions:
 - OverloadedStrings

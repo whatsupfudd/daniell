@@ -81,6 +81,14 @@ library
       Template.Jinja2
       Template.Parser
       Template.PHP
+      Template.PHP.Class
+      Template.PHP.Error
+      Template.PHP.Interface
+      Template.PHP.Print
+      Template.PHP.Scanner
+      Template.PHP.ScannerB
+      Template.PHP.State
+      Template.PHP.Types
       Template.TsParser
       Template.Types
       Utils
@@ -105,6 +113,7 @@ library
     , case-insensitive
     , containers
     , cryptohash-md5
+    , deepseq
     , directory
     , either
     , exceptions
@@ -171,6 +180,7 @@ executable daniell
     , containers
     , cryptohash-md5
     , daniell
+    , deepseq
     , directory
     , either
     , exceptions
