@@ -6,7 +6,9 @@ import Control.DeepSeq (NFData (rnf))
 
 import TreeSitter.Node ( Node(..), TSPoint(TSPoint, pointRow, pointColumn) )
 import qualified Data.Vector as V
+import Template.Fuddle.Ast (BinaryOp(EqOP))
 
+import Template.PHP.AST (PhpAction, SegmentPos)
 
 data NodeEntry = NodeEntry {
   name :: String
@@ -48,45 +50,6 @@ instance Data TSPoint where
   toConstr _ = error "toConstr: TSPoint"
   gunfold _ _ = error "gunfold: TSPoint"
   dataTypeOf _ = error "dataTypeOf: TSPoint"
-
-
-type SegmentPos = (TSPoint, TSPoint)
-
-
-data PhpAction =
-  Verbatim Int
-  | Statement PhpStatement
-  | Expression PhpExpression
-  | Block [PhpAction]
-  | CommentA Int
-  | MiscST String SegmentPos
-  deriving Show
-
-data PhpStatement =
-  IfST PhpExpression PhpAction (Maybe PhpAction)
-  | ClassST Int [ PhpStatement ]
-  deriving Show
-
-
-data PhpExpression =
-  Literal Int
-  | Variable Int
-  | BinaryOp Int
-  | UnaryOp UnaryOps PhpExpression
-  | TernaryOp PhpExpression PhpExpression PhpExpression
-  | FunctionCall String [PhpExpression]
-  | ArrayAccess PhpExpression PhpExpression
-  | ArrayLiteral [PhpExpression]
-  | Parenthesized [PhpExpression]
-  | CommentX Int
-  | MiscExpr String (TSPoint, TSPoint)
-  deriving Show
-
-
-data UnaryOps =
-  NotOp
-  | NegOp
-  deriving Show
 
 
 data PhpContext = PhpContext {

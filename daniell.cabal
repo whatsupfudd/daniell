@@ -81,12 +81,14 @@ library
       Template.Jinja2
       Template.Parser
       Template.PHP
+      Template.PHP.AST
       Template.PHP.Class
+      Template.PHP.Debug
       Template.PHP.Error
       Template.PHP.Interface
+      Template.PHP.NeParser
       Template.PHP.Print
       Template.PHP.Scanner
-      Template.PHP.ScannerB
       Template.PHP.State
       Template.PHP.Types
       Template.TsParser
@@ -143,6 +145,7 @@ library
     , text
     , time
     , tomland
+    , transformers
     , tree-sitter
     , tree-sitter-haskell
     , tree-sitter-php
@@ -210,6 +213,7 @@ executable daniell
     , text
     , time
     , tomland
+    , transformers
     , tree-sitter
     , tree-sitter-haskell
     , tree-sitter-php

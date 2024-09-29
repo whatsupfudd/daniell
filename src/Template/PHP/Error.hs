@@ -43,6 +43,9 @@ import qualified Data.Set as E
 import GHC.Generics
 
 import Template.PHP.Types
+import Data.Void (Void, absurd)
+import Data.Maybe (isNothing)
+import Data.List
 
 
 data ErrorItem t =
@@ -134,3 +137,85 @@ data PosState = PosState {
   deriving (Show, Eq, Data, Typeable, Generic)
 instance NFData PosState
 
+
+class (Ord a) => ShowErrorComponent a where
+  -- | Pretty-print a component of 'ParseError'.
+  showErrorComponent :: a -> String
+
+  -- | Length of the error component in characters, used for highlighting of
+  -- parse errors in input string.
+  --
+  -- @since 7.0.0
+  errorComponentLen :: a -> Int
+  errorComponentLen _ = 1
+
+instance ShowErrorComponent Void where
+  showErrorComponent = absurd
+
+parseErrorPretty :: (ShowErrorComponent e) =>
+  -- | Parse error to render
+  ScanError e ->
+  -- | Result of rendering
+  String
+parseErrorPretty err =
+  "offset=" <> show err.position <> ":\n" <> parseErrorTextPretty err
+
+parseErrorTextPretty :: forall e. ( ShowErrorComponent e) =>
+  -- | Parse error to render
+  ScanError e ->
+  -- | Result of rendering
+  String
+parseErrorTextPretty (TrivialError _ msg mbErrors ps) =
+  if isNothing mbErrors && E.null ps
+    then "unknown parse error.\n"
+    else
+      messageItemsPretty "unexpected " (showErrorItem `E.map` maybe E.empty E.singleton mbErrors)
+        <> messageItemsPretty "expecting " (showErrorItem `E.map` ps)
+
+parseErrorTextPretty (FancyError _ xs) =
+  if E.null xs
+    then "unknown fancy parse error.\n"
+    else unlines (showErrorFancy <$> E.toAscList xs)
+
+
+showErrorItem :: ErrorItem NodeEntry -> String
+showErrorItem = \case
+  Tokens ts -> show ts
+  Label label -> NE.toList label
+  EndOfInput -> "end of input"
+
+
+showErrorFancy :: (ShowErrorComponent e) => ErrorFancy e -> String
+showErrorFancy = \case
+  ErrorFail msg -> msg
+  ErrorIndentation ord ref actual ->
+    "incorrect indentation (got "
+      <> show actual
+      <> ", should be "
+      <> p
+      <> show ref
+      <> ")"
+    where
+      p = case ord of
+        LT -> "less than "
+        EQ -> "equal to "
+        GT -> "greater than "
+  ErrorCustom a -> showErrorComponent a
+
+
+-- | Transform a list of error messages into their textual representation.
+messageItemsPretty :: String -> Set String -> String
+  -- | String prefix: Prefix to prepend
+  -- | Set String ts: Collection of messages
+  -- | String: Result of rendering
+messageItemsPretty prefix messages
+  | E.null messages = ""
+  | otherwise =
+      prefix <> (orList . NE.fromList . E.toAscList) messages <> "\n"
+
+-- | Print a pretty list where items are separated with commas and the word
+-- “or” according to the rules of English punctuation.
+orList :: NonEmpty String -> String
+orList (x :| []) = x
+orList (x :| [y]) = x <> " or " <> y
+orList xs = intercalate ", " (NE.init xs) <> ", or " <> NE.last xs

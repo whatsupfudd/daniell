@@ -86,6 +86,7 @@ dependencies:
   - iso639
   # For PHP ScannerB:
   - deepseq
+  - transformers
 
 
 default-extensions:

@@ -1,10 +1,13 @@
 module Template.PHP.Print where
 
 
+import Data.Maybe (maybe)
 import qualified Data.Vector as V
 import TreeSitter.Node ( Node(..), TSPoint(TSPoint, pointRow, pointColumn) )
 
 import Template.PHP.Types
+import Template.PHP.AST
+
 
 printNode :: Int -> NodeEntry -> IO ()
 printNode level node = do
@@ -15,6 +18,18 @@ printNode level node = do
     pure ()
   else do
     mapM_ (printNode (succ level)) node.children
+
+
+showNode :: Int -> NodeEntry -> String
+showNode level node =
+  let
+    prefix = if level == 0 then "" else replicate ((level - 1) * 2) ' ' <> "| "
+    mainPart = prefix <> name node <> " " <> showNodePos node
+  in
+  if null node.children then
+    mainPart
+  else do
+    mainPart <> " > " <> concatMap (showNode (succ level)) node.children
 
 
 showNodePos :: NodeEntry -> String
@@ -77,10 +92,10 @@ printPhpContext content ctxt =
     case action of
       Verbatim uid -> indent <> "Verbatim " <> show uid
       Statement stmt -> indent <> "Statement " <> showStatement (level + 1) stmt
-      Expression expr -> indent <> "Expression " <> showExpr (level + 1) expr
-      Block actions -> indent <> "Block " <> showLogic (level + 1) actions
       CommentA uid -> indent <> "CommentA " <> show uid
       MiscST name pos -> indent <> "MiscST " <> show name
+      Interpolation content -> indent <> "Interpolation " <> concatMap (showAction level) content
+      NoOpAct -> ""
 
   showStatement :: Int -> PhpStatement -> String
   showStatement level stmt =
@@ -96,6 +111,23 @@ printPhpContext content ctxt =
         in
         indent <> "IfST \n" <> indent <> showExpr level cond <> "\n" <> showAction level thenBlock <> "\n" <> elsePart
       ClassST name classDef -> indent <> "ClassST " <> show name <> " " <> show classDef
+      ExpressionST expr -> indent <> "Expression " <> showExpr (level + 1) expr
+      BlockST actions -> indent <> "Block " <> showLogic (level + 1) actions
+      ExitST mbExpr -> indent <> "ExitST " <> maybe "" (showExpr (level + 1)) mbExpr
+      EchoST exprs -> indent <> "EchoST " <> concatMap (showExpr level) exprs
+      ForEachST cond asVar mbWithKey iterStmt -> indent <> "ForEachST " <> showExpr level cond <> "\n" <> showVarSpec level asVar <> "\n" <> maybe "" (showVarSpec level) mbWithKey <> "\n" <> showAction level iterStmt
+
+
+  showVarSpec :: Int -> VariableSpec -> String
+  showVarSpec level varSpec =
+    let
+      indent = replicate (level * 2) ' '
+    in
+    case varSpec of
+      SimpleVS varID -> indent <> "SimpleVS " <> show varID
+      Dynamic varName index -> indent <> "Dynamic " <> show varName <> " " <> show index
+      ComplexVS expr -> indent <> "ComplexVS " <> showExpr level expr
+
 
   showExpr :: Int -> PhpExpression -> String
   showExpr level expr =
@@ -105,14 +137,48 @@ printPhpContext content ctxt =
     case expr of
       Literal uid -> indent <> "Literal " <> show uid
       Variable uid -> indent <> "Variable " <> show uid
-      BinaryOp op -> indent <> "BinaryOp " <> show op
+      Symbol uid -> indent <> "Symbol " <> show uid
+      BinaryOp op lArg rArg -> indent <> "BinaryOp " <> show op <> " " <> showExpr 0 lArg <> " " <> showExpr 0 rArg
       UnaryOp op arg -> indent <> "UnaryOp " <> show op <> " " <> showExpr 0 arg
       TernaryOp cond thenExpr elseExpr ->
         indent <> "TernaryOp \n" <> showExpr (level + 1) cond <> "\n" <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
+      FunctionCall uid args ->
+        indent <> "FunctionCall " <> show uid <> " " <> concatMap (showExpr level) args
       ArrayAccess array index ->
         indent <> "ArrayAccess " <> showExpr (level + 1) array <> " " <> showExpr 0 index
+      ArrayLiteral exprs ->
+        indent <> "ArrayLiteral " <> concatMap (showExpr level) exprs
       Parenthesized exprs ->
         indent <> "Parenthesized " <> concatMap (showExpr level) exprs
+      AssignLocal varName expr ->
+        indent <> "AssignLocal " <> show varName <> " " <> showExpr 0 expr
+      Require isOnce expr ->
+        indent <> "Require " <> if isOnce then "once" else "" <> " " <> showExpr 0 expr
       CommentX uid -> indent <> "CommentX " <> show uid
       MiscExpr name pos -> indent <> "MiscExpr " <> show name
+      Subscript varName index ->
+        indent <> "Subscript " <> show varName <> " " <> showExpr 0 index
+      MemberAccess varName uid ->
+        indent <> "MemberAccess " <> show varName <> " " <> show uid
+      Conditional cond thenExpr elseExpr ->
+        indent <> "Conditional \n" <> showExpr (level + 1) cond <> "\n" <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
+      Casting castType expr ->
+        indent <> "Casting " <> show castType <> " " <> showExpr 0 expr
 
+{-
+  Literal LiteralValue
+  | Variable Int
+  | Symbol Int
+  | BinaryOp BinaryOps PhpExpression PhpExpression
+  | UnaryOp UnaryOps PhpExpression
+  | TernaryOp PhpExpression PhpExpression PhpExpression
+  | FunctionCall Int [PhpExpression]
+  | ArrayAccess PhpExpression PhpExpression
+  | ArrayLiteral [PhpExpression]
+  | Parenthesized [PhpExpression]
+  | AssignLocal Int PhpExpression
+  | RequireOnce PhpExpression
+  | CommentX Int
+  | MiscExpr String (TSPoint, TSPoint)
+
+-}

@@ -1,16 +1,9 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use camelCase" #-}
 module Template.PHP where
 
-import Control.Monad.Cont (foldM, lift, MonadPlus (..))
-import Control.Applicative (asum, many, some, (<|>))
+import Control.Monad.Cont (foldM)
 
-import Data.Data (Data (..))
-import Control.Lens (Identity)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Identity (Identity(..))
 import Data.Text (pack)
-
 import qualified Data.Vector as V
 
 import Foreign.C.String ( newCStringLen, peekCString )
@@ -28,79 +21,9 @@ import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
 import Conclusion (GenError (..))
 import Template.Types ( FileTempl )
 
-import Template.PHP.Print (printNode, printPhpContext)
-import Template.PHP.Scanner (parseNodesB)
-import qualified Template.PHP.ScannerB as B
-import qualified Template.PHP.Class as B
-import qualified Template.PHP.State as B
-import qualified Template.PHP.Error as E
+import Template.PHP.NeParser (testScannerB)
+import Template.PHP.Print (printPhpContext, printNode)
 import Template.PHP.Types
-import Text.Cannelle.Hugo.AST (Statement)
-
-
-newtype TError = TError String
-  deriving (Show, Eq, Ord)
-instance Data TError where
-  toConstr _ = error "toConstr"
-  gunfold _ _ = error "gunfold"
-  dataTypeOf _ = error "dataTypeOf"
-
-
-type ScannerB = B.ScannerT (E.ScanError TError) Identity
-
-testScannerB :: [NodeEntry] -> Either TError [PhpAction]
-testScannerB nodes =
-  let
-    Identity (endState, result) = B.doScanT testS (B.initState nodes)
-  in
-  case result of
-    Left err -> Left $ TError $ show err
-    Right value -> Right value
-
-
-testS :: ScannerB [PhpAction]
-testS = do
-  rezA <- textS
-  rezB <- phpTagS
-  rezC <- commentS
-  rezD <- ifS
-  pure [ rezA, rezB, rezC, rezD ]
-
-statementS :: ScannerB PhpAction
-statementS = asum [
-  textS
-  , phpTagS
-  , commentS
-  , ifS
-  ]
-
-
-{-
-     , commentS
-  pure [ rezA, rezB, rezD ]
--}
-
-commentS :: ScannerB PhpAction
-commentS = do
-  rez <- B.single "comment"
-  pure $ CommentA 0
-
-ifS :: ScannerB PhpAction
-ifS = do
-  rez <- B.single "if_statement"
-  pure $ CommentA 1
-
-textS :: ScannerB PhpAction
-textS = do
-  rez <- B.single "text"
-  pure $ CommentA 2
-
-phpTagS :: ScannerB PhpAction
-phpTagS = do
-  rez <- B.single "php_tag"
-  pure $ CommentA 3
-
-
 
 
 tsParsePhp :: FilePath -> IO (Either GenError FileTempl)
@@ -135,6 +58,7 @@ tryParsePhp parser path = do
     Left err -> do
       putStrLn $ "@[tryParsePhp] parseTsAst err: " <> show err
     Right logicCtxt -> do
+      putStrLn "@[tryParsePhp] logicCtxt: "
       printPhpContext tmplString logicCtxt
 
   free children
@@ -151,10 +75,14 @@ parseTsAst children count = do
   nodeGraph <- analyzeChildren 0 children count
   -- putStrLn $ "@[parseTsChildren] nodeGraph: " <> show nodeGraph
   mapM_ (printNode 0) nodeGraph
-  putStrLn "@[parseTsAst] testing ScannerB"
-  case testScannerB nodeGraph of
-    Left err -> putStrLn $ "@[parseTsAst] testScannerB err: " <> show err
-    Right value -> putStrLn $ "@[parseTsAst] tested ScannerB: " <> show value
+  let
+    scanRez = testScannerB nodeGraph
+  case scanRez of
+    Left err -> pure . Left . SimpleMsg . pack $ "@[parseTsAst] testScannerB err: " <> show err
+    Right context -> pure $ Right context
+
+  -- testScannerC nodeGraph
+  {-
   let
     eiLogicCtxt = parseNodesB nodeGraph
   case eiLogicCtxt of
@@ -165,7 +93,7 @@ parseTsAst children count = do
       putStrLn errMsg
       pure . Left $ SimpleMsg (pack errMsg)
     Right logicCtxt -> pure $ Right logicCtxt
-
+  -}
 
 analyzeChildren :: Int -> Ptr Node -> Int -> IO [NodeEntry]
 analyzeChildren level children count = do

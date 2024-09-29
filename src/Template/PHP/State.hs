@@ -34,7 +34,7 @@ import qualified Data.Vector as V
 
 import Template.PHP.Types
 import Template.PHP.Error
-
+import Template.PHP.AST (SegmentPos)
 
 data ScanState errT = ScanState {
     inputs :: [ NodeEntry ]
