@@ -270,6 +270,7 @@ instance (Ord errT, Monad m) => MonadScanner errT (ScannerT errT m) where
   updateScannerState = pUpdateScannerState
   tokenPush = pTokenPush
   tokenDemand = pTokenDemand
+  tokenTryPush = pTokenTryPush
 
 
 pScanError :: ScanError errT -> ScannerT errT m a
@@ -295,6 +296,7 @@ pToken test errSet =
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
                     (ScanState state.inputs state.parsed state.errors state.contextDemands)
 
+
 pTokenPush :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m a
 pTokenPush test errSet =
   ScannerT $ \state consOK consErr emptyOK emptyErr ->
@@ -313,6 +315,7 @@ pTokenPush test errSet =
             in
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
                     (ScanState state.inputs state.parsed state.errors state.contextDemands)
+
 
 pTokenDemand :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m Int
 pTokenDemand test errSet =
@@ -337,6 +340,32 @@ pTokenDemand test errSet =
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
                     (ScanState state.inputs state.parsed state.errors state.contextDemands)
 
+
+pTokenTryPush :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m (Either Int a)
+pTokenTryPush test errSet =
+  ScannerT $ \state consOK consErr emptyOK emptyErr ->
+    case state.inputs of
+      [] ->
+        let
+          us = pure EndOfInput
+        in emptyErr (TrivialError state.parsed "no entry left." us errSet) state
+      hNode : rest ->
+        case test hNode of
+          Just x ->
+            if null hNode.children then
+              let
+                demandLength = length state.contextDemands
+                newDemands = V.snoc state.contextDemands (hNode.start, hNode.end)
+              in
+              consOK (Left demandLength) (ScanState (hNode.children <> rest) (state.parsed + 1) state.errors newDemands) mempty
+            else
+              consOK (Right x) (ScanState (hNode.children <> rest) (state.parsed + 1) state.errors state.contextDemands) mempty
+          Nothing ->
+            let
+              us = (Just . Tokens . newEmpty) hNode
+            in
+            emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
+                    (ScanState state.inputs state.parsed state.errors state.contextDemands)
 
 
 newEmpty x = x :| []
@@ -398,25 +427,33 @@ satisfy f = token testChar E.empty
   testChar :: NodeEntry -> Maybe NodeEntry
   testChar x = if f x.name then Just x else Nothing
 
+buildFakeNodeEntry :: String -> NodeEntry
+buildFakeNodeEntry t = NodeEntry t (TSPoint 0 0) (TSPoint 0 0) []
 
 single :: (MonadScanner e m) => String -> m NodeEntry
 single t = token testToken expected
   where
   testToken x = if x.name == t then Just x else Nothing
-  expected = E.singleton (Tokens ((NodeEntry t (TSPoint 0 0) (TSPoint 0 0) []) :| []))
+  expected = E.singleton (Tokens (buildFakeNodeEntry t :| []))
 
 
 singleP :: (MonadScanner e m) => String -> m NodeEntry
 singleP t = tokenPush testToken expected
   where
   testToken x = if x.name == t then Just x else Nothing
-  expected = E.singleton (Tokens ((NodeEntry t (TSPoint 0 0) (TSPoint 0 0) []) :| []))
+  expected = E.singleton (Tokens (buildFakeNodeEntry t :| []))
 
 symbol :: (MonadScanner e m) => String -> m Int
 symbol t = tokenDemand testToken expected
   where
   testToken x = if x.name == t then Just x else Nothing
-  expected = E.singleton (Tokens ((NodeEntry t (TSPoint 0 0) (TSPoint 0 0) []) :| []))
+  expected = E.singleton (Tokens (buildFakeNodeEntry t :| []))
+
+symbolPT :: (MonadScanner e m) => String -> m (Either Int NodeEntry)
+symbolPT t = tokenTryPush testToken expected
+  where
+  testToken x = if x.name == t then Just x else Nothing
+  expected = E.singleton (Tokens (buildFakeNodeEntry t :| []))
 
 
 failure :: (MonadScanner e m) =>  String -> Maybe (ErrorItem NodeEntry) -> Set (ErrorItem NodeEntry) -> m a
@@ -429,3 +466,17 @@ failure msg us ps = do
 
 getOffset :: (MonadScanner e m) => m Int
 getOffset = (.parsed) <$> getScannerState
+
+
+-- *** Combinators *** ---
+
+sepBy :: Alternative m => m a -> m sep -> m [a]
+sepBy p sep = sepBy1 p sep <|> pure []
+{-# INLINE sepBy #-}
+
+-- | @sepBy1 p sep@ parses /one/ or more occurrences of @p@, separated
+-- by @sep@. Returns a list of values returned by @p@.
+
+sepBy1 :: Alternative m => m a -> m sep -> m [a]
+sepBy1 p sep = (:) <$> p <*> many (sep *> p)
+{-# INLINE sepBy1 #-}

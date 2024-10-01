@@ -137,6 +137,13 @@ data PosState = PosState {
   deriving (Show, Eq, Data, Typeable, Generic)
 instance NFData PosState
 
+showScanErrorBundle :: (ShowErrorComponent e) => ScanErrBundle e -> String
+showScanErrorBundle scanErrBundle =
+  let
+    errors = scanErrBundle.errors
+    endPos = scanErrBundle.endPos
+  in
+  unlines $ parseErrorPretty <$> NE.toList errors
 
 class (Ord a) => ShowErrorComponent a where
   -- | Pretty-print a component of 'ParseError'.

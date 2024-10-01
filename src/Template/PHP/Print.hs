@@ -28,7 +28,7 @@ showNode level node =
   in
   if null node.children then
     mainPart
-  else do
+  else
     mainPart <> " > " <> concatMap (showNode (succ level)) node.children
 
 
@@ -39,6 +39,28 @@ showNodePos aNode =
     endS = "(" ++ show aNode.end.pointRow ++ "," ++ show aNode.end.pointColumn ++ ")"
   in
   startS <> "-" <> endS
+
+
+showNodeCap :: Int -> Int -> [NodeEntry] -> (String, Int)
+showNodeCap level capCount nodes =
+  case nodes of
+    [] -> ("", capCount)
+    hNode : rest ->
+      if capCount > 10 then
+        ("...", succ capCount)
+      else
+        let
+            prefix = if level == 0 then "" else "\n" <> replicate ((level - 1) * 2) ' ' <> "| "
+            mainPart = prefix <> hNode.name <> " " <> showNodePos hNode
+          in
+          if null hNode.children then
+            (mainPart, succ capCount)
+          else
+            let
+              (nextPart, newCap) = showNodeCap level (succ capCount) hNode.children
+              (restPart2, newCap2) = if newCap > 10 then ("...", newCap) else showNodeCap level (succ capCount) rest
+            in
+            (mainPart <> " > " <> nextPart <> " " <> restPart2, newCap2)
 
 
 printPhpContext :: String -> PhpContext -> IO ()
@@ -103,6 +125,9 @@ printPhpContext content ctxt =
       indent = replicate (level * 2) ' '
     in
     case stmt of
+      BlockST actions -> indent <> "Block " <> showLogic (level + 1) actions
+      NamedLabelST -> indent <> "NamedLabelST "
+      ExpressionST expr -> indent <> "Expression " <> showExpr (level + 1) expr
       IfST cond thenBlock elseBlock ->
         let
           elsePart = case elseBlock of
@@ -110,13 +135,57 @@ printPhpContext content ctxt =
             Just aBlock -> showAction level aBlock
         in
         indent <> "IfST \n" <> indent <> showExpr level cond <> "\n" <> showAction level thenBlock <> "\n" <> elsePart
-      ClassST name classDef -> indent <> "ClassST " <> show name <> " " <> show classDef
-      ExpressionST expr -> indent <> "Expression " <> showExpr (level + 1) expr
-      BlockST actions -> indent <> "Block " <> showLogic (level + 1) actions
-      ExitST mbExpr -> indent <> "ExitST " <> maybe "" (showExpr (level + 1)) mbExpr
+      SwitchST -> indent <> "SwitchST "
+      WhileST -> indent <> "WhileST "
+      DoST -> indent <> "DoST "
+      ForST -> indent <> "ForST "
+      ForEachST cond (isRef, asVar) mbWithKey iterStmt ->
+        indent <> "ForEachST " <> showExpr level cond
+        <> "\n" <> if isRef then " Ref " else "" <> showVarSpec level asVar
+        <> "\n" <> maybe "" (showVarSpec level) mbWithKey
+        <> "\n" <> showAction level iterStmt
+      GotoST -> indent <> "GotoST "
+      ContinueST -> indent <> "ContinueST "
+      BreakST -> indent <> "BreakST "
+      ReturnST expr -> indent <> "ReturnST " <> maybe "" (showExpr level) expr
+      TryST -> indent <> "TryST "
+      DeclareST -> indent <> "DeclareST "
       EchoST exprs -> indent <> "EchoST " <> concatMap (showExpr level) exprs
-      ForEachST cond asVar mbWithKey iterStmt -> indent <> "ForEachST " <> showExpr level cond <> "\n" <> showVarSpec level asVar <> "\n" <> maybe "" (showVarSpec level) mbWithKey <> "\n" <> showAction level iterStmt
+      ExitST mbExpr -> indent <> "ExitST " <> maybe "" (showExpr (level + 1)) mbExpr
+      UnsetST -> indent <> "UnsetST "
+      ConstDeclST -> indent <> "ConstDeclST "
+      FunctionDefST -> indent <> "FunctionDefST "
+      ClassDefST attribs modifiers nameID mbBaseID interfDefs classMembers ->
+          indent <> "ClassDefST " <> show nameID <> maybe "" (\bid -> " extends " <> show bid) mbBaseID
+          <> "\n" <> indent <> "attribs: " <> show attribs <> "; modifiers: " <> show modifiers
+          <> "\n" <> indent <> "interfaces: " <> show interfDefs <> "; classMembers:\n"
+         <> unlines (map (showMemberDecl (succ level)) classMembers)
+      InterfaceDefST -> indent <> "InterfaceDefST "
+      TraitDefST -> indent <> "TraitDefST "
+      EnumDefST -> indent <> "EnumDefST "
+      NamespaceDefST -> indent <> "NamespaceDefST "
+      NamespaceUseST -> indent <> "NamespaceUseST "
+      GlobalDeclST -> indent <> "GlobalDeclST "
+      FunctionStaticST -> indent <> "FunctionStaticST "
 
+  showMemberDecl :: Int -> ClassMemberDecl -> String
+  showMemberDecl level memberDecl =
+    let
+      indent = replicate (level * 2) ' '
+    in
+    case memberDecl of
+      CommentCDecl uid -> indent <> "comment " <> show uid
+      ConstantCDecl modifiers consts -> indent <> "ConstantCDecl " <> show modifiers <> " " <> show consts
+      PropertyCDecl attribs modifiers varSpec mbExpr -> indent <> "PropertyCDecl " <> show attribs <> " (" <> show modifiers <> ") " <> show varSpec <> maybe "" (\expr -> ", init: " <> showExpr level expr) mbExpr
+      MethodCDecl attribs modifiers varID argSpecs methodImpl ->
+          indent <> "MethodCDecl " <> show attribs <> " (" <> show modifiers <> ") " <> show varID
+          <> "\n" <> indent <> unlines (map (showVarSpec level) argSpecs)
+          <> "\n" <> case methodImpl of
+            MethodImplementation action -> showAction level action
+            ReturnType typeDecl -> indent <> "returns " <> show typeDecl
+      ConstructorCDecl -> indent <> "ConstructorCDecl "
+      DestructorCDecl -> indent <> "DestructorCDecl "
+      TraitUseCDecl nameIDs mbUseList -> indent <> "TraitUseCDecl " <> show nameIDs <> maybe "" (\useList -> " " <> show useList) mbUseList
 
   showVarSpec :: Int -> VariableSpec -> String
   showVarSpec level varSpec =
@@ -150,20 +219,28 @@ printPhpContext content ctxt =
         indent <> "ArrayLiteral " <> concatMap (showExpr level) exprs
       Parenthesized exprs ->
         indent <> "Parenthesized " <> concatMap (showExpr level) exprs
-      AssignLocal varName expr ->
-        indent <> "AssignLocal " <> show varName <> " " <> showExpr 0 expr
-      Require isOnce expr ->
-        indent <> "Require " <> if isOnce then "once" else "" <> " " <> showExpr 0 expr
+      AssignVar assignee expr ->
+        indent <> "AssignLocal " <> show assignee <> " " <> showExpr 0 expr
       CommentX uid -> indent <> "CommentX " <> show uid
       MiscExpr name pos -> indent <> "MiscExpr " <> show name
-      Subscript varName index ->
-        indent <> "Subscript " <> show varName <> " " <> showExpr 0 index
+      Subscript varName mbIndex ->
+        indent <> "Subscript " <> show varName <> " " <> maybe "" (showExpr 0) mbIndex
       MemberAccess varName uid ->
         indent <> "MemberAccess " <> show varName <> " " <> show uid
       Conditional cond thenExpr elseExpr ->
         indent <> "Conditional \n" <> showExpr (level + 1) cond <> "\n" <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
       Casting castType expr ->
         indent <> "Casting " <> show castType <> " " <> showExpr 0 expr
+      ObjectCreation nameID args ->
+        indent <> "ObjectCreation " <> show nameID <> " " <> concatMap (showExpr level) args
+      ScopeCall nameIDs args ->
+        indent <> "ScopeCall " <> show nameIDs <> " " <> concatMap (showExpr level) args
+      Include inclMode expr ->
+        indent <> "Include " <> show inclMode <> " " <> showExpr 0 expr
+      AugmentedAssign var op expr ->
+        indent <> "AugmentedAssign " <> show var <> " " <> show op <> " " <> showExpr 0 expr
+      ScopedPropertyAccess baseName expr ->
+        indent <> "ScopedPropertyAccess " <> show baseName <> " " <> showExpr 0 expr
 
 {-
   Literal LiteralValue

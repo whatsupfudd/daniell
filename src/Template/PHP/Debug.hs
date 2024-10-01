@@ -27,7 +27,7 @@ import Template.PHP.Interface (Hints(..))
 import Template.PHP.Types (NodeEntry)
 import Template.PHP.State (ScanState(..))
 import Control.Lens (concatMapOf)
-import Template.PHP.Print (showNode)
+import Template.PHP.Print (showNode, showNodeCap)
 
 
 class (MonadScanner errT m) => ScannerDebug errT m where
@@ -127,22 +127,22 @@ debugLog lbl item = prefix msg
     showHints hints = "[" ++ intercalate "," (showErrorItem `map` E.toAscList hints) ++ "]"
     msg = case item of
       DbgIn nodes ->
-        "IN: " ++ concatMap (\n -> showNode 0 n ++ "\n") nodes
+        "IN: " ++ fst (showNodeCap 0 0 nodes) ++ "\n"
       DbgCOK nodes a (Hints hints) ->
         "MATCH (COK): "
-          ++ concatMap (\n -> showNode 0 n ++ "\n") nodes
+          ++ fst (showNodeCap 0 0 nodes)
           ++ "\nVALUE: "
           ++ show a
           ++ "\nHINTS: "
-          ++ showHints hints
+          ++ showHints (E.take 5 hints)
       DbgCERR nodes e ->
-        "MATCH (CERR): " ++ concatMap (\n -> showNode 0 n ++ "\n") nodes ++ "\nERROR:\n" ++ parseErrorPretty e
+        "MATCH (CERR): " ++ fst (showNodeCap 0 0 nodes) ++ "\nERROR:\n" ++ parseErrorPretty e
       DbgEOK nodes a (Hints hints) ->
         "MATCH (EOK): "
-          ++ concatMap (\n -> showNode 0 n ++ "\n") nodes
+          ++ fst (showNodeCap 0 0 nodes)
           ++ "\nVALUE: "
           ++ show a
           ++ "\nHINTS: "
-          ++ showHints hints
+          ++ showHints (E.take 5 hints)
       DbgEERR nodes e ->
-        "MATCH (EERR): " ++ concatMap (\n -> showNode 0 n ++ "\n") nodes ++ "\nERROR:\n" ++ parseErrorPretty e
+        "MATCH (EERR): " ++ fst (showNodeCap 0 0 nodes) ++ "\nERROR:\n" ++ parseErrorPretty e

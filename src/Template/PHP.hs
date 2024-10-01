@@ -21,7 +21,7 @@ import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
 import Conclusion (GenError (..))
 import Template.Types ( FileTempl )
 
-import Template.PHP.NeParser (testScannerB)
+import Template.PHP.NeParser (testScannerB, TError (..))
 import Template.PHP.Print (printPhpContext, printNode)
 import Template.PHP.Types
 
@@ -78,7 +78,7 @@ parseTsAst children count = do
   let
     scanRez = testScannerB nodeGraph
   case scanRez of
-    Left err -> pure . Left . SimpleMsg . pack $ "@[parseTsAst] testScannerB err: " <> show err
+    Left (TError errMsg) -> pure . Left . SimpleMsg . pack $ "@[parseTsAst] testScannerB err: " <> errMsg
     Right context -> pure $ Right context
 
   -- testScannerC nodeGraph

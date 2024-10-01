@@ -76,6 +76,8 @@ class MonadPlus m => MonadScanner errT m | m -> errT where
 
   tokenDemand :: (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> m Int
 
+  tokenTryPush :: (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> m (Either Int a)
+
 
 
 instance (MonadScanner errT m) => MonadScanner errT (IdentityT m) where
