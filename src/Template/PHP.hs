@@ -21,10 +21,12 @@ import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
 import Conclusion (GenError (..))
 import Template.Types ( FileTempl )
 
-import Template.PHP.NeParser (testScannerB, TError (..))
+import Template.PHP.NeParser (testScannerB)
 import Template.PHP.Print (printPhpContext, printNode)
 import Template.PHP.Types
+import Template.PHP.Parser.Types (TError (..))
 
+import Template.PHP.AST (PhpContext (..))
 
 tsParsePhp :: FilePath -> IO (Either GenError FileTempl)
 tsParsePhp filePath = do

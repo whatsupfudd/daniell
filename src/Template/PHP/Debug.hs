@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Template.PHP.Debug where
 
@@ -24,10 +25,10 @@ import Template.PHP.Class
 import Template.PHP.Error
 import Template.PHP.Scanner (ScannerT (..))
 import Template.PHP.Interface (Hints(..))
-import Template.PHP.Types (NodeEntry)
 import Template.PHP.State (ScanState(..))
 import Control.Lens (concatMapOf)
 import Template.PHP.Print (showNode, showNodeCap)
+import Template.PHP.Types (NodeEntry (..), showRange)
 
 
 class (MonadScanner errT m) => ScannerDebug errT m where
@@ -122,27 +123,44 @@ debugLog :: forall e a. (ShowErrorComponent e, Show a) =>
   String
 debugLog lbl item = prefix msg
   where
-    prefix = unlines . fmap ((lbl ++ "> ") ++) . lines
+    prefix = unlines . fmap ((lbl <> "> ") <>) . lines
     showHints :: E.Set (ErrorItem NodeEntry) -> String
-    showHints hints = "[" ++ intercalate "," (showErrorItem `map` E.toAscList hints) ++ "]"
+    showHints hints = "[" <> intercalate "," (showErrorItem `map` E.toAscList (E.take 5 hints))
+            <> if length hints > 5 then " ...]" else "]"
     msg = case item of
       DbgIn nodes ->
-        "IN: " ++ fst (showNodeCap 0 0 nodes) ++ "\n"
+        case nodes of
+          [] -> "IN: <empty>"
+          [ hNode ] -> "IN: " <> hNode.name <> " " <> showRange hNode.start hNode.end <> showChildren hNode.children
+          hNode : rest -> "IN: " <> hNode.name <> " " <> showRange hNode.start hNode.end <> showChildren hNode.children
+            <> case rest of
+              [ rNode ] -> ", " <> rNode.name <> "."
+              hr : rr -> ", " <> hr.name <> " ..."
+          -- fst (showNodeCap 0 0 nodes)
       DbgCOK nodes a (Hints hints) ->
         "MATCH (COK): "
           ++ fst (showNodeCap 0 0 nodes)
           ++ "\nVALUE: "
-          ++ show a
+          ++ case show a of
+            'n' : 'e' : rest -> "ne: " <> take 80 rest
+            _ -> show a
           ++ "\nHINTS: "
-          ++ showHints (E.take 5 hints)
+          ++ showHints hints
       DbgCERR nodes e ->
         "MATCH (CERR): " ++ fst (showNodeCap 0 0 nodes) ++ "\nERROR:\n" ++ parseErrorPretty e
       DbgEOK nodes a (Hints hints) ->
         "MATCH (EOK): "
           ++ fst (showNodeCap 0 0 nodes)
           ++ "\nVALUE: "
-          ++ show a
+          ++ case show a of
+            'n' : 'e' : rest -> "ne: " <> take 80 rest
+            _ -> show a
           ++ "\nHINTS: "
-          ++ showHints (E.take 5 hints)
+          ++ showHints hints
       DbgEERR nodes e ->
         "MATCH (EERR): " ++ fst (showNodeCap 0 0 nodes) ++ "\nERROR:\n" ++ parseErrorPretty e
+    showChildren :: [NodeEntry] -> String
+    showChildren = \case
+      [] -> ""
+      [ cNode ] -> " > [" <> cNode.name
+      hc : rc -> " > [" <> hc.name <> " ...]"

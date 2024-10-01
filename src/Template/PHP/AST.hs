@@ -1,8 +1,32 @@
 module Template.PHP.AST where
 
+import qualified Data.Vector as V
+
 import TreeSitter.Node (TSPoint(..))
+import Template.PHP.Types (showRange)
+import Options (EnvOptions(danHome))
 
 type SegmentPos = (TSPoint, TSPoint)
+
+showPoint :: TSPoint -> String
+showPoint pt = "(" <> show pt.pointRow <> ", " <> show pt.pointColumn <> ")"
+
+showSegmentRange :: SegmentPos -> String
+showSegmentRange (start, end) = showRange start end
+
+
+data PhpContext = PhpContext {
+  logic :: V.Vector PhpAction
+  , contentDemands :: V.Vector SegmentPos
+  }
+  deriving Show
+
+
+initPhpContext :: PhpContext
+initPhpContext = PhpContext {
+    logic = V.empty
+    , contentDemands = V.empty
+  }
 
 
 data PhpAction =
@@ -12,7 +36,15 @@ data PhpAction =
   | MiscST String SegmentPos
   | Interpolation [PhpAction]
   | NoOpAct
-  deriving Show
+
+instance Show PhpAction where
+  show action = case action of
+    Verbatim uid -> "Verbatim " <> show uid
+    Statement stmt -> "Statement " <> show stmt
+    CommentA uid -> "CommentA " <> show uid
+    MiscST msg pos -> "MiscST " <> msg <> " " <> showSegmentRange pos
+    Interpolation acts -> "Interpolation " <> show (map show acts)
+    NoOpAct -> "noop"
 
 data PhpStatement =
   -- Empty:
@@ -73,6 +105,18 @@ data PhpStatement =
   | GlobalDeclST
   -- Static:
   | FunctionStaticST
+  -- A holder for dangling statements (else, else-if, end-if, ...)
+  | DanglingST DanglingClosure
+  deriving Show
+
+
+data DanglingClosure =
+  StatementDC PhpAction
+  | EndifDC
+  | EndwhileDC
+  | EndforDC
+  | EndforeachDC
+  | EndswitchDC
   deriving Show
 
 
@@ -92,13 +136,17 @@ data PhpExpression =
   | MiscExpr String (TSPoint, TSPoint)
   | Subscript PhpExpression (Maybe PhpExpression) -- var  ()'{' | '[') expr (']' | '}')
   | MemberAccess PhpExpression MemberAccessMode        -- var->expr
+  | MemberCall PhpExpression MemberAccessMode [PhpExpression]        -- var->expr
   | Conditional PhpExpression PhpExpression PhpExpression
   | Casting Int PhpExpression
-  | ObjectCreation Int [PhpExpression]
+  | ObjectCreation MemberAccessMode [PhpExpression]
   | Include IncludeMode PhpExpression
   | AugmentedAssign PhpExpression BinaryOps PhpExpression
   | ScopeCall [ScopeMode] [PhpExpression]
   | ScopedPropertyAccess ScopeMode PhpExpression
+  | ErrorSuppression PhpExpression
+  | ListLiteral [PhpExpression]
+  | HereDoc Int Int Int
   deriving Show
 
 
@@ -169,7 +217,7 @@ data LiteralValue =
   deriving Show
 
 data StringDetails =
-  SimpleString (Maybe Int)
+  SimpleString [EncapsedMode]
   | EncapsedString [EncapsedMode]
   deriving Show
 

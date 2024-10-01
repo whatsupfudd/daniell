@@ -3,15 +3,12 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE FunctionalDependencies #-}
 
 module Template.PHP.Error where
 
@@ -187,7 +184,7 @@ parseErrorTextPretty (FancyError _ xs) =
 
 showErrorItem :: ErrorItem NodeEntry -> String
 showErrorItem = \case
-  Tokens ts -> show ts
+  Tokens ts -> intercalate ", " (NE.toList $ (.name) <$> ts)
   Label label -> NE.toList label
   EndOfInput -> "end of input"
 

@@ -213,25 +213,26 @@ instance (Ord errT, Functor m, Monad m) => MonadPlus (ScannerT errT m) where
   mplus = pPlus
 
 pZero :: (Ord errT) => ScannerT errT m a
-pZero = ScannerT $ \st@(ScanState _ parsed _ _) _ _ _ empErr ->
-  empErr (TrivialError parsed "No more input (pZero)." Nothing mempty) st
+pZero = ScannerT $ \st _ _ _ empErr ->
+  empErr (TrivialError st.parsed "No more input (pZero)." Nothing mempty) st
 
 pPlus :: (Ord errT) => ScannerT errT m a -> ScannerT errT m a -> ScannerT errT m a
-pPlus m n = ScannerT $ \state consOK consErr emptyOK emptyErr ->
+pPlus firstS secondS = ScannerT $ \state consOK consErr emptyOK emptyErr ->
   let
-    mEmptyErr err ms =
+    mEmptyErr err midState =
       let
-        nConsErr err' updState = consErr (err' <> err) (longuestMatch ms updState)
+        nConsErr err' updState = consErr (err' <> err) (longuestMatch midState updState)
         nEmpOk x updState hints = emptyOK x updState (toHints updState.parsed err <> hints)
-        nEmpErr err' updState = emptyErr (err' <> err) (longuestMatch ms updState)
+        nEmpErr err' updState = emptyErr (err' <> err) (longuestMatch midState updState)
       in
-      scannerT n state consOK nConsErr nEmpOk nEmpErr
+      scannerT secondS state consOK nConsErr nEmpOk nEmpErr
   in
-  scannerT m state consOK consErr emptyOK mEmptyErr
+  scannerT firstS state consOK consErr emptyOK mEmptyErr
+
 
 longuestMatch :: Ord errT => ScanState errT -> ScanState errT -> ScanState errT
-longuestMatch s1@(ScanState _ parsed1 _ _) s2@(ScanState _ parsed2 _ _) =
-  case parsed1 `compare` parsed2 of
+longuestMatch s1 s2 =
+  case s1.parsed `compare` s2.parsed of
     LT -> s2
     EQ -> s2
     GT -> s1
@@ -279,7 +280,7 @@ pScanError e = ScannerT $ \state _ _ _ emptyErr -> emptyErr e state
 
 pToken :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m a
 pToken test errSet =
-  ScannerT $ \state consOK consErr emptyOK emptyErr ->
+  ScannerT $ \state consOK _ _ emptyErr ->
     case state.inputs of
       [] ->
         let
@@ -288,14 +289,16 @@ pToken test errSet =
       hNode : rest ->
         case test hNode of
           Just x ->
-            consOK x (ScanState rest (state.parsed + 1) state.errors state.contextDemands) mempty
+            consOK x (ScanState rest (state.parsed + 1 + allCount hNode.children) state.errors state.contextDemands) mempty
           Nothing ->
             let
               us = (Just . Tokens . newEmpty) hNode
             in
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
-                    (ScanState state.inputs state.parsed state.errors state.contextDemands)
+                    state
 
+allCount :: [NodeEntry] -> Int
+allCount = foldl (\acc ch -> if null ch.children then acc + 1 else acc + 1 + allCount ch.children) 0
 
 pTokenPush :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m a
 pTokenPush test errSet =
@@ -314,7 +317,7 @@ pTokenPush test errSet =
               us = (Just . Tokens . newEmpty) hNode
             in
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
-                    (ScanState state.inputs state.parsed state.errors state.contextDemands)
+                    state
 
 
 pTokenDemand :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m Int
@@ -332,13 +335,14 @@ pTokenDemand test errSet =
               demandLength = length state.contextDemands
               newDemands = V.snoc state.contextDemands (hNode.start, hNode.end)
             in
-            consOK demandLength (ScanState (hNode.children <> rest) (state.parsed + 1) state.errors newDemands) mempty
+            -- TODL: decide if children are pushed to the stack or ignored.
+            consOK demandLength (ScanState rest (state.parsed + 1) state.errors newDemands) mempty
           Nothing ->
             let
               us = (Just . Tokens . newEmpty) hNode
             in
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
-                    (ScanState state.inputs state.parsed state.errors state.contextDemands)
+                    state
 
 
 pTokenTryPush :: forall errT m a. (NodeEntry -> Maybe a) -> Set (ErrorItem NodeEntry) -> ScannerT errT m (Either Int a)
@@ -365,7 +369,7 @@ pTokenTryPush test errSet =
               us = (Just . Tokens . newEmpty) hNode
             in
             emptyErr (TrivialError state.parsed ("nothing found, node: " <> hNode.name) us errSet)
-                    (ScanState state.inputs state.parsed state.errors state.contextDemands)
+                    state
 
 
 newEmpty x = x :| []

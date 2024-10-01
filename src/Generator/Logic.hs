@@ -76,7 +76,9 @@ data SpecPlan =
   | HugoPlan Hu.HgWorkPlan
   | NextPlan Nx.NxWorkPlan
   | FuddlePlan Fd.FdWorkPlan
+  | PhpPlan
   deriving Show
+
 
 buildSite :: RunOptions -> SiteOptions -> IO (Either GenError ())
 buildSite rtOpts siteOpts = do
@@ -111,7 +113,7 @@ buildSite rtOpts siteOpts = do
       Nothing -> pure . Left . SimpleMsg . pack $ "@[buildSite] no srcDir for Php project."
       Just aText -> do
         tsParsePhp $ unpack aText
-        pure . Left $ SimpleMsg "TEST DONE."
+        pure $ Right PhpPlan
     _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
 
   case eiWorkPlan of
@@ -149,6 +151,8 @@ buildSite rtOpts siteOpts = do
           case rezA of
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
+        PhpPlan -> do
+          pure $ Right ()
 
 
 createProject :: RunOptions -> NewOptions -> IO Conclusion

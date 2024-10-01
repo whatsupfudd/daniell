@@ -24,7 +24,7 @@ showNode :: Int -> NodeEntry -> String
 showNode level node =
   let
     prefix = if level == 0 then "" else replicate ((level - 1) * 2) ' ' <> "| "
-    mainPart = prefix <> name node <> " " <> showNodePos node
+    mainPart = prefix <> name node <> " " <> showRange node.start node.end
   in
   if null node.children then
     mainPart
@@ -46,21 +46,21 @@ showNodeCap level capCount nodes =
   case nodes of
     [] -> ("", capCount)
     hNode : rest ->
-      if capCount > 10 then
+      if capCount > 3 then
         ("...", succ capCount)
       else
         let
             prefix = if level == 0 then "" else "\n" <> replicate ((level - 1) * 2) ' ' <> "| "
-            mainPart = prefix <> hNode.name <> " " <> showNodePos hNode
+            mainPart = prefix <> show hNode
           in
           if null hNode.children then
             (mainPart, succ capCount)
           else
             let
               (nextPart, newCap) = showNodeCap level (succ capCount) hNode.children
-              (restPart2, newCap2) = if newCap > 10 then ("...", newCap) else showNodeCap level (succ capCount) rest
+              (restPart2, newCap2) = if newCap > 3 then ("...", newCap) else showNodeCap level (succ newCap) rest
             in
-            (mainPart <> " > " <> nextPart <> " " <> restPart2, newCap2)
+            (mainPart <> " > " <> nextPart <> " | " <> restPart2, newCap2)
 
 
 printPhpContext :: String -> PhpContext -> IO ()
@@ -159,7 +159,7 @@ printPhpContext content ctxt =
           indent <> "ClassDefST " <> show nameID <> maybe "" (\bid -> " extends " <> show bid) mbBaseID
           <> "\n" <> indent <> "attribs: " <> show attribs <> "; modifiers: " <> show modifiers
           <> "\n" <> indent <> "interfaces: " <> show interfDefs <> "; classMembers:\n"
-         <> unlines (map (showMemberDecl (succ level)) classMembers)
+          <> unlines (map (showMemberDecl (succ level)) classMembers)
       InterfaceDefST -> indent <> "InterfaceDefST "
       TraitDefST -> indent <> "TraitDefST "
       EnumDefST -> indent <> "EnumDefST "
@@ -212,7 +212,7 @@ printPhpContext content ctxt =
       TernaryOp cond thenExpr elseExpr ->
         indent <> "TernaryOp \n" <> showExpr (level + 1) cond <> "\n" <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
       FunctionCall uid args ->
-        indent <> "FunctionCall " <> show uid <> " " <> concatMap (showExpr level) args
+        indent <> "FunctionCall " <> show uid <> " " <> concatMap (showExpr (level + 1)) args
       ArrayAccess array index ->
         indent <> "ArrayAccess " <> showExpr (level + 1) array <> " " <> showExpr 0 index
       ArrayLiteral exprs ->
@@ -228,7 +228,7 @@ printPhpContext content ctxt =
       MemberAccess varName uid ->
         indent <> "MemberAccess " <> show varName <> " " <> show uid
       Conditional cond thenExpr elseExpr ->
-        indent <> "Conditional \n" <> showExpr (level + 1) cond <> "\n" <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
+        indent <> "Conditional \n" <> indent <> showExpr (level + 1) cond <> "\n" <> indent <> showExpr (level + 1) thenExpr <> "\n" <> showExpr 0 elseExpr
       Casting castType expr ->
         indent <> "Casting " <> show castType <> " " <> showExpr 0 expr
       ObjectCreation nameID args ->
@@ -241,6 +241,9 @@ printPhpContext content ctxt =
         indent <> "AugmentedAssign " <> show var <> " " <> show op <> " " <> showExpr 0 expr
       ScopedPropertyAccess baseName expr ->
         indent <> "ScopedPropertyAccess " <> show baseName <> " " <> showExpr 0 expr
+      ErrorSuppression expr ->
+        indent <> "ErrorSuppression " <> showExpr 0 expr
+      _ -> show expr
 
 {-
   Literal LiteralValue

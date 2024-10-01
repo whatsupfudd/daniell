@@ -1,6 +1,7 @@
 module Template.PHP.Types where
 
 import Data.Data (Data (..))
+import Data.List (intercalate)
 import Control.DeepSeq (NFData (rnf))
 
 
@@ -8,7 +9,6 @@ import TreeSitter.Node ( Node(..), TSPoint(TSPoint, pointRow, pointColumn) )
 import qualified Data.Vector as V
 import Template.Fuddle.Ast (BinaryOp(EqOP))
 
-import Template.PHP.AST (PhpAction, SegmentPos)
 
 data NodeEntry = NodeEntry {
   name :: String
@@ -16,7 +16,16 @@ data NodeEntry = NodeEntry {
   , end :: TSPoint
   , children :: [NodeEntry]
   }
-  deriving Show
+
+instance Show NodeEntry where
+  show ne = "ne " <> ne.name <> " (" <> showRange ne.start ne.end
+          <> case ne.children of
+            [] -> ""
+            rest -> ", c = [" <> intercalate ", " (map (.name) (take 5 ne.children)) <> " }"
+
+showRange :: TSPoint -> TSPoint -> String
+showRange start end = "(" <> show start.pointRow <> ", " <> show start.pointColumn <> ") - (" <> show end.pointRow <> ", " <> show end.pointColumn <> ")"
+
 
 instance Eq NodeEntry where
   NodeEntry a b c d == NodeEntry a' b' c' d' = a == a' && b == b' && c == c' && d == d'
@@ -51,16 +60,3 @@ instance Data TSPoint where
   gunfold _ _ = error "gunfold: TSPoint"
   dataTypeOf _ = error "dataTypeOf: TSPoint"
 
-
-data PhpContext = PhpContext {
-  logic :: V.Vector PhpAction
-  , contentDemands :: V.Vector SegmentPos
-  }
-  deriving Show
-
-
-initPhpContext :: PhpContext
-initPhpContext = PhpContext {
-    logic = V.empty
-    , contentDemands = V.empty
-  }
