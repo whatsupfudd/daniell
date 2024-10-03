@@ -194,10 +194,10 @@ forEachS = do
   (isRef, asVar, mbWithKey) <- asum [
       do
         debugOpt "forEach-pair" $ B.singleP "pair"
-        (isRef, asVar) <- mbRefVarAccessS
+        (refVar, asVar) <- mbRefVarAccessS
         debugOpt "pair-arrow" $ B.single "=>"
-        withKey <- debugOpt "pair-localVar" localVarAccessS
-        pure (isRef, asVar, Just withKey)
+        (refKey, withKey) <- debugOpt "pair-localVar" mbRefVarAccessS 
+        pure (refVar, asVar, Just (refKey, withKey))
     , do
       (isRef, asVar) <- mbRefVarAccessS
       pure (isRef, asVar, Nothing)
@@ -208,7 +208,7 @@ forEachS = do
   case asVar of
     Variable varSpec ->
       case mbWithKey of
-        Just (Variable keySpec) -> pure $ Statement $ ForEachST cond (isRef, varSpec) (Just keySpec) iterStmt
+        Just (keyFlag, Variable keySpec) -> pure $ Statement $ ForEachST cond (isRef, varSpec) (Just (keyFlag, keySpec)) iterStmt
         Nothing -> pure $ Statement $ ForEachST cond (isRef, varSpec) Nothing iterStmt
         Just _ -> B.failure "foreach statement must use a simple variable for key." Nothing mempty
     _ -> B.failure "foreach statement must use a simple variable for value." Nothing mempty
@@ -242,7 +242,7 @@ colonBlockS blockName hasElse = do
       many $ debugOpt "colonBlock-else-stmt" statementS
   else
     pure Nothing
-  elseVerbatim <- optional textInterpolationS
+  elseVerbatim <- optional $ debugOpt "colonBlock-else-verbatim" textInterpolationS
   -- TODO: figure out if the end-token should be considered outside of this block
   -- or not (it's not a child of colon-block).
   debugOpt "colonBlock-end" $ B.single ("end" <> blockName)
@@ -299,7 +299,12 @@ echoS :: ScannerB PhpAction
 echoS = do
   debugOpt "echoS-start" $ B.singleP "echo_statement"
   debugOpt "echoS-echo" $ B.single "echo"
-  exprs <- many $ debugOpt "echoS-expr" expressionS
+  exprs <- asum [
+      (:[]) <$> debugOpt "echoS-expr" expressionS
+    , do
+      B.single "sequence_expression"
+      debugOpt "echoS-exprs-seq" $ expressionS `B.sepBy` B.single ","
+    ]
   B.single ";"
   pure . Statement $ EchoST exprs
 
@@ -310,11 +315,15 @@ exitS = do
   debugOpt "exitS-exit" $ B.single "exit"
   mbExpr <- optional $ do
     B.single "("
-    expr <- debugOpt "exitS-expr" expressionS
+    expr <- optional $ debugOpt "exitS-expr" expressionS
     B.single ")"
     pure expr
   B.single ";"
-  pure . Statement $ ExitST mbExpr
+  case mbExpr of
+    Nothing -> pure $ Statement $ ExitST Nothing
+    Just subExpr -> case subExpr of
+      Nothing -> pure $ Statement $ ExitST Nothing
+      Just expr -> pure $ Statement $ ExitST (Just expr)
 
 
 unsetS :: ScannerB PhpAction
@@ -329,8 +338,13 @@ constDeclS = do
 
 functionDefS :: ScannerB PhpAction
 functionDefS = do
-  debugOpt "functionDefS-start" $ B.single "function_definition"
-  pure $ Statement FunctionDefST
+  debugOpt "fctDefS-start" $ B.singleP "function_definition"
+  B.single "function"
+  name <- debugOpt "fctDefS-name" qualifiedNameS
+  -- TODO: push the formal parameters and handle them.
+  B.single "formal_parameters"
+  Statement . FunctionDefST name <$> debugOpt "fctDefS-body" compoundStmtS
+
 
 classDefS :: ScannerB PhpAction
 classDefS = do
@@ -339,10 +353,10 @@ classDefS = do
   modifiers <- many memberModifierS
   B.single "class"
   nameID <- debugOpt "classDefS-name" $ B.symbol "name"
-  mbBaseID <- optional $ do
+  mbBaseName <- optional $ do
     B.singleP "base_clause"
     B.single "extends"
-    debugOpt "classDefS-base" $ B.symbol "name"
+    qualifiedNameS
   interfDefs <- optional $ do
     B.singleP "class_interface_clause"
     B.single "implements"
@@ -351,7 +365,7 @@ classDefS = do
   B.single "{"
   classMembers <- many $ debugOpt "classDefS-member" classMemberDeclS
   B.single "}"
-  pure . Statement $ ClassDefST mbAttributes modifiers nameID mbBaseID interfDefs classMembers
+  pure . Statement $ ClassDefST mbAttributes modifiers nameID mbBaseName interfDefs classMembers
 
 
 classMemberDeclS :: ScannerB ClassMemberDecl
@@ -456,14 +470,19 @@ methodCDeclS = do
     debugOpt "methodCDeclS-modifiers" memberModifierS
   B.single "function"
   mbRefModifier <- optional referenceModifierS
-  name <- debugOpt "propertyCDeclS-name" $ nameS
-  B.singleP "formal_parameters"
-  B.single "("
-  B.single ")"
+  name <- debugOpt "methodCDeclS-name" nameS
+  -- TODO: push the formal parameters and handle them.
+  B.single "formal_parameters"
+  -- B.single "("
+  -- params <- debug "methodCDeclS-param" formalParameterS
+  -- B.single ")"
   -- TODO: handle a "return_type" ";" instead of a compoundStmt.
   methodImpl <-
-    MethodImplementation <$> compoundStmtS
-    <|> ReturnType <$> functionReturnTypeS
+    if AbstractCM `elem` modifiers then
+      AbstractMI <$ B.single ";"
+    else
+      MethodImplementationMI <$> compoundStmtS
+      <|> ReturnTypeMI <$> functionReturnTypeS
   pure $ MethodCDecl mbAttributes (modifiers <> maybeToList mbRefModifier) name [] methodImpl
 
 functionReturnTypeS :: ScannerB TypeDecl
@@ -576,10 +595,11 @@ danglingElseIfS =
 danglingEndIfS :: ScannerB PhpAction
 danglingEndIfS =
   Statement . DanglingST <$> asum [
-    EndifDC <$ B.single "endif"
-    , EndwhileDC <$ B.single "endwhile"
-    , EndforDC <$ B.single "endfor"
-    , EndforeachDC <$ B.single "endforeach"
-    , EndswitchDC <$ B.single "endswitch"
+      EndDeclareDC <$ B.single "enddeclare"
+    , EndForDC <$ B.single "endfor"
+    , EndForEachDC <$ B.single "endforeach"
+    , EndIfDC <$ B.single "endif"
+    , EndSwitchDC <$ B.single "endswitch"
+    , EndWhileDC <$ B.single "endwhile"
   ]
 

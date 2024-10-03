@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-module Template.TsParser where
+module Template.TSitterParser where
 
 import Control.Monad ( forM_, when )
 import Control.Monad.Cont (foldM)

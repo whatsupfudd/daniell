@@ -15,13 +15,17 @@ import Template.PHP.AST
 import Template.PHP.Parser.Types
 
 
+-- TODO: implement a CommentedExpr type and tag into the comments that may show up
+-- in expressions (CommentedExpr [<comments>:PhpExpression] PhpExpression).
+
 expressionS :: ScannerB PhpExpression
 expressionS = do
   asum [
       parenExprS
       , unaryOpS
       , functionCallS
-      , debugOpt "assignS" assignS
+      , assignS
+      , refAssignS
       , requireOnceS
       , requireS
       , includeS
@@ -42,8 +46,11 @@ expressionS = do
       , scopedPropertyAccessS
       , errorSupressionS
       , hereDocS
-
-      -- update_expression: [++, --] variable_name [ ++, -- ]
+      , classContantAccessS
+      , shellCommandS
+      , throwS
+      , updateS
+      , cloneS
       -- anonymous_function_creation_expression
       -- unset_expression
     ]
@@ -60,7 +67,9 @@ parenExprS :: ScannerB PhpExpression
 parenExprS = do
   debugOpt "parenE-start" $ B.singleP "parenthesized_expression"
   debugOpt "parenE-paren" $ B.single "("
+  doc1 <- optional $ CommentX <$> B.symbol "comment"
   expr <- debugOpt "parenE-exprS" expressionS
+  doc2 <- optional $ CommentX <$> B.symbol "comment"
   debugOpt "parenE-end" $ B.single ")"
   pure expr
 
@@ -77,19 +86,50 @@ unaryOpS = do
 functionCallS :: ScannerB PhpExpression
 functionCallS = do
   debugOpt "funcCallS-start" $ B.singleP "function_call_expression"
-  nameID <- debugOpt "funcCallS-name" $ B.symbol "name"
+  caller <- asum [
+      QualNameCS <$> debugOpt "funcCallS-name" qualifiedNameS
+      , do
+        debugOpt "funcCallS-var" $ B.singleP "variable_name"
+        VariableCS <$> varAccessorS
+      , SubscriptCS <$> subscriptS
+    ]
+
   -- TODO: use singleP and parse content of arguments.
   debugOpt "funcCallS-args" $ B.single "arguments"
-  pure $ FunctionCall nameID []
+  pure $ FunctionCall caller []
+
+
+qualifiedNameS :: ScannerB QualifiedName
+qualifiedNameS = asum [
+    SimpleNameQN <$> B.symbol "name"
+    , do
+      debugOpt "qualNameS-start" $ B.singleP "qualified_name"
+      debugOpt "qualNameS-ns-prefix" $ B.singleP "namespace_name_as_prefix"
+      debugOpt "qualNameS-ns-start" $ B.singleP "namespace_name"
+      nameList <- debugOpt "qualNameS-ns-name" (B.symbol "name") `B.sepBy1` B.single "\\"
+      -- last of the namespace_name_as_prefix children: \
+      -- last of the qualified_name children: name
+      pure $ QualifiedNameQN nameList
+  ]
 
 
 assignS :: ScannerB PhpExpression
 assignS = do
   debugOpt "assignS-start" $ B.singleP "assignment_expression"
   assignee <- localVarAccessS <|> memberAccessS <|> subscriptS <|> scopedPropertyAccessS <|> listLiteralS
+  doc1 <- optional $ CommentX <$> B.symbol "comment"
   debugOpt "assignS-assign" $ B.single "="
-  AssignVar assignee <$> debugOpt "assignS-expr" expressionS
+  doc2 <- optional $ CommentX <$> B.symbol "comment"
+  AssignVar False assignee <$> debugOpt "assignS-expr" expressionS
 
+
+refAssignS :: ScannerB PhpExpression
+refAssignS = do
+  debugOpt "refAssignS-start" $ B.singleP "reference_assignment_expression"
+  assignee <- localVarAccessS <|> memberAccessS <|> subscriptS <|> scopedPropertyAccessS <|> listLiteralS
+  debugOpt "assignS-assign" $ B.single "="
+  debugOpt "refAssignS-assign" $ B.single "&"
+  AssignVar True assignee <$> debugOpt "refAssignS-expr" expressionS
 
 requireOnceS :: ScannerB PhpExpression
 requireOnceS = do
@@ -105,15 +145,17 @@ requireS = do
   expr <- debugOpt "requireOnceS-expr" expressionS
   pure $ Include RequireIM expr
 
+
 binaryOpS :: ScannerB PhpExpression
 binaryOpS = do
   debugOpt "binOpS-start" $ B.singleP "binary_expression"
   aExpr <- debugOpt "binOpS-aExpr" expressionS
   -- TODO: figure out how to attach comments to the right expression.
-  comment1 <- optional $ CommentX <$> B.symbol "comment"
+  doc1 <- optional $ CommentX <$> B.symbol "comment"
   op <- binOperatorS
-  comment2 <- optional $ CommentX <$> B.symbol "comment"
+  doc2 <- optional $ CommentX <$> B.symbol "comment"
   BinaryOp op aExpr <$> debugOpt "binOpS-bExpr" expressionS
+
 
 binOperatorS :: ScannerB BinaryOps
 binOperatorS = asum [
@@ -123,7 +165,7 @@ binOperatorS = asum [
     , MulOp <$ debugOpt "binOpS-mul" (B.single "*")
     , DivOp <$ debugOpt "binOpS-div" (B.single "/")
     , ModOp <$ debugOpt "binOpS-mod" (B.single "%")
-    , PowOp <$ debugOpt "binOpS-pow" (B.single "^")
+    , PowOp <$ debugOpt "binOpS-pow" (B.single "xor")
     , EqOp <$ debugOpt "binOpS-eq" (B.single "==")
     , EqlOp <$ debugOpt "binOpS-eql" (B.single "===")
     , NeqOp <$ debugOpt "binOpS-neq" (B.single "!=")
@@ -135,6 +177,11 @@ binOperatorS = asum [
     , AndOp <$ debugOpt "binOpS-and" (B.single "&&")
     , OrOp <$ debugOpt "binOpS-or" (B.single "||")
     , InstanceOfOp <$ debugOpt "binOpS-instanceOf" (B.single "instanceof")
+    , BitAndOp <$ debugOpt "binOpS-bitAnd" (B.single "&")
+    , BitOrOp <$ debugOpt "binOpS-bitOr" (B.single "|")
+    , BitXorOp <$ debugOpt "binOpS-bitXor" (B.single "^")
+    , BitShiftLeftOp <$ debugOpt "binOpS-bitShiftLeft" (B.single "<<")
+    , BitShiftRightOp <$ debugOpt "binOpS-bitShiftRight" (B.single ">>")
     ]
 
 
@@ -160,7 +207,7 @@ varAccessorS = do
 subscriptS :: ScannerB PhpExpression
 subscriptS = do
   debugOpt "subscriptS-start" $ B.singleP "subscript_expression"
-  var <- localVarAccessS <|> memberAccessS <|> functionCallS <|> subscriptS <|> scopedPropertyAccessS
+  var <- localVarAccessS <|> memberAccessS <|> memberCallS <|> functionCallS <|> subscriptS <|> scopedPropertyAccessS
   B.single "[" <|> B.single "{"
   mbIndex <- optional expressionS
   B.single "]" <|> B.single "}"
@@ -170,18 +217,23 @@ subscriptS = do
 memberAccessS :: ScannerB PhpExpression
 memberAccessS = do
   debugOpt "memberAcc-start" $ B.singleP "member_access_expression"
-  baseVar <- localVarAccessS <|> memberCallS <|> memberAccessS <|> subscriptS
+  baseVar <- localVarAccessS <|> memberCallS <|> memberAccessS <|> subscriptS <|> functionCallS
   debugOpt "memberAcc-arrow" $ B.single "->"
   fieldVar <- asum [
       nameS
       , VarExprMT <$> debugOpt "memberAcc-uid" localVarAccessS
+      , do
+        B.single "{"
+        name <- stringLiteralS <|> encapsedStrLiteralS
+        B.single "}"
+        pure $ StringMT name
     ]
   pure $ MemberAccess baseVar fieldVar
 
 
 nameS :: ScannerB MemberAccessMode
 nameS = do
-  eiVal <- debugOpt "memberAcc-uid" (B.symbolPT "name")
+  eiVal <- debugOpt "nameS-name" (B.symbolPT "name")
   case eiVal of
     Left anInt -> pure $ NameMT anInt
     Right _ ->
@@ -212,7 +264,8 @@ castingS = do
 memberCallS :: ScannerB PhpExpression
 memberCallS = do
   debugOpt "memberCallS-start" $ B.singleP "member_call_expression"
-  var <- localVarAccessS <|> functionCallS <|> memberAccessS <|> subscriptS <|> scopedPropertyAccessS <|> scopeCallS <|> memberCallS
+  var <- localVarAccessS <|> functionCallS <|> memberAccessS <|> memberCallS
+     <|> subscriptS <|> scopedPropertyAccessS <|> scopeCallS <|> parenExprS
   debugOpt "memberCallS-arrow" $ B.single "->"
   fieldVar <- asum [
       nameS
@@ -235,11 +288,15 @@ objectCreationS = do
   debugOpt "objectCreationS-start" $ B.singleP "object_creation_expression"
   B.single "new"
   name <- asum [
-    NameMT <$> debugOpt "objectCreationS-name" (B.symbol "name")
+      do
+      eiName <- debugOpt "objectCreationS-name" $ B.symbolPT "name"
+      case eiName of
+        Left anID -> pure $ NameMT anID
+        Right _ -> SelfMT <$ debugOpt "objCreateS-self" (B.single "self")
     , VarExprMT <$> localVarAccessS
     ]
   -- TODO: push the arguments and parse them.
-  B.single "arguments"
+  args <- optional $ B.single "arguments"
   pure $ ObjectCreation name []
 
 
@@ -283,6 +340,11 @@ augmentedAssignOperatorS = asum [
     , MulOp <$ debugOpt "augAssgn-mul" (B.single "*=")
     , DivOp <$ debugOpt "augAssgn-div" (B.single "/=")
     , ModOp <$ debugOpt "augAssgn-mod" (B.single "%=")
+    , OrOp <$ debugOpt "augAssgn-or" (B.single "|=")
+    , AndOp <$ debugOpt "augAssgn-and" (B.single "&=")
+    , BitXorOp <$ debugOpt "augAssgn-xor" (B.single "^=")
+    , BitShiftLeftOp <$ debugOpt "augAssgn-shiftLeft" (B.single "<<=")
+    , BitShiftRightOp <$ debugOpt "augAssgn-shiftRight" (B.single ">>=")
     ]
 
 
@@ -304,7 +366,15 @@ scopeNameS =  asum [
       RelativeSelfSM <$ B.single "self"
     , do
       B.singleP "relative_scope"
+      RelativeParentSM <$ B.single "parent"
+    , do
+      B.singleP "relative_scope"
       RelativeStaticSM <$ B.single "static"
+    , do
+      var <- localVarAccessS
+      let
+        (Variable varSpec) = var
+      pure $ VariableSM varSpec
   ]
 
 errorSupressionS :: ScannerB PhpExpression
@@ -322,6 +392,52 @@ hereDocS = do
   endKind <- B.symbol "heredoc_end"
   pure $ HereDoc docKind content endKind
 
+
+classContantAccessS :: ScannerB PhpExpression
+classContantAccessS = do
+  debugOpt "classContantAccessS-start" $ B.singleP "class_constant_access_expression"
+  clName <- debugOpt "classContantAccessS-name" scopeNameS
+  B.single "::"
+  constName <- debugOpt "classContantAccessS-name" $ B.symbol "name"
+  pure $ ClassConstantAccess clName constName
+
+
+shellCommandS :: ScannerB PhpExpression
+shellCommandS = do
+  debugOpt "shellCommandS-start" $ B.singleP "shell_command_expression"
+  B.single "`"
+  cmd <- expressionS
+  B.single "`"
+  pure $ ShellCommand cmd
+
+
+throwS :: ScannerB PhpExpression
+throwS = do
+  debugOpt "throwS-start" $ B.singleP "throw_expression"
+  B.single "throw"
+  expr <- debugOpt "throwS-expr" expressionS
+  pure $ ThrowExpr expr
+
+updateS :: ScannerB PhpExpression
+updateS = do
+  debugOpt "updateS-start" $ B.singleP "update_expression"
+  prefixOp <- optional $ asum [ IncOp <$ B.single "++" , DecOp <$ B.single "--" ]
+  var <- localVarAccessS <|> memberAccessS <|> subscriptS <|> scopedPropertyAccessS
+  (selectedOp, posFlag) <- case prefixOp of
+    Nothing -> do
+      postOp <- asum [ IncOp <$ B.single "++" , DecOp <$ B.single "--" ]
+      pure (postOp, False)
+    Just op -> pure (op, True)
+  pure $ UpdateExpr posFlag selectedOp var
+
+cloneS :: ScannerB PhpExpression
+cloneS = do
+  debugOpt "cloneS-start" $ B.singleP "clone_expression"
+  B.single "clone"
+  expr <- debugOpt "cloneS-expr" expressionS
+  pure $ CloneExpr expr
+
+
 listLiteralS :: ScannerB PhpExpression
 listLiteralS = do
   debugOpt "listLiteralS-start" $ B.singleP "list_literal"
@@ -334,12 +450,14 @@ listLiteralS = do
         encapsedStrLiteralS
         B.single "=>"
         localVarAccessS
+      , memberAccessS
+      , subscriptS
       ] `B.sepBy1` B.single ","
   B.single ")"
   pure $ ListLiteral exprs
 
 
-{-
+{- Formal definition:
 list-intrinsic:
    list   (   list-expression-list   )
 
@@ -362,12 +480,13 @@ list-or-variable:
 -}
 
 
--- *** Literal parsing: *** --
+-- *** LITERALS *** --
 literalS :: ScannerB PhpExpression
 literalS =
   asum [
     boolLiteralS
     , intLiteralS
+    , floatLiteralS
     , stringLiteralS
     , debugOpt "lit-encap" encapsedStrLiteralS
     , nullLiteralS
@@ -384,6 +503,11 @@ intLiteralS :: ScannerB PhpExpression
 intLiteralS = do
   intID <- B.symbol "integer"
   pure . Literal $ IntLiteral intID
+
+floatLiteralS :: ScannerB PhpExpression
+floatLiteralS = do
+  floatID <- B.symbol "float"
+  pure . Literal $ FloatLiteral floatID
 
 stringLiteralS :: ScannerB PhpExpression
 stringLiteralS = do

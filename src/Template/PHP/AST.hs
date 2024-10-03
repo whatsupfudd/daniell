@@ -66,7 +66,7 @@ data PhpStatement =
   -- For:
   | ForST
   -- Foreach:
-  | ForEachST PhpExpression (Bool, VariableSpec) (Maybe VariableSpec) PhpAction
+  | ForEachST PhpExpression (Bool, VariableSpec) (Maybe (Bool, VariableSpec)) PhpAction
   -- Goto:
   | GotoST
   -- Continue:
@@ -88,9 +88,9 @@ data PhpStatement =
   -- Const:
   | ConstDeclST
   -- Function definition:
-  | FunctionDefST
+  | FunctionDefST QualifiedName PhpAction
   -- Class: attributes, modifiers, name, extends, implements, members
-  | ClassDefST (Maybe AttributeList) [MemberModifier] Int (Maybe Int) (Maybe [Int]) [ClassMemberDecl]
+  | ClassDefST (Maybe AttributeList) [MemberModifier] Int (Maybe QualifiedName) (Maybe [Int]) [ClassMemberDecl]
   -- Interface:
   | InterfaceDefST
   -- Trait:
@@ -112,11 +112,12 @@ data PhpStatement =
 
 data DanglingClosure =
   StatementDC PhpAction
-  | EndifDC
-  | EndwhileDC
-  | EndforDC
-  | EndforeachDC
-  | EndswitchDC
+  | EndDeclareDC
+  | EndForDC
+  | EndForEachDC
+  | EndIfDC
+  | EndSwitchDC
+  | EndWhileDC
   deriving Show
 
 
@@ -127,11 +128,11 @@ data PhpExpression =
   | BinaryOp BinaryOps PhpExpression PhpExpression
   | UnaryOp UnaryOps PhpExpression
   | TernaryOp PhpExpression PhpExpression PhpExpression
-  | FunctionCall Int [PhpExpression]
+  | FunctionCall CallerSpec [PhpExpression]
   | ArrayAccess PhpExpression PhpExpression
   | ArrayLiteral [PhpExpression]
   | Parenthesized [PhpExpression]
-  | AssignVar PhpExpression PhpExpression
+  | AssignVar Bool PhpExpression PhpExpression
   | CommentX Int
   | MiscExpr String (TSPoint, TSPoint)
   | Subscript PhpExpression (Maybe PhpExpression) -- var  ()'{' | '[') expr (']' | '}')
@@ -147,20 +148,37 @@ data PhpExpression =
   | ErrorSuppression PhpExpression
   | ListLiteral [PhpExpression]
   | HereDoc Int Int Int
+  | ClassConstantAccess ScopeMode Int
+  | ShellCommand PhpExpression
+  | ThrowExpr PhpExpression
+  -- UpdateExpr posFlag (true: prefix, false: postfix) selectedOp var
+  | UpdateExpr Bool UpdateOp PhpExpression
+  | CloneExpr PhpExpression
+  deriving Show
+
+
+data CallerSpec =
+  QualNameCS QualifiedName
+  | VariableCS VariableSpec
+  | SubscriptCS PhpExpression
   deriving Show
 
 
 data MemberAccessMode =
   NameMT Int
   | ParentMT
+  | SelfMT
   | VarExprMT PhpExpression
+  | StringMT PhpExpression
   deriving Show
 
 
 data ScopeMode =
   RelativeSelfSM
   | RelativeStaticSM
+  | RelativeParentSM
   | NamedSM Int
+  | VariableSM VariableSpec
   deriving Show
 
 
@@ -206,11 +224,21 @@ data BinaryOps =
   | AndOp
   | OrOp
   | InstanceOfOp
+  | BitShiftLeftOp
+  | BitShiftRightOp
   deriving Show
+
+
+data UpdateOp =
+  IncOp
+  | DecOp
+  deriving Show
+
 
 data LiteralValue =
   BoolLiteral Int
   | IntLiteral Int
+  | FloatLiteral Int
   -- string [bB] "<content>" | [bB] '<content>'
   | StringLiteral Bool StringDetails 
   | NullLiteral
@@ -241,7 +269,7 @@ data MemberModifier =
   | StaticCM
   | ReferenceCM
   | NoOpCM
-  deriving Show
+  deriving (Show, Eq)
 
 
 newtype Attribute = LabelAT Int
@@ -251,6 +279,12 @@ newtype AttributeGroup = AttributeGroup [Attribute]
   deriving Show
 
 newtype AttributeList = AttributeList [AttributeGroup]
+  deriving Show
+
+
+data QualifiedName =
+    SimpleNameQN Int
+  | QualifiedNameQN [Int]
   deriving Show
 
 
@@ -269,8 +303,9 @@ newtype UseList = UseList [Int]
   deriving Show
 
 data MethodImplementation =
-    MethodImplementation PhpAction
-  | ReturnType TypeDecl
+    MethodImplementationMI PhpAction
+  | ReturnTypeMI TypeDecl
+  | AbstractMI
   deriving Show
 
 

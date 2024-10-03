@@ -95,7 +95,7 @@ library
       Template.PHP.Scanner
       Template.PHP.State
       Template.PHP.Types
-      Template.TsParser
+      Template.TSitterParser
       Template.Types
       Utils
       WebServer.CorsPolicy

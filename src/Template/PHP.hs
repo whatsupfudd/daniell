@@ -1,9 +1,12 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module Template.PHP where
 
+import Control.Monad (when)
 import Control.Monad.Cont (foldM)
 
-import Data.Text (pack)
+import qualified Data.ByteString as Bs
+import Data.Text (pack, unpack)
+import qualified Data.Text.Encoding as T
 import qualified Data.Vector as V
 
 import Foreign.C.String ( newCStringLen, peekCString )
@@ -38,9 +41,9 @@ tsParsePhp filePath = do
 
 tryParsePhp :: Ptr Parser -> FilePath -> IO (Either GenError FileTempl)
 tryParsePhp parser path = do
-  tmplString <- readFile path
+  tmplString <- Bs.readFile path
 
-  (cStr, strLen) <- newCStringLen tmplString
+  (cStr, strLen) <- newCStringLen $ unpack . T.decodeUtf8 $ tmplString
   tree <- ts_parser_parse_string parser nullPtr cStr strLen
 
   mem <- malloc
@@ -73,10 +76,12 @@ tryParsePhp parser path = do
 
 parseTsAst :: Ptr Node -> Int -> IO (Either GenError PhpContext)
 parseTsAst children count = do
+  -- TODO: define the debug flag as part of parameters.
+  let showGraph = True
   -- algo: do the descent of ts nodes and extract into verbatim and logic blocks; parse the syntax of each logic block, reassemble into a tree of statements/expressions.
   nodeGraph <- analyzeChildren 0 children count
   -- putStrLn $ "@[parseTsChildren] nodeGraph: " <> show nodeGraph
-  mapM_ (printNode 0) nodeGraph
+  when showGraph $ mapM_ (printNode 0) nodeGraph
   let
     scanRez = testScannerB nodeGraph
   case scanRez of

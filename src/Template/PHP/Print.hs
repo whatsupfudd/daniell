@@ -1,12 +1,16 @@
 module Template.PHP.Print where
 
 
+import qualified Data.ByteString as Bs
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Maybe (maybe)
 import qualified Data.Vector as V
 import TreeSitter.Node ( Node(..), TSPoint(TSPoint, pointRow, pointColumn) )
 
 import Template.PHP.Types
 import Template.PHP.AST
+import Template.PHP.Parser.Types (TError)
 
 
 printNode :: Int -> NodeEntry -> IO ()
@@ -63,17 +67,17 @@ showNodeCap level capCount nodes =
             (mainPart <> " > " <> nextPart <> " | " <> restPart2, newCap2)
 
 
-printPhpContext :: String -> PhpContext -> IO ()
+printPhpContext :: Bs.ByteString -> PhpContext -> IO ()
 printPhpContext content ctxt =
   let
-    cLines = V.fromList $ lines content
+    cLines = V.fromList $ Bs.split 10 content
     demandLines = V.map (fetchContent cLines) $ V.zip ctxt.contentDemands (V.fromList [0..])
   in do
   putStrLn $ "@[printPhpContext] logic: " <> showLogic 0 (V.toList ctxt.logic)
   putStrLn $ "@[printPhpContext] contentDemands: "
   V.mapM_ putStrLn demandLines
   where
-  fetchContent :: V.Vector String -> (SegmentPos, Int) -> String
+  fetchContent :: V.Vector Bs.ByteString -> (SegmentPos, Int) -> String
   fetchContent cLines ((start, end), lineNum) =
     let
       startLine = fromIntegral start.pointRow
@@ -81,9 +85,9 @@ printPhpContext content ctxt =
       endLine = fromIntegral end.pointRow
       endCol = fromIntegral end.pointColumn
       mainText
-        | startLine == endLine = take (endCol - startCol) $ drop startCol (cLines V.! startLine)
+        | startLine == endLine = Bs.take (endCol - startCol) $ Bs.drop startCol (cLines V.! startLine)
         | endCol == 0 = let
-                          prefix = drop startCol (cLines V.! startLine)
+                          prefix = Bs.drop startCol (cLines V.! startLine)
                           middle = if endLine == succ startLine then
                               ""
                             else
@@ -91,13 +95,13 @@ printPhpContext content ctxt =
                         in
                         prefix <> middle
         | otherwise = let
-                        prefix = drop startCol (cLines V.! startLine)
+                        prefix = Bs.drop startCol (cLines V.! startLine)
                         middle = V.foldl (\acc x -> acc <> "\n" <> x) "" (V.slice (succ startLine) (endLine - startLine) cLines)
-                        postfix = drop endCol (cLines V.! endLine)
+                        postfix = Bs.drop endCol (cLines V.! endLine)
                       in
                       prefix <> middle <> postfix
     in
-    show lineNum <> ": " <> mainText <> "\n"
+    show lineNum <> ": " <> (T.unpack . T.decodeUtf8) mainText <> "\n"
 
   showLogic :: Int -> [PhpAction] -> String
   showLogic level actions =
@@ -142,7 +146,7 @@ printPhpContext content ctxt =
       ForEachST cond (isRef, asVar) mbWithKey iterStmt ->
         indent <> "ForEachST " <> showExpr level cond
         <> "\n" <> if isRef then " Ref " else "" <> showVarSpec level asVar
-        <> "\n" <> maybe "" (showVarSpec level) mbWithKey
+        <> "\n" <> maybe "" (\(refFlag, varSpec) -> if refFlag then "(refed) " else "" <> showVarSpec level varSpec) mbWithKey
         <> "\n" <> showAction level iterStmt
       GotoST -> indent <> "GotoST "
       ContinueST -> indent <> "ContinueST "
@@ -154,7 +158,7 @@ printPhpContext content ctxt =
       ExitST mbExpr -> indent <> "ExitST " <> maybe "" (showExpr (level + 1)) mbExpr
       UnsetST -> indent <> "UnsetST "
       ConstDeclST -> indent <> "ConstDeclST "
-      FunctionDefST -> indent <> "FunctionDefST "
+      FunctionDefST qualName stmt -> indent <> "FunctionDefST " <> show qualName <> "\n" <> showAction level stmt
       ClassDefST attribs modifiers nameID mbBaseID interfDefs classMembers ->
           indent <> "ClassDefST " <> show nameID <> maybe "" (\bid -> " extends " <> show bid) mbBaseID
           <> "\n" <> indent <> "attribs: " <> show attribs <> "; modifiers: " <> show modifiers
@@ -167,6 +171,9 @@ printPhpContext content ctxt =
       NamespaceUseST -> indent <> "NamespaceUseST "
       GlobalDeclST -> indent <> "GlobalDeclST "
       FunctionStaticST -> indent <> "FunctionStaticST "
+      DanglingST dangling -> indent <> "DanglingST " <> show dangling
+      _ -> "unprettyfied stmt: " <> show stmt
+      
 
   showMemberDecl :: Int -> ClassMemberDecl -> String
   showMemberDecl level memberDecl =
@@ -181,8 +188,9 @@ printPhpContext content ctxt =
           indent <> "MethodCDecl " <> show attribs <> " (" <> show modifiers <> ") " <> show varID
           <> "\n" <> indent <> unlines (map (showVarSpec level) argSpecs)
           <> "\n" <> case methodImpl of
-            MethodImplementation action -> showAction level action
-            ReturnType typeDecl -> indent <> "returns " <> show typeDecl
+            AbstractMI -> indent <> "abstract method"
+            MethodImplementationMI action -> showAction level action
+            ReturnTypeMI typeDecl -> indent <> "returns " <> show typeDecl
       ConstructorCDecl -> indent <> "ConstructorCDecl "
       DestructorCDecl -> indent <> "DestructorCDecl "
       TraitUseCDecl nameIDs mbUseList -> indent <> "TraitUseCDecl " <> show nameIDs <> maybe "" (\useList -> " " <> show useList) mbUseList
@@ -219,8 +227,8 @@ printPhpContext content ctxt =
         indent <> "ArrayLiteral " <> concatMap (showExpr level) exprs
       Parenthesized exprs ->
         indent <> "Parenthesized " <> concatMap (showExpr level) exprs
-      AssignVar assignee expr ->
-        indent <> "AssignLocal " <> show assignee <> " " <> showExpr 0 expr
+      AssignVar isRef assignee expr ->
+        indent <> "AssignVar " <> if isRef then "(refed)" else "" <> " " <> show assignee <> " " <> showExpr 0 expr
       CommentX uid -> indent <> "CommentX " <> show uid
       MiscExpr name pos -> indent <> "MiscExpr " <> show name
       Subscript varName mbIndex ->

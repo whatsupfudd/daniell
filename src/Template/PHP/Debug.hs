@@ -154,7 +154,7 @@ debugLog lbl item = prefix msg
           ++ "\nVALUE: "
           ++ case show a of
             'n' : 'e' : rest -> "ne: " <> take 80 rest
-            _ -> show a
+            o -> show a -- take 160 o <> "..."
           ++ "\nHINTS: "
           ++ showHints hints
       DbgEERR nodes e ->

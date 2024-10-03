@@ -8,8 +8,14 @@ import qualified Options as Opt
 import qualified MainLogic as Ml
 import qualified Conclusion as Cnc
 
+import GHC.IO.Handle (hSetEncoding)
+import GHC.IO.StdHandles (stdout)
+import GHC.IO.Encoding (utf8)
+
+
 main :: IO ()
 main = do
+  hSetEncoding stdout utf8
   eiOptions <- Opt.parseCliOptions
   case eiOptions of
     Left errMsg ->

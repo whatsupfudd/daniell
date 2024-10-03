@@ -6,7 +6,7 @@ import TreeSitter.Haskell ( tree_sitter_haskell )
 
 import Conclusion (GenError (..))
 import Template.Types ( FileTempl )
-import Template.TsParser ( tsParseFile )
+import Template.TSitterParser ( tsParseFile )
 
 
 tsParseHaskell :: FilePath -> IO (Either GenError FileTempl)

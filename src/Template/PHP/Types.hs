@@ -24,7 +24,7 @@ instance Show NodeEntry where
             rest -> ", c = [" <> intercalate ", " (map (.name) (take 5 ne.children)) <> " }"
 
 showRange :: TSPoint -> TSPoint -> String
-showRange start end = "(" <> show start.pointRow <> ", " <> show start.pointColumn <> ") - (" <> show end.pointRow <> ", " <> show end.pointColumn <> ")"
+showRange start end = "(" <> show start.pointRow <> "," <> show start.pointColumn <> ") - (" <> show end.pointRow <> "," <> show end.pointColumn <> ")"
 
 
 instance Eq NodeEntry where
