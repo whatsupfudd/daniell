@@ -24,11 +24,13 @@ import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
               , TSPoint(TSPoint, pointRow, pointColumn) )
 import TreeSitter.Language (symbolToName, fromTSSymbol)
 
+import Cannelle.Common.Error (CompError (..))
+import qualified Cannelle.Fuddle.Parser as Fp
+import qualified Cannelle.Fuddle.Compiler as Fc
+import qualified Cannelle.VM.Context as Vm
+
 import Conclusion (GenError (..))
 import Template.Types
-import qualified Template.Fuddle.Parser as Fp
-import qualified Template.Fuddle.Compiler as Fc
-import qualified RunTime.Interpreter.Context as Vm
 
 
 tsParseFile :: Ptr Parser -> FilePath -> IO (Either GenError FileTempl)
@@ -108,23 +110,24 @@ compileParseBlocks codeName fileContent tsTree =
     (lefts, rights) = foldl eiSplit ([], []) rezA
   if null lefts then
     case Fp.astBlocksToTree (fromRight [] $ sequence rights) of
-      Left err -> pure . Left $ err
+      Left err -> pure . Left . SimpleMsg . pack . show $ err
       Right astTree -> do
         -- putStrLn $ "@[compileParseBlocks] ast blocks: " ++ show (sequence rights)
         -- putStrLn $ "@[compileParseBlocks] ast tree: " ++ show astTree
         -- TODO: load prelude modules and pass to compileAstTree.
         -- TODO: scan the AST for qualifed identifiers, load the module & term definitions, and also pass to compileAstTree.
         case Fc.compileAstTree astTree of
-          Left err -> pure $ Left err
+          Left err -> pure . Left . SimpleMsg . pack . show $ err
           Right vmCode -> pure $ Right vmCode
   else
     let
       combinedMsg = foldl (\accum lErr ->
           case lErr of
-            Left err ->
-              case err of
-                SimpleMsg aMsg -> accum <> "\n" <> aMsg
-                _ -> accum <> "\nunknown err: " <> (pack . show $ err)
+            Left (CompError errors) ->
+              foldl (\innerAccum (lineNbr, msg) ->
+                  innerAccum <> "\n" <> pack (show lineNbr) <> ": " <> pack msg
+                ) accum errors
+            _ -> accum <> "\nunknown err: " <> pack (show lErr)
           ) "" lefts
     in
     pure . Left . SimpleMsg $ combinedMsg

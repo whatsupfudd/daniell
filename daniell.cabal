@@ -60,41 +60,13 @@ library
       ProjectDefinition.Paraml
       ProjectDefinition.Scaffolding
       ProjectDefinition.Types
-      RunTime.Compiler.Assembler
-      RunTime.Compiler.Common
-      RunTime.Compiler.Types
       RunTime.Interpreter
-      RunTime.Interpreter.Context
-      RunTime.Interpreter.Engine
-      RunTime.Interpreter.Memory
-      RunTime.Interpreter.OpCodes
       RunTime.StaticSite
       Template.FileTree
-      Template.Fuddle.Ast
-      Template.Fuddle.Compiler
-      Template.Fuddle.Parser
-      Template.Golang.Ast
-      Template.Golang.Compiler
-      Template.Golang.Defines
-      Template.Golang.Parser
       Template.Haskell
       Template.Jinja2
       Template.Parser
       Template.PHP
-      Template.PHP.AST
-      Template.PHP.Class
-      Template.PHP.Debug
-      Template.PHP.Error
-      Template.PHP.Interface
-      Template.PHP.NeParser
-      Template.PHP.Parser.Expressions
-      Template.PHP.Parser.Statements
-      Template.PHP.Parser.Support
-      Template.PHP.Parser.Types
-      Template.PHP.Print
-      Template.PHP.Scanner
-      Template.PHP.State
-      Template.PHP.Types
       Template.TSitterParser
       Template.Types
       Utils

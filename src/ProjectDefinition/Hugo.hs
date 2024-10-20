@@ -24,8 +24,8 @@ import System.FilePath ((</>), splitDirectories)
 
 import Data.LanguageCodes (fromChars)
 
-import qualified Text.Cannelle.Hugo.Parse as Cnl
-import qualified Text.Cannelle.Hugo.AST as Cnl
+import qualified Cannelle.Hugo.Parse as Cnl
+import qualified Cannelle.Hugo.AST as Cnl
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
@@ -40,13 +40,14 @@ import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
-import qualified RunTime.Interpreter.Context as VM
+import qualified Cannelle.VM.Context as VM
 
-import RunTime.Compiler.Types (CompContext (..), CompFunction (..), CompConstant (..))
-import RunTime.Compiler.Assembler (assemble, convertCompCteToTempl)
-import Template.Golang.Compiler (compileStatements, FullCompContext (..))
-import qualified RunTime.Interpreter.Engine as VM
-import RunTime.Interpreter.Context (ConstantValue)
+import Cannelle.Hugo.Types (CompContext (..), CompFunction (..), CompConstant (..))
+import Cannelle.Hugo.Assembler (assemble, convertCompCteToTempl)
+import Cannelle.Hugo.Compiler (compileStatements, FullCompContext (..))
+import Cannelle.Hugo.AST (RawStatement (..))
+import qualified Cannelle.VM.Engine as VM
+import Cannelle.VM.Context (ConstantValue)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -79,7 +80,7 @@ newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
 data HgContext = HgContext {
       mergedConfigs :: Mp.Map Text DictEntry
     , pathPrefixes :: Mp.Map Int32 FilePath
-    , compTemplates :: Mp.Map FilePath [Cnl.Statement]
+    , compTemplates :: Mp.Map FilePath [RawStatement]
   }
   deriving Show
 

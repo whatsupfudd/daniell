@@ -31,9 +31,8 @@ import qualified Template.Parser as Tmpl
 import Template.Types (ScaffoldTempl (..), FileTempl (..), Function (..), Code (..))
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
-import qualified RunTime.Interpreter as Ri
-import qualified RunTime.Interpreter.Context as Vm
-import qualified RunTime.Interpreter.Engine as Vm
+import qualified Cannelle.VM.Context as Vm
+import qualified Cannelle.VM.Engine as Vm
 
 import Utils (splitResults)
 import Generator.Types

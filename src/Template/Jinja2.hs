@@ -9,10 +9,13 @@ import qualified Data.Text.IO as DT
 import Control.Monad.Identity (Identity, runIdentity)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
-import qualified Text.Ginger as Gngr
 
 import qualified System.IO as Sio
 import qualified System.IO.Error as Serr
+
+import Cannelle.Jinja.Parse (parseGinger, IncludeResolver, SourcePos)
+import Cannelle.Jinja.AST (Template)
+import Cannelle.Jinja.Run (easyRender)
 
 
 demoContext :: HashMap DT.Text DT.Text
@@ -21,21 +24,21 @@ demoContext = HashMap.fromList [
   , ("location", "Wonderland")
   ]
 
-nullResolver :: Gngr.IncludeResolver Identity
+nullResolver :: IncludeResolver Identity
 nullResolver = const $ return Nothing
 
-demoTemplate :: Gngr.Template Gngr.SourcePos
+demoTemplate :: Template SourcePos
 demoTemplate =
   either (error . show) id . runIdentity $
-      Gngr.parseGinger nullResolver Nothing "Hello, {{ name }}, welcome in {{ location }}!"
+      parseGinger nullResolver Nothing "Hello, {{ name }}, welcome in {{ location }}!"
 
 
 parse rtOpts filePath = do
   let
-    output = Gngr.easyRender demoContext demoTemplate
+    output = easyRender demoContext demoTemplate
   DT.putStrLn $ "@[parse] rez: " <> output
 
---  Gngr.runGingerT (Gngr.makeContextHtmlM scopeLookup (putStr . DT.unpack . htmlSource)) tpl
+--  runGingerT (makeContextHtmlM scopeLookup (putStr . DT.unpack . htmlSource)) tpl
 
 loadFile fn = Sio.openFile fn Sio.ReadMode >>= Sio.hGetContents
 

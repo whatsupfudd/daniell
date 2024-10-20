@@ -33,10 +33,10 @@ import Template.PHP (tsParsePhp)
 import qualified Template.Parser as Tmpl
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
-import qualified RunTime.Interpreter as Ri
-import qualified RunTime.Interpreter.Context as Vm
-import qualified RunTime.Interpreter.Engine as Vm
+import qualified Cannelle.VM.Context as Vc
+import qualified Cannelle.VM.Engine as Vm
 
+import qualified RunTime.Interpreter as Ri
 import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..))
 import qualified Generator.Types as Scf
 

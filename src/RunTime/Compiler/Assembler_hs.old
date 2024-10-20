@@ -1,13 +1,14 @@
 module RunTime.Compiler.Assembler where
 
+import Control.Monad (foldM)
+
 import Data.Int (Int32)
 import qualified Data.Map as Mp
 import qualified Data.Vector as V
 
-import RunTime.Interpreter.OpCodes
+import Cannelle.VM.OpCodes
+import Cannelle.VM.Context (ConstantValue (..))
 import RunTime.Compiler.Types
-import RunTime.Interpreter.Context (ConstantValue (..))
-import Control.Monad (foldM)
 
 
 assemble :: CompFunction -> Either String (V.Vector Int32)

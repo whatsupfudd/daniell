@@ -21,15 +21,15 @@ import TreeSitter.PHP ( tree_sitter_php )
 import TreeSitter.Node ( nodeStartPoint ,ts_node_copy_child_nodes, Node(..)
               , TSPoint(TSPoint, pointRow, pointColumn) )
 
+import Cannelle.PHP.NeParser (testScannerB)
+import Cannelle.PHP.Print (printPhpContext, printNode)
+import Cannelle.PHP.Types
+import Cannelle.PHP.Parser.Types (TError (..))
+import Cannelle.PHP.AST (PhpContext (..))
+
 import Conclusion (GenError (..))
 import Template.Types ( FileTempl )
 
-import Template.PHP.NeParser (testScannerB)
-import Template.PHP.Print (printPhpContext, printNode)
-import Template.PHP.Types
-import Template.PHP.Parser.Types (TError (..))
-
-import Template.PHP.AST (PhpContext (..))
 
 tsParsePhp :: FilePath -> IO (Either GenError FileTempl)
 tsParsePhp filePath = do

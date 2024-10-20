@@ -6,7 +6,7 @@ import Data.Text (Text)
 import qualified Data.Map as Mp
 import FileSystem.Types (PathFiles)
 
-import qualified RunTime.Interpreter.Context as Vm
+import qualified Cannelle.VM.Context as Vm
 
 
 {- Scaffhold Template
