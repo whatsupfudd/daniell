@@ -21,6 +21,7 @@ import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteTy
 import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
 import qualified ProjectDefinition.Hugo.Config as Hu
+import qualified ProjectDefinition.Hugo.Types as Ht
 import qualified ProjectDefinition.NextJS as Nx
 import qualified ProjectDefinition.Gatsby as Gb
 import qualified ProjectDefinition.Fuddle as Fd
@@ -29,7 +30,7 @@ import ProjectDefinition.Scaffolding (createScaffolding)
 import ProjectDefinition.Gatsby (analyseGatsbyProject)
 import ProjectDefinition.Fuddle (analyseFuddleProject)
 import Template.Haskell (tsParseHaskell)
-import Template.PHP (tsParsePhp)
+import Cannelle.PHP.Parse (tsParsePhp)
 import qualified Template.Parser as Tmpl
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
@@ -73,7 +74,7 @@ doPlan rtOpts plan =
 data SpecPlan =
   ScfPlan ScfWorkPlan
   | GatsbyPlan Gb.GbWorkPlan
-  | HugoPlan Hu.HgWorkPlan
+  | HugoPlan Ht.HgWorkPlan
   | NextPlan Nx.NxWorkPlan
   | FuddlePlan Fd.FdWorkPlan
   | PhpPlan
@@ -109,11 +110,16 @@ buildSite rtOpts siteOpts = do
       case eiSiteDef of
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
         Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
-    PhpSS phpOpts -> case phpOpts.srcDir of
-      Nothing -> pure . Left . SimpleMsg . pack $ "@[buildSite] no srcDir for Php project."
-      Just aText -> do
-        tsParsePhp $ unpack aText
-        pure $ Right PhpPlan
+    PhpSS phpOpts ->
+      -- TODO: add the proper execution of a PHP WP & Laravel template.
+      case phpOpts.srcDir of
+        Nothing -> pure . Left . SimpleMsg . pack $ "@[buildSite] no srcDir for Php project."
+        Just aText ->
+          let
+            debugMode = False
+          in do
+          tsParsePhp debugMode $ unpack aText
+          pure $ Right PhpPlan
     _ -> pure . Left . SimpleMsg . pack $ "@[buildSite] unknown subproject kind: " <> show siteOpts
 
   case eiWorkPlan of
@@ -134,7 +140,7 @@ buildSite rtOpts siteOpts = do
             Left err -> pure $ Left err
             Right _ -> pure $ Right ()
         HugoPlan hgPlan -> do
-          putStrLn $ "@[buildSite] hugo workPlan: " <> show hgPlan
+          putStrLn $ "@[buildSite] will run hugo workPlan: " <> show hgPlan
           rezA <- runPlan rtOpts hgPlan.engine hgPlan.context hgPlan.items
           case rezA of
             Left err -> pure $ Left err

@@ -39,6 +39,8 @@ library
       Generator.Types
       Generator.Work
       MainLogic
+      Markup.FrontMatter
+      Markup.Html
       Markup.Markdown
       Markup.Page
       Markup.Types
@@ -64,9 +66,9 @@ library
       RunTime.StaticSite
       Template.FileTree
       Template.Haskell
+      Template.Hugo
       Template.Jinja2
       Template.Parser
-      Template.PHP
       Template.TSitterParser
       Template.Types
       Utils

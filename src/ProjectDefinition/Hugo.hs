@@ -20,34 +20,24 @@ import Data.Text (Text, pack, unpack)
 import qualified Data.Text.Encoding as T
 import qualified Data.Vector as Vc
 
-import System.FilePath ((</>), splitDirectories)
+import System.FilePath ((</>), splitDirectories, takeBaseName)
 
 import Data.LanguageCodes (fromChars)
-
-import qualified Cannelle.Hugo.Parse as Cnl
-import qualified Cannelle.Hugo.AST as Cnl
 
 import Options.Runtime (RunOptions (..), TechOptions (..))
 import Options.Types (HugoBuildOptions (..))
 import Conclusion (GenError (..))
 import qualified FileSystem.Types as Fs
-import FileSystem.Types (FileWithPath)
+import FileSystem.Types (FileWithPath (..))
 import Generator.Types (ExecSystem (..), WorkPlan (..))
 import Markup.Types (MarkupPage (..), Content (..), ContentEncoding (..), FrontMatter (..), FMEncoding (..), Definition (..))
 import Markup.Page (parseContent)
-import ProjectDefinition.Paraml (tomlToDict)
+import Template.Hugo (compileTemplate)
 
+import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
-import qualified Cannelle.VM.Context as VM
-
-import Cannelle.Hugo.Types (CompContext (..), CompFunction (..), CompConstant (..))
-import Cannelle.Hugo.Assembler (assemble, convertCompCteToTempl)
-import Cannelle.Hugo.Compiler (compileStatements, FullCompContext (..))
-import Cannelle.Hugo.AST (RawStatement (..))
-import qualified Cannelle.VM.Engine as VM
-import Cannelle.VM.Context (ConstantValue)
 
 {- For Hugo project, use archetype/* to create a new document in the content section -}
 
@@ -73,31 +63,6 @@ defaultComponents = HugoComponents {
   }
 
 
-type HgWorkPlan = WorkPlan HgEngine HgContext HgWorkItem
-
-newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
-  deriving Show
-data HgContext = HgContext {
-      mergedConfigs :: Mp.Map Text DictEntry
-    , pathPrefixes :: Mp.Map Int32 FilePath
-    , compTemplates :: Mp.Map FilePath [RawStatement]
-  }
-  deriving Show
-
-data HgWorkItem =
-  ExecTmplForContent CTPair
-  | ExecTmplForRoute { dirPath :: FilePath }
-
-data CTPair = CTPair {
-    kind :: Fs.FileKind
-    , contentPrefix :: Int32
-    , section :: FilePath
-    , content :: Fs.FileItem
-    , themePrefix :: Int32
-    , template :: FilePath
-  }
-  deriving Show
-
 instance Show HgWorkItem where
   show wi = case wi of
     ExecTmplForContent ctp -> "ExecTmplForContent> dirPath: " <> ctp.section <> ", content" <> show ctp.content <> ", template: " <> ctp.template
@@ -111,10 +76,15 @@ instance ExecSystem HgEngine HgContext HgWorkItem where
         pure $ Right context
       ExecTmplForContent ctp ->
         let
-          contentPath = context.pathPrefixes Mp.! ctp.contentPrefix
-          themePath = context.pathPrefixes Mp.! ctp.themePrefix
-          mkPath = contentPath </> ctp.section </> Fs.getItemPath ctp.content
-          tmplPath = themePath </> ctp.template
+          mbContentPath = Mp.lookup ctp.contentPrefix context.pathPrefixes
+          mbThemePath = Mp.lookup ctp.themePrefix context.pathPrefixes
+          mkPath = case mbContentPath of
+            Nothing -> ctp.section </> Fs.getItemPath ctp.content
+            Just aPath -> aPath </> ctp.section </> Fs.getItemPath ctp.content
+          tmplPath = case mbThemePath of
+            -- TODO: find the default location of the layouts directory:
+            Nothing -> rtOpts.baseDir </> "layouts" </> ctp.template
+            Just aPath -> aPath </> ctp.template
         in do
         putStrLn $ "@[runWorkItem.HgEngine] content: " <> mkPath <> ", template: " <> tmplPath
         case Mp.lookup tmplPath context.compTemplates of
@@ -128,55 +98,7 @@ instance ExecSystem HgEngine HgContext HgWorkItem where
                 putStrLn errMsg
                 pure . Left . SimpleMsg $ pack errMsg
               Right templSource -> do
-                rezB <- Cnl.parseTemplateSource (Just tmplPath) templSource
-                case rezB of
-                  Left errMsg ->
-                    let
-                      nErrMsg = "@[runWorkItem.HgEngine] parseTemplateSource err: " <> errMsg
-                    in do
-                    putStrLn nErrMsg
-                    pure . Left . SimpleMsg $ pack nErrMsg
-                  Right templateElements -> case Cnl.convertElements templateElements of
-                    Left errMsg ->
-                      let
-                        nErrMsg = "@[runWorkItem.HgEngine] convertElements err: " <> errMsg
-                      in do
-                      putStrLn nErrMsg
-                      pure . Left . SimpleMsg $ pack nErrMsg
-                    Right rezC -> do
-                      putStrLn "@[runWorkItem.HgEngine] convertElements: "
-                      Cnl.showStatements rezC
-                      case compileStatements "$main" rezC of
-                        Left err -> do
-                          putStrLn $ "@[runWorkItem.HgEngine] compileCode err: " <> show err
-                          pure . Left . SimpleMsg $ "@[runWorkItem.HgEngine] compileCode err: " <> pack (show err)
-                        Right compiledCode -> do
-                          putStrLn $ "@[runWorkItem.HgEngine] compileCode: " <> show compiledCode
-                          let
-                            vmModule = VM.VMModule {
-                                functions = Vc.fromList . map (\(compFct, fID) -> 
-                                    VM.FunctionDef {
-                                      moduleID = 0
-                                      , fname = T.decodeUtf8 $ case compFct.name of
-                                          "$main" -> compFct.name
-                                          _ -> "$" <> compFct.name
-                                      , args = Nothing
-                                      , returnType = VM.FirstOrderSO VM.IntTO
-                                      , body = case assemble compFct of
-                                          Left err -> VM.ByteCode Vc.empty
-                                          Right compiled -> VM.ByteCode compiled
-                                    }
-                                  ) $ Mp.elems compiledCode.functions
-                              , constants = Vc.fromList . map (convertCompCteToTempl . fst) $ Mp.elems compiledCode.constants
-                              , externModules = Mp.empty
-                            }
-                          rezE <- VM.execModule vmModule
-                          case rezE of
-                            Left errMsg -> do
-                              putStrLn $ "@[runWorkItem.HgEngine] execModule err: " <> errMsg
-                            Right (VM.ExecResult vmCtxt) -> do
-                              putStrLn $ "@[runWorkItem.HgEngine] exec rez: " <> show vmCtxt
-                          pure . Right $ context { compTemplates = Mp.insert tmplPath rezC context.compTemplates }
+                compileTemplate rtOpts (engine, context, wItem) (tmplPath, templSource)
           Just stmts -> do
             putStrLn $ "@[runWorkItem.HgEngine] template already parsed: " <> tmplPath
             pure $ Right context
@@ -214,26 +136,36 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
       mrkpPages <- analyzeMarkups rtOpts context markupFiles
       case mrkpPages of
         Left err -> pure $ Left err
-        Right mrkpPages ->
+        Right mrkpPages -> do
           let
             eiTheme = selectTheme hugoOpts context
-          in
-          case eiTheme of
-            Left err -> pure $ Left err
+
+          mbThemeName <- case eiTheme of
+            Left err -> do
+              putStrLn $ "@[analyseContent] Warning: no theme available, " <> show err
+              pure Nothing
             Right aLabel ->
-              let
-                mbProjLayout = if null components.templCore.layouts then Nothing else Just $ buildTemplateFromCore components.templCore
-                (mbTheme, fakePrefix_1) = case Mp.lookup (unpack aLabel) components.themes of
+              pure $ Just aLabel
+
+          let
+            mbProjLayout = if null components.templCore.layouts then Nothing else Just $ buildTemplateFromCore components.templCore
+            (mbTemplate, fakePrefix_1) = case mbThemeName of
+              Nothing -> (Nothing, Mp.empty)
+              Just aLabel ->
+                case Mp.lookup (unpack aLabel) components.themes of
                   Nothing -> (Nothing, fakePrefixes_0)
                   Just aTmplCore -> (Just $ buildTemplateFromCore aTmplCore, Mp.insert 1 (baseDir </> "themes" </> unpack aLabel </> "layouts") fakePrefixes_0)
-              in
-              case (mbTheme, mbProjLayout) of
-                (Nothing, Nothing) -> pure . Left . SimpleMsg $ "@[analyseContent] no theme directory (" <> aLabel <> ") nor site layout available."
+
+          case (mbTemplate, mbProjLayout) of
+                (Nothing, Nothing) ->
+                  pure . Left . SimpleMsg $ "@[analyseContent] no theme directory (" <> fromMaybe "<nothing>" mbThemeName <> ") nor site layout available."
                 (_, _) -> do
-                  putStrLn $ "@[analyseContent] theme: " <> show mbTheme
+                  putStrLn $ "@[analyseContent] theme: " <> maybe "<nothing>" unpack mbThemeName
                   putStrLn $ "@[analyseContent] proj layout: " <> show mbProjLayout
-                  putStrLn $ "@[analyseContent] markup pages: " <> show mrkpPages
-                  case assignContentToTheme context components (maybesToArray (mbProjLayout, mbTheme)) mrkpPages of
+                  putStrLn $ "@[analyseContent] markup pages: " <> show (map (\p -> p.item) mrkpPages)
+                  -- putStrLn $ "@[analyseContent] tmpPairs: " <> show tmpPairs
+                  -- putStrLn $ "@[analyseContent] templates: " <> show (maybesToArray [mbProjLayout, mbTemplate])
+                  case assignContentToTheme context components (maybesToArray [mbProjLayout, mbTemplate]) mrkpPages of
                     Left err -> pure $ Left err
                     Right pairs ->
                       let
@@ -272,7 +204,7 @@ analyseContent (rtOpts, hugoOpts) (ProjectDefinition baseDir (Site Hugo) [] path
       _ -> ExecTmplForRoute dirPath :| []
 
 
-maybesToArray :: (Maybe a, Maybe a) -> [ a ]
+maybesToArray :: [ Maybe a ] -> [ a ]
 maybesToArray = foldr (\a accum -> maybe accum (: accum) a) []
 
 classifyContent :: (RunOptions, HugoBuildOptions) -> Fs.PathFiles -> HugoComponents
@@ -372,7 +304,7 @@ assignContentToTheme context components themes markupPages =
   where
   analyzePage :: AnalyzeContext -> [ Template ] -> [ (MarkupPage, PageTmpl) ] -> MarkupPage -> Either GenError [ (MarkupPage, PageTmpl) ]
   analyzePage context themes accum aPage =
-    if isMarkdown aPage.content.encoding then
+    if isMarkdown aPage.content.encoding || isHtml aPage.content.encoding then
       -- TODO: apply the relevant front-matter and association rules to assign the page to a theme.
       let
         mbLocale = aPage.frontMatter >>= (\fm -> case Mp.lookup "language" fm.fields of
@@ -384,10 +316,10 @@ assignContentToTheme context components themes markupPages =
           let
             allDirs = splitDirectories dirPath
           in
-          if isIso639 $ head allDirs then
-            (head allDirs, tail allDirs)
-          else
-            ("", allDirs)
+          case allDirs of
+            [] -> ("", [])
+            [ a ] -> if isIso639 a then (a, []) else ("", allDirs)
+            a : rest -> if isIso639 a then (a, rest) else ("", allDirs)
         mbPage = findPageTmpl themes (locale, sections) aPage
       in
       case mbPage of
@@ -404,8 +336,9 @@ assignContentToTheme context components themes markupPages =
       aTempl : rest ->
         let
           mkPagePath = Fs.getItemPath (snd mkPage.item)
+          mkPageName = takeBaseName mkPagePath
           kind = case mkPage.frontMatter of
-            Nothing -> if null sections && mkPagePath `elem` ["index.md", "_index.md" ] then Home else Single
+            Nothing -> if null sections && mkPageName `elem` ["index", "_index" ] then Home else Single
             Just aFM -> case Mp.lookup "layout" aFM.fields of
               Just (ValueDF aType) -> case aType of
                 StringDV "home" -> Home
@@ -416,7 +349,7 @@ assignContentToTheme context components themes markupPages =
                 StringDV "summary" -> Summary
                 StringDV aLabel -> Other aLabel
                 _ -> Single
-              Nothing -> if null sections && mkPagePath `elem` [ "index.md", "_index.md" ] then Home else Single
+              Nothing -> if null sections && mkPageName `elem` [ "index", "_index" ] then Home else Single
         in
         case findInLayout aTempl.layout kind (locale, sections) mkPage of
           Just aPageTmpl -> Just aPageTmpl
@@ -468,6 +401,10 @@ assignContentToTheme context components themes markupPages =
   isMarkdown (ParsedMarkdown _) = True
   isMarkdown RawMarkdown = True
   isMarkdown _ = False
+
+  isHtml :: ContentEncoding -> Bool
+  isHtml RawHtml = True
+  isHtml _ = False
 
 
 isIso639 :: String -> Bool
@@ -570,7 +507,7 @@ extractMarkup :: [ FileWithPath ] -> Mp.Map String [ FileWithPath ]
 extractMarkup = foldl (\accum (dirPath, aFile) ->
     case aFile of
       Fs.KnownFile kind aPath ->
-        if kind == Fs.Markdown then
+        if kind == Fs.Markdown || kind == Fs.Html then
           Mp.insertWith (<>) dirPath [(dirPath, aFile)] accum
         else
           accum
@@ -621,10 +558,6 @@ analyzeMarkupPage :: RunOptions -> FilePath -> FilePath -> FileWithPath -> IO (E
 analyzeMarkupPage rtOpts rootDir groupPath file =
   -- putStrLn $ "@[analyzeMarkupPage] analyzing: " <> fullPath
   parseContent rtOpts (rootDir </> "content") file
-
-analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.KnownFile _ filePath) = do
-  putStrLn $ "@[analyzeMarkupPage] error, trying to analyze a non-markup file: " <> groupPath </> filePath
-  pure $ Left $ SimpleMsg "Trying to analyze a non-markup file."
 
 analyzeMarkupPage rtOpts rootDir groupPath (aDirPath, Fs.MiscFile filePath) = do
   putStrLn $ "@[analyzeMarkupPage] error, trying to analyze a non-markup file: " <> groupPath </> filePath

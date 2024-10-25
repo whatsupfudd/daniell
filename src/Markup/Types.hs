@@ -49,6 +49,7 @@ data Content = Content {
 data ContentEncoding =
   ParsedMarkdown MMark
   | RawMarkdown
+  | RawHtml
   deriving Show
 
 

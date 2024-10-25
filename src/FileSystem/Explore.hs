@@ -67,6 +67,7 @@ itemMaker fileName
   | ".rss" `isSuffixOf` fileName = Just $ KnownFile Rss fileName
   | ".xml" `isSuffixOf` fileName = Just $ KnownFile Xml fileName
   | ".txt" `isSuffixOf` fileName = Just $ KnownFile TxtTempl fileName
+  | ".php" `isSuffixOf` fileName = Just $ KnownFile Php fileName
   | otherwise = Just $ MiscFile fileName
 
 

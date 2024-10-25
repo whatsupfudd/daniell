@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use list comprehension" #-}
 module ProjectDefinition.Hugo.Config where
 
 import Control.Monad (foldM)
@@ -19,7 +21,7 @@ import Conclusion (GenError (..))
 import qualified FileSystem.Types as Fs
 import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types (DictEntry (..))
-import ProjectDefinition.Hugo.Types
+import ProjectDefinition.Hugo.Types (AnalyzeContext (..), RunMode (..), defaultContext)
 
 
 data LocaleConfig = LanguageConfig {

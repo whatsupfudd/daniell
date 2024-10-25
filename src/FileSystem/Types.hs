@@ -30,6 +30,7 @@ data FileKind =
   | Pandoc
   | Xml
   | TxtTempl
+  | Php
   deriving (Eq, Ord, Show)
 
 

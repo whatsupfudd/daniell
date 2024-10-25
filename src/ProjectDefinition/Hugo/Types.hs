@@ -1,27 +1,32 @@
 module ProjectDefinition.Hugo.Types where
 
 import Data.ByteString (ByteString)
-import Data.Map (Map, empty)
+import Data.Int (Int32)
+import qualified Data.Map as Mp
 import Data.Text (Text)
 
-import FileSystem.Types (FileWithPath)
+import Options.Types (HugoBuildOptions (..))
+import qualified FileSystem.Types as Fs
+import Generator.Types (ExecSystem (..), WorkPlan (..))
 import ProjectDefinition.Types (DictEntry)
+
+import qualified Cannelle.Template.Types as Ct
 
 -- Analysis context for a Hugo project (configurations, etc) that will be used to drive generation.
 data AnalyzeContext = AnalyzeContext {
-    globalVars :: Map Text DictEntry
-    , defaultVars :: Map Text DictEntry
-    , otherVars :: Map Text (Map Text DictEntry)
-    , mergedConfigs :: Map Text DictEntry
+    globalVars :: Mp.Map Text DictEntry
+    , defaultVars :: Mp.Map Text DictEntry
+    , otherVars :: Mp.Map Text (Mp.Map Text DictEntry)
+    , mergedConfigs :: Mp.Map Text DictEntry
   }
   deriving Show
 
 defaultContext :: AnalyzeContext
 defaultContext = AnalyzeContext {
-    globalVars = empty
-    , defaultVars = empty
-    , otherVars = empty
-    , mergedConfigs = empty
+    globalVars = Mp.empty
+    , defaultVars = Mp.empty
+    , otherVars = Mp.empty
+    , mergedConfigs = Mp.empty
   }
 
 
@@ -33,18 +38,18 @@ data RunMode =
 
 data Template = Template {
     core :: HugoTemplCore
-    , config :: Map Text DictEntry
+    , config :: Mp.Map Text DictEntry
     , layout :: LayoutTmpl
   }
   deriving Show
 
-type ThemeTmplPages = Map Text PageTmpl
-type ThemeTmplMaps = Map Text ThemeTmplPages
+type ThemeTmplPages = Mp.Map Text PageTmpl
+type ThemeTmplMaps = Mp.Map Text ThemeTmplPages
 data LayoutTmpl = LayoutTmpl {
     topLevel :: ThemeTmplPages
     , defaults :: ThemeTmplPages
-    , kinds :: Map Text ThemeTmplPages
-    , partials :: Map Text ThemeTmplPages
+    , kinds :: Mp.Map Text ThemeTmplPages
+    , partials :: Mp.Map Text ThemeTmplPages
     , shortcodes :: ThemeTmplPages
   }
   deriving Show
@@ -61,7 +66,7 @@ data PageKind =
   deriving Show
 
 data PageTmpl =
-  FileRef FileWithPath
+  FileRef Fs.FileWithPath
   | Compiled CompiledTemplate
   deriving Show
 
@@ -70,9 +75,9 @@ type CompiledTemplate = ByteString
 
 data HugoComponents = HugoComponents {
     templCore :: HugoTemplCore
-    , config :: [ FileWithPath ]
-    , content :: [ FileWithPath ]
-    , public :: [ FileWithPath ]
+    , config :: [ Fs.FileWithPath ]
+    , content :: [ Fs.FileWithPath ]
+    , public :: [ Fs.FileWithPath ]
     , themes :: ThemeMap
     , staticDest :: FilePath
   }
@@ -80,17 +85,46 @@ data HugoComponents = HugoComponents {
 
 
 data HugoTemplCore = HugoTemplCore {
-    archetypes :: [ FileWithPath ]
-    , assets :: [ FileWithPath ]
-    , dataSet :: [ FileWithPath ]
-    , i18n :: [ FileWithPath ]
-    , layouts :: [ FileWithPath ]
-    , resource :: [ FileWithPath ]
-    , static :: [ FileWithPath ]
-    , projConfig :: [ FileWithPath ]
-    , miscs :: [ FileWithPath ]
+    archetypes :: [ Fs.FileWithPath ]
+    , assets :: [ Fs.FileWithPath ]
+    , dataSet :: [ Fs.FileWithPath ]
+    , i18n :: [ Fs.FileWithPath ]
+    , layouts :: [ Fs.FileWithPath ]
+    , resource :: [ Fs.FileWithPath ]
+    , static :: [ Fs.FileWithPath ]
+    , projConfig :: [ Fs.FileWithPath ]
+    , miscs :: [ Fs.FileWithPath ]
   }
   deriving Show
 
-type ThemeMap = Map String HugoTemplCore
+type ThemeMap = Mp.Map String HugoTemplCore
+
+-- WorkPlan relate data types:
+
+data CTPair = CTPair {
+    kind :: Fs.FileKind
+    , contentPrefix :: Int32
+    , section :: FilePath
+    , content :: Fs.FileItem
+    , themePrefix :: Int32
+    , template :: FilePath
+  }
+  deriving Show
+
+
+type HgWorkPlan = WorkPlan HgEngine HgContext HgWorkItem
+
+newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
+  deriving Show
+
+data HgContext = HgContext {
+      mergedConfigs :: Mp.Map Text DictEntry
+    , pathPrefixes :: Mp.Map Int32 FilePath
+    , compTemplates :: Mp.Map FilePath Ct.TemplateDef
+  }
+  deriving Show
+
+data HgWorkItem =
+  ExecTmplForContent CTPair
+  | ExecTmplForRoute { dirPath :: FilePath }
 

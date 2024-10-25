@@ -33,6 +33,23 @@ import Conclusion (GenError (..))
 import Template.Types
 
 
+data TemplTsTree = TemplTsTree {
+  hasLogic :: Bool
+  , blocks :: [ParseBlock]
+  }
+
+
+data ParseBlock =
+    Verbatim (TSPoint, TSPoint)
+    | Logic (TSPoint, TSPoint)
+
+instance Show ParseBlock where
+  show (Verbatim (pA, pB)) = "Verbatim (" <> show pA.pointRow <> ", "
+        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
+  show (Logic (pA, pB)) = "Logic (" <> show pA.pointRow <> ", "
+        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
+
+
 tsParseFile :: Ptr Parser -> FilePath -> IO (Either GenError FileTempl)
 tsParseFile parser path = do
   tmplString <- readFile path
@@ -174,23 +191,6 @@ getBlockContent lines pBlock =
         else ""
     in
       prefix <> "\n" <> middle <> postfix
-
-
-data TemplTsTree = TemplTsTree {
-  hasLogic :: Bool
-  , blocks :: [ParseBlock]
-  }
-
-
-data ParseBlock =
-    Verbatim (TSPoint, TSPoint)
-    | Logic (TSPoint, TSPoint)
-
-instance Show ParseBlock where
-  show (Verbatim (pA, pB)) = "Verbatim (" <> show pA.pointRow <> ", "
-        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
-  show (Logic (pA, pB)) = "Logic (" <> show pA.pointRow <> ", "
-        <> show pA.pointColumn <> ")-(" <> show pB.pointRow <> ", " <> show pB.pointColumn <> ")"
 
 
 parseTsChildren :: Ptr Node -> Int -> IO (Either GenError TemplTsTree)
