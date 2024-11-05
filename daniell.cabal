@@ -56,8 +56,10 @@ library
       ProjectDefinition.Fuddle
       ProjectDefinition.Gatsby
       ProjectDefinition.Hugo
+      ProjectDefinition.Hugo.Analyze
       ProjectDefinition.Hugo.Config
       ProjectDefinition.Hugo.Types
+      ProjectDefinition.Hugo.Work
       ProjectDefinition.NextJS
       ProjectDefinition.Paraml
       ProjectDefinition.Scaffolding

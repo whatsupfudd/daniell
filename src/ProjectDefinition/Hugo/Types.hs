@@ -10,7 +10,7 @@ import qualified FileSystem.Types as Fs
 import Generator.Types (ExecSystem (..), WorkPlan (..))
 import ProjectDefinition.Types (DictEntry)
 
-import qualified Cannelle.Template.Types as Ct
+import qualified Cannelle.FileUnit.Types as Fu
 
 -- Analysis context for a Hugo project (configurations, etc) that will be used to drive generation.
 data AnalyzeContext = AnalyzeContext {
@@ -107,7 +107,7 @@ data CTPair = CTPair {
     , section :: FilePath
     , content :: Fs.FileItem
     , themePrefix :: Int32
-    , template :: FilePath
+    , templates :: [FilePath]
   }
   deriving Show
 
@@ -120,7 +120,8 @@ newtype HgEngine = HgEngine { hugoOpts :: HugoBuildOptions }
 data HgContext = HgContext {
       mergedConfigs :: Mp.Map Text DictEntry
     , pathPrefixes :: Mp.Map Int32 FilePath
-    , compTemplates :: Mp.Map FilePath Ct.TemplateDef
+    , compFileUnits :: Mp.Map FilePath Fu.FileUnit
+    , siteDef :: HugoComponents
   }
   deriving Show
 

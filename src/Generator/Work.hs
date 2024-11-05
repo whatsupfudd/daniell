@@ -33,6 +33,7 @@ import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import qualified Cannelle.VM.Context as Vm
 import qualified Cannelle.VM.Engine as Vm
+import qualified Cannelle.Hugo.Exec as Hg
 
 import Utils (splitResults)
 import Generator.Types
@@ -41,7 +42,7 @@ import Data.List.NonEmpty (NonEmpty)
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
-
+-- *** DEPRECATED: should use the Fuddle or Haskell WorkEngine instead.
 runGen :: RunOptions -> FilePath -> ScaffoldTempl -> NonEmpty ScfWorkItem -> IO (Either GenError ())
 runGen rtOpts destDir projTempl wItems = do
   mapM_ (\wi -> do
@@ -150,8 +151,9 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
     Right aVM -> case aVM of
       FuddleVM vmModule -> do
         putStrLn $ "@[genFileFromTemplate] Haskell templ, executing VM module: " <> show vmModule
-        -- TODO: create a runtime context, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
-        eiRez <- Vm.execModule vmModule
+        -- TODO: create a runtime context, execute the VM on the FileTemplate produced:
+        -- TODO: pass the proper context, HugoLib context isn't appropriate for all cases.
+        eiRez <- Vm.execModule vmModule Hg.fakeHugoContext Nothing
         case eiRez of
           Left errMsg -> do
             putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg

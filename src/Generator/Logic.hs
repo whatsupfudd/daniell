@@ -100,13 +100,13 @@ buildSite rtOpts siteOpts = do
         newRtOpts = Hu.setRunOptions rtOpts hugoOpts
       in do
       eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
-      putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
+      putStrLn $ "@[buildSite] eiSiteDef:\n" <> showSiteDef eiSiteDef
       case eiSiteDef of
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
         Right dirTree -> (HugoPlan <$>) <$> Hu.analyseProject newRtOpts dirTree
     NextSS -> do
       eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
-      putStrLn $ "@[buildSite] eiSiteDef: " <> show eiSiteDef
+      putStrLn $ "@[buildSite] eiSiteDef:\n" <> showSiteDef eiSiteDef
       case eiSiteDef of
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
         Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
@@ -159,6 +159,12 @@ buildSite rtOpts siteOpts = do
             Right _ -> pure $ Right ()
         PhpPlan -> do
           pure $ Right ()
+
+  where
+  showSiteDef :: Either String Fs.PathFiles -> String
+  showSiteDef eiSiteDef = case eiSiteDef of
+      Left err -> show err
+      Right aSiteDef -> concatMap (\(dirPath, items) -> "\t- " <> dirPath <> " -> " <> show items <> "\n") aSiteDef
 
 
 createProject :: RunOptions -> NewOptions -> IO Conclusion

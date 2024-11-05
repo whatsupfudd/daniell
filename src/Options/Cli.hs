@@ -75,7 +75,7 @@ commandsDef :: Mod CommandFields Command
 commandsDef =
   let
     cmdArray = [
-        ("build", BuildCmd <$> buildOpts, "Print the site configuration.")
+        ("build", BuildCmd <$> buildOpts, "Builds a project into a static website or a dynamic web application.")
       , ("config", pure ConfigCmd, "Print the site configuration.")
       , ("convert", pure ConvertCmd, "Convert your content to different formats.")
       , ("deploy", pure DeployCmd, "Deploy your site to a Cloud provider.")
@@ -95,7 +95,7 @@ commandsDef =
   in
     foldl (\accum aCmd -> cmdBuilder aCmd <> accum) (cmdBuilder headArray) tailArray
   where
-  cmdBuilder (label, cmdDef, desc) = command label (info cmdDef (progDesc desc))
+  cmdBuilder (label, cmdDef, desc) = command label (info (cmdDef <**> helper) (progDesc desc))
 
 
 newOpts :: Parser NewOptions
@@ -130,10 +130,10 @@ buildOpts = do
         <*> optional (strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory."))
   -- (subparser (hugoSP <> nextSP <> fuddleSP <> gatsbySP)
   where
-  sitePK = command "site" (info (SiteBK <$> siteOpts) (progDesc "Create a new site project."))
-  webAppPK = command "webapp" (info (pure WebAppBK) (progDesc "Create a new webapp project."))
-  localAppPK = command "localapp" (info (pure LocalAppBK) (progDesc "Create a new localapp project."))
-  {- TODO: get the parser to only accept these keywoards:
+  sitePK = command "site" (info (SiteBK <$> siteOpts <**> helper) (progDesc "Build a site project."))
+  webAppPK = command "webapp" (info (pure WebAppBK) (progDesc "Build a webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppBK) (progDesc "Build a localapp project."))
+  {- TODO: get the parser to only accept these keywords:
   nextSP = command "next" (info (pure NextSP) (progDesc "Build a Next project."))
   fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Build a Fuddle project."))
   gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Build a Gatsby project."))
