@@ -36,7 +36,7 @@ data BuildOptions = BuildOptions {
 
 data BuildKind =
   SiteBK SiteOptions
-  | WebAppBK
+  | WebAppBK WebAppOptions
   | LocalAppBK
   deriving Show
 
@@ -48,8 +48,9 @@ data SiteOptions =
   | PhpSS PhpBuildOptions
   deriving Show
 
+
 data WebAppOptions =
-  NextWA
+  NextWA NextAppBuildOptions
   | FuddleWA
   deriving Show
 
@@ -99,7 +100,14 @@ data HugoBuildOptions = HugoBuildOptions {
   }
   deriving Show
 
+
 newtype PhpBuildOptions = PhpBuildOptions {
     srcDir :: Maybe Text
+  }
+  deriving Show
+
+
+newtype NextAppBuildOptions = NextAppBuildOptions {
+    packagePath :: Maybe Text
   }
   deriving Show

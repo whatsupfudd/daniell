@@ -14,7 +14,7 @@ import qualified System.Directory as SE
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..), PhpBuildOptions (..))
+import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..), PhpBuildOptions (..), WebAppOptions (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
@@ -36,6 +36,8 @@ import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import qualified Cannelle.VM.Context as Vc
 import qualified Cannelle.VM.Engine as Vm
+
+import Utils ((>>=?))
 
 import qualified RunTime.Interpreter as Ri
 import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..))
@@ -160,12 +162,6 @@ buildSite rtOpts siteOpts = do
         PhpPlan -> do
           pure $ Right ()
 
-  where
-  showSiteDef :: Either String Fs.PathFiles -> String
-  showSiteDef eiSiteDef = case eiSiteDef of
-      Left err -> show err
-      Right aSiteDef -> concatMap (\(dirPath, items) -> "\t- " <> dirPath <> " -> " <> show items <> "\n") aSiteDef
-
 
 createProject :: RunOptions -> NewOptions -> IO Conclusion
 createProject rtOpts newOpts =
@@ -179,6 +175,21 @@ createProject rtOpts newOpts =
     LocalAppPK ->
       createScaffolding rtOpts newOpts
 
+
+buildWebApp :: RunOptions -> WebAppOptions -> IO (Either GenError ())
+buildWebApp rtOpts waOpts = do
+  putStrLn "@[buildWebApp] starting."
+  case waOpts of
+    FuddleWA -> pure . Left . SimpleMsg . pack $ "@[buildWebApp] Fuddle not supported yet."
+    NextWA nextOpts -> do
+      eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
+      putStrLn $ "@[buildWebApp] eiSiteDef:\n" <> showSiteDef eiSiteDef
+      case eiSiteDef of
+        Left err -> pure . Left $ SimpleMsg (pack . show $ err)
+        Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
+      >>=? \workPlan -> do
+        putStrLn $ "@[buildWebApp] workPlan: " <> show workPlan
+        pure . Right $ ()
 
 {- Early stage testing of stuff: -}
 
@@ -233,6 +244,12 @@ genOutput rtOpts siteDef execCtxt (tmplName, genList) = do
           Left err -> pure $ Left err
           Right aCtxt -> Ri.execute rtOpts siteDef template aCtxt (Just item)
         ) (Right execCtxt) genList
+
+
+showSiteDef :: Either String Fs.PathFiles -> String
+showSiteDef eiSiteDef = case eiSiteDef of
+    Left err -> show err
+    Right aSiteDef -> concatMap (\(dirPath, items) -> "\t- " <> dirPath <> " -> " <> show items <> "\n") aSiteDef
 
 
 -- Tests:

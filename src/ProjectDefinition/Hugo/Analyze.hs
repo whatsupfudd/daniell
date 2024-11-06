@@ -41,9 +41,10 @@ import ProjectDefinition.Paraml (tomlToDict)
 import ProjectDefinition.Types
 import ProjectDefinition.Hugo.Config
 import ProjectDefinition.Hugo.Types
+
+import Utils ((>>=?))
+
 import Cannelle.Hugo.Types (HugoCompileCtxt)
-import Control.Monad.Cont (lift, liftIO)
-import Control.Monad ((>=>))
 
 
 defaultComponents :: HugoComponents
@@ -99,12 +100,6 @@ classifyContent (rtOpts, hugoOpts) pathFiles =
     case aFile of
       Fs.KnownFile aKind aPath -> (Mp.insertWith (<>) aKind [(dirPath, aFile)] fileDict, miscItems)
       Fs.MiscFile aPath -> (fileDict, miscItems <> [ (dirPath, aFile) ])
-
-
-(>>=?) :: IO (Either GenError a) -> (a -> IO (Either GenError b)) -> IO (Either GenError b)
-ma >>=? f = ma >>= \case
-    Left err -> pure $ Left err
-    Right a -> f a
 
 
 -- ^ analyseContent: decides what to do, most importantly, what to generate from the <content> directory.

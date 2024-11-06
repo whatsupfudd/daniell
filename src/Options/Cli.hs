@@ -130,13 +130,13 @@ buildOpts = do
         <*> optional (strArgument (metavar "PROJECTROOT" <> help "Name of project's root directory."))
   -- (subparser (hugoSP <> nextSP <> fuddleSP <> gatsbySP)
   where
-  sitePK = command "site" (info (SiteBK <$> siteOpts <**> helper) (progDesc "Build a site project."))
-  webAppPK = command "webapp" (info (pure WebAppBK) (progDesc "Build a webapp project."))
-  localAppPK = command "localapp" (info (pure LocalAppBK) (progDesc "Build a localapp project."))
+  sitePK = command "site" (info (SiteBK <$> siteOpts <**> helper) (progDesc "Builds a site project."))
+  webAppPK = command "webapp" (info (WebAppBK <$> webappOpts <**> helper) (progDesc "Builds a webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppBK <**> helper) (progDesc "Builds a localapp project."))
   {- TODO: get the parser to only accept these keywords:
-  nextSP = command "next" (info (pure NextSP) (progDesc "Build a Next project."))
-  fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Build a Fuddle project."))
-  gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Build a Gatsby project."))
+  nextSP = command "next" (info (pure NextSP) (progDesc "Builds a Next project."))
+  fuddleSP = command "fuddle" (info (pure FuddleSP) (progDesc "Builds a Fuddle project."))
+  gatsbySP = command "gatsby" (info (pure GatsbySP) (progDesc "Builds a Gatsby project."))
   -}
   {-
    Hugo options:
@@ -188,7 +188,8 @@ siteOpts :: Parser SiteOptions
 siteOpts = 
   subparser (
       command "hugo" (info (HugoSS <$> hugoOpts <**> helper) (progDesc "Build a Hugo project."))
-    <> command "php" (info (PhpSS <$> phpOpts <**> helper) (progDesc "Build a PHP project."))
+    <> command "php" (info (PhpSS <$> phpOpts <**> helper) (progDesc "Builds a PHP project."))
+    <> command "gatsby" (info (pure GatsbySS <**> helper) (progDesc "Builds a Gatsby project."))
   )
 
 
@@ -240,6 +241,20 @@ hugoOpts =
 phpOpts :: Parser PhpBuildOptions
 phpOpts =
   PhpBuildOptions <$> optional (strOption (long "srcDir" <> help "(string) filesystem path to read files relative from"))
+
+
+
+webappOpts :: Parser WebAppOptions
+webappOpts =
+  subparser (
+      command "next" (info (NextWA <$> nextAppOpts <**> helper) (progDesc "Builds a Next project."))
+    <> command "fuddle" (info (pure FuddleWA <**> helper) (progDesc "Builds a Fuddle project."))
+  )
+
+
+nextAppOpts :: Parser NextAppBuildOptions
+nextAppOpts =
+  NextAppBuildOptions <$> optional (strOption (long "package" <> short 'p' <> help "(string) alternative package file for the project."))
 
 
 paramParser :: ReadM ParameterTpl
