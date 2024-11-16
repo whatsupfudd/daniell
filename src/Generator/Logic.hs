@@ -23,6 +23,7 @@ import qualified ProjectDefinition.Hugo as Hu
 import qualified ProjectDefinition.Hugo.Config as Hu
 import qualified ProjectDefinition.Hugo.Types as Ht
 import qualified ProjectDefinition.NextJS as Nx
+import qualified ProjectDefinition.NextJS.Types as NxT
 import qualified ProjectDefinition.Gatsby as Gb
 import qualified ProjectDefinition.Fuddle as Fd
 import qualified Generator.Work as Scf
@@ -77,7 +78,7 @@ data SpecPlan =
   ScfPlan ScfWorkPlan
   | GatsbyPlan Gb.GbWorkPlan
   | HugoPlan Ht.HgWorkPlan
-  | NextPlan Nx.NxWorkPlan
+  | NextPlan NxT.NxWorkPlan
   | FuddlePlan Fd.FdWorkPlan
   | PhpPlan
   deriving Show
@@ -186,9 +187,23 @@ buildWebApp rtOpts waOpts = do
       putStrLn $ "@[buildWebApp] eiSiteDef:\n" <> showSiteDef eiSiteDef
       case eiSiteDef of
         Left err -> pure . Left $ SimpleMsg (pack . show $ err)
-        Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts True dirTree
+        Right dirTree -> (NextPlan <$>) <$> Nx.analyseProject rtOpts False dirTree
       >>=? \workPlan -> do
-        putStrLn $ "@[buildWebApp] workPlan: " <> show workPlan
+        -- putStrLn $ "@[buildWebApp] workPlan: " <> show workPlan
+        case workPlan of
+          NextPlan nxPlan -> do
+            putStrLn $ "@[buildWebApp] nextjs workPlan: " <> show nxPlan
+            rezA <- runPlan rtOpts nxPlan.engine nxPlan.context nxPlan.items
+            case rezA of
+              Left err -> pure $ Left err
+              Right _ -> pure $ Right ()
+          FuddlePlan fdPlan -> do
+            putStrLn $ "@[buildWebApp] fuddle workPlan: " <> show fdPlan
+            rezA <- runPlan rtOpts fdPlan.engine fdPlan.context fdPlan.items
+            case rezA of
+              Left err -> pure $ Left err
+              Right _ -> pure $ Right ()
+        
         pure . Right $ ()
 
 {- Early stage testing of stuff: -}

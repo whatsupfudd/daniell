@@ -33,7 +33,12 @@ buildWebApp rtOpts buildOpts waOpts = do
     Just "." -> SE.getCurrentDirectory
     Just aStr -> pure $ unpack aStr
     Nothing -> SE.getCurrentDirectory
-  mbSite <- Gen.buildWebApp (rtOpts { Rto.baseDir = srcDir }) waOpts
+  let
+    techOpts = case waOpts of
+      NextWA nxOpts -> Rto.NextOptions nxOpts
+      FuddleWA -> Rto.FuddleOptions
+    updatedRtOpts = rtOpts { Rto.baseDir = srcDir, Rto.techOpts = techOpts }
+  mbSite <- Gen.buildWebApp updatedRtOpts waOpts
   case mbSite of
     Left genErr ->
       putStrLn $ "@[buildWebApp] buildCmd: " <> show genErr

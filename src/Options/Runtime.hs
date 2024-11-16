@@ -3,7 +3,7 @@ module Options.Runtime where
 import Data.Text (Text)
 import Options.SiteConfig as Scfg
 import WebServer.CorsPolicy (CORSConfig, defaultCorsPolicy)
-import Options.Types (HugoBuildOptions (..))
+import Options.Types (HugoBuildOptions (..), NextJSBuildOptions (..))
 
 data RunOptions = RunOptions {
     debug :: Int
@@ -18,7 +18,7 @@ data RunOptions = RunOptions {
 
 data TechOptions =
   HugoOptions HugoBuildOptions
-  | NextOptions
+  | NextOptions NextJSBuildOptions
   | FuddleOptions
   | GatsbyOptions
   | NoTech

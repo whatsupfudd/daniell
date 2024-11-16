@@ -252,9 +252,9 @@ webappOpts =
   )
 
 
-nextAppOpts :: Parser NextAppBuildOptions
+nextAppOpts :: Parser NextJSBuildOptions
 nextAppOpts =
-  NextAppBuildOptions <$> optional (strOption (long "package" <> short 'p' <> help "(string) alternative package file for the project."))
+  NextJSBuildOptions <$> optional (strOption (long "package" <> short 'p' <> help "(string) alternative package file for the project."))
 
 
 paramParser :: ReadM ParameterTpl

@@ -92,38 +92,10 @@ data DbConfig = DbConfig {
     , dbPass :: String
   }
 
+{- MISC structures -}
 type FileSet = (Mp.Map FileKind [FileWithPath], [FileWithPath])
 type OrgMap = Mp.Map String [FileWithPath]
 
-{- NextJS -}
-
-data NextJSComponents = NextJSComponents {
-      config :: NextJSConfig
-      , components :: [ FileWithPath ]
-      , pages :: [ FileWithPath ]
-      , api :: [ FileWithPath ]
-      , lib :: [ FileWithPath ]
-      , styles :: [ FileWithPath ]
-      , utils :: [ FileWithPath ]
-      , hooks :: [ FileWithPath ]
-      , services :: [ FileWithPath ]
-      , types :: [ FileWithPath ]
-      , tests :: [ FileWithPath ]
-      , stories :: [ FileWithPath ]
-      , public :: [ FileWithPath ]
-      , build :: [ FileWithPath ]
-      , deploy :: [ FileWithPath ]
-      , miscs :: [ FileWithPath ]
-    }
-    deriving Show
-
-data NextJSConfig = NextJSConfig {
-    envConfig :: [ FileItem ]
-    , nextConfig :: [ FileItem ]
-    , packageConfig :: [ FileItem ]
-    , tsConfig :: [ FileItem ]
-  }
-  deriving Show
 
 data DictEntry =
   StringDV Text

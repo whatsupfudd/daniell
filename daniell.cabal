@@ -61,6 +61,9 @@ library
       ProjectDefinition.Hugo.Types
       ProjectDefinition.Hugo.Work
       ProjectDefinition.NextJS
+      ProjectDefinition.NextJS.Analyze
+      ProjectDefinition.NextJS.Types
+      ProjectDefinition.NextJS.Work
       ProjectDefinition.Paraml
       ProjectDefinition.Scaffolding
       ProjectDefinition.Types
@@ -70,6 +73,7 @@ library
       Template.Haskell
       Template.Hugo
       Template.Jinja2
+      Template.NextJS
       Template.Parser
       Template.TSitterParser
       Template.Types

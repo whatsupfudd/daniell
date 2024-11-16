@@ -50,7 +50,7 @@ data SiteOptions =
 
 
 data WebAppOptions =
-  NextWA NextAppBuildOptions
+  NextWA NextJSBuildOptions
   | FuddleWA
   deriving Show
 
@@ -107,7 +107,7 @@ newtype PhpBuildOptions = PhpBuildOptions {
   deriving Show
 
 
-newtype NextAppBuildOptions = NextAppBuildOptions {
+newtype NextJSBuildOptions = NextJSBuildOptions {
     packagePath :: Maybe Text
   }
   deriving Show

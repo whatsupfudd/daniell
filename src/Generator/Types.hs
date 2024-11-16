@@ -33,7 +33,8 @@ class ExecSystem e c w where
   runWorkItem :: RunOptions -> e -> c -> w -> IO (Either GenError c)
 
   runPlan :: RunOptions -> e -> c -> NonEmpty w -> IO (Either GenError c)
-  runPlan rtOpts engine context = foldM (runItem engine) (Right context)
+  runPlan rtOpts engine context =
+    foldM (runItem engine) (Right context)
     where
     runItem :: (ExecSystem e c w) => e -> Either GenError c -> w -> IO (Either GenError c)
     runItem _ (Left err) item = pure $ Left err
