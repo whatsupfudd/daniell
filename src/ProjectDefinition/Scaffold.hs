@@ -1,6 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-
-module ProjectDefinition.Scaffolding where
+module ProjectDefinition.Scaffold where
 
 import Control.Monad (unless, when)
 import qualified Data.Foldable as Fld
@@ -12,24 +10,18 @@ import qualified Options.Runtime as Op
 import Conclusion (Conclusion (..), GenError (..))
 import qualified FileSystem.Types as Fs
 
-import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..), ScfWorkItem (..), ScfEngine (..), ScfContext (..))
-import Generator.Work (runItem)
-import Template.Types (ScaffoldTempl (..))
-import Template.FileTree (mergeTemplates, loadTree)
+import Generator.Types (ExecSystem (..), WorkPlan (..))
+import Scaffold.Types (ScaffoldBundle (..))
+import Scaffold.FileTree (mergeBundles, loadTree)
 
 import Utils (splitResults)
 
 import ProjectDefinition.Defaults (defaultLocations)
+import ProjectDefinition.Scaffold.Types
+import ProjectDefinition.Scaffold.Work (runItem)  -- For runPlan.
 
-
-instance ExecSystem ScfEngine ScfContext ScfWorkItem where
-  runWorkItem rtOpts engine context item = do
-    runItem rtOpts context.destDir context.scaffoldTempl item
-    pure $ Right context
-
-
-createScaffolding :: Op.RunOptions -> Op.NewOptions -> IO Conclusion
-createScaffolding rtOpts newOpts = do
+createScaffold :: Op.RunOptions -> Op.NewOptions -> IO Conclusion
+createScaffold rtOpts newOpts = do
   rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
   let
     (errTemplates, userTemplates) = splitResults rezTemplates
@@ -38,28 +30,27 @@ createScaffolding rtOpts newOpts = do
     [] -> do
       -- putStrLn $ "Parsed templates: " <> show userTemplates
       -- if there's no 'no-default template' instruction in the specified templates, load the default template.
-      rezA <-
+      rezA <- do
         -- TODO: figure out when to not scan the defaultLocations...
         --  if False then pure $ Right userTemplates else
-        do
         rezB <- parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
         case rezB of
           Left errMsg -> pure . Left $ show errMsg
           Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
       case rezA of
-        Left errMsg -> pure $ ErrorCcl $ "@[createScaffolding] error loading default template: " <> show errMsg
+        Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error loading default template: " <> show errMsg
         Right allTemplates -> do
-          rezB <- createFileTree rtOpts newOpts allTemplates
-          case rezB of
-            Left errMsg -> pure $ ErrorCcl $ "@[createScaffolding] error creating project: " <> show errMsg
+          rezC <- createFileTree rtOpts newOpts allTemplates
+          case rezC of
+            Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error creating project: " <> show errMsg
             Right _ -> pure NilCcl
     -- Errors while reading templates, abort.
     _ -> do
-      putStrLn $ "@[createScaffolding] Template loading error: " <> show errTemplates
-      pure $ ErrorCcl $ "@[createScaffolding] error loading templates: " <> show errTemplates
+      putStrLn $ "@[createScaffold] Template loading error: " <> show errTemplates
+      pure $ ErrorCcl $ "@[createScaffold] error loading templates: " <> show errTemplates
 
 
-parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffoldTempl)
+parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffoldBundle)
 parseFileTree rtOpts tPath =
   let
     (fullPath, mbPrefix) = case tPath of
@@ -73,13 +64,13 @@ parseFileTree rtOpts tPath =
     Right aTempl -> pure $ Right aTempl { hasPrefix = mbPrefix }
 
 
-createFileTree :: Op.RunOptions -> Op.NewOptions -> [ScaffoldTempl] -> IO (Either GenError ())
-createFileTree rtOpts newOpts templates = do
+createFileTree :: Op.RunOptions -> Op.NewOptions -> [ScaffoldBundle] -> IO (Either GenError ())
+createFileTree rtOpts newOpts bundles = do
   putStrLn "@[createFileTree] starting."
   -- move template(s) info into a work plan.
   let
-    mergedTemplate = mergeTemplates templates
-    eiWorkPlan = buildWorkPlan rtOpts newOpts mergedTemplate
+    mergedBundle = mergeBundles bundles
+    eiWorkPlan = buildWorkPlan rtOpts newOpts mergedBundle
   case eiWorkPlan of
     Right workPlan -> do
       -- pass the work plan to the generator.
@@ -93,10 +84,10 @@ createFileTree rtOpts newOpts templates = do
     Left err -> pure $ Left err
 
 
-buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffoldTempl -> Either GenError ScfWorkPlan
-buildWorkPlan rtOpts newOpts template =
+buildWorkPlan :: Op.RunOptions -> Op.NewOptions -> ScaffoldBundle -> Either GenError ScfWorkPlan
+buildWorkPlan rtOpts newOpts bundle =
   let
-    structList = Fld.toList template.structure
+    structList = Fld.toList bundle.structure
     newDirs = map NewDirIfNotExist (extractDirs structList)
     workItems = concatMap analyzeSources structList
   in
@@ -105,7 +96,7 @@ buildWorkPlan rtOpts newOpts template =
     h : t -> Right $ WorkPlan {
         items = h :| t
         , engine = ScfEngine
-        , context = ScfContext template newOpts.rootDir
+        , context = ScfContext bundle newOpts.rootDir
       }
 
 
@@ -126,7 +117,7 @@ workForSource :: FilePath -> Fs.FileItem -> Maybe ScfWorkItem
 workForSource dir src =
   case src of
     Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
-    Fs.KnownFile fileType path -> 
+    Fs.KnownFile fileType path ->
       case fileType of
         Fs.DanTmpl -> Just $ RunTemplate (buildPath dir path)
         _ -> Just $ RunTemplateToDest fileType dir src (buildPath dir path)

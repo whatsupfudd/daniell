@@ -10,7 +10,7 @@ import qualified Data.Vector as Vc
 import qualified Data.Aeson.Types as Ae
 import Data.Scientific (toRealFloat)
 
-import Template.Types (ScaffoldTempl, FileTempl)
+import Scaffold.Types (ScaffoldBundle)
 import FileSystem.Types (PathFiles, FileItem, FileWithPath, FileKind)
 
 
@@ -30,7 +30,7 @@ Note:
 data ProjectDefinition = ProjectDefinition {
     baseDir :: FilePath
     , pType :: ProjectType
-    , templates :: [ ScaffoldTempl ]
+    , templates :: [ ScaffoldBundle ]
     , sourceContent :: PathFiles
   }
 

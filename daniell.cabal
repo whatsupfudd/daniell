@@ -37,7 +37,6 @@ library
       FileSystem.Types
       Generator.Logic
       Generator.Types
-      Generator.Work
       MainLogic
       Markup.FrontMatter
       Markup.Html
@@ -65,18 +64,16 @@ library
       ProjectDefinition.NextJS.Types
       ProjectDefinition.NextJS.Work
       ProjectDefinition.Paraml
-      ProjectDefinition.Scaffolding
+      ProjectDefinition.Scaffold
+      ProjectDefinition.Scaffold.Types
+      ProjectDefinition.Scaffold.Work
       ProjectDefinition.Types
-      RunTime.Interpreter
       RunTime.StaticSite
-      Template.FileTree
-      Template.Haskell
+      Scaffold.FileTree
+      Scaffold.Types
       Template.Hugo
       Template.Jinja2
       Template.NextJS
-      Template.Parser
-      Template.TSitterParser
-      Template.Types
       Utils
       WebServer.CorsPolicy
       WebServer.JWT

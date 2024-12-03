@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Generator.Logic where
 
-import Control.Monad (foldM, forM, forM_)
+import Control.Monad (foldM, forM, forM_, when)
 import Control.Monad.IO.Class (liftIO)
 
 import qualified Data.ByteString as BS
@@ -26,13 +26,10 @@ import qualified ProjectDefinition.NextJS as Nx
 import qualified ProjectDefinition.NextJS.Types as NxT
 import qualified ProjectDefinition.Gatsby as Gb
 import qualified ProjectDefinition.Fuddle as Fd
-import qualified Generator.Work as Scf
-import ProjectDefinition.Scaffolding (createScaffolding)
+import ProjectDefinition.Scaffold (createScaffold)
 import ProjectDefinition.Gatsby (analyseGatsbyProject)
 import ProjectDefinition.Fuddle (analyseFuddleProject)
-import Template.Haskell (tsParseHaskell)
 import Cannelle.PHP.Parse (tsParsePhp)
-import qualified Template.Parser as Tmpl
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 import qualified Cannelle.VM.Context as Vc
@@ -40,10 +37,9 @@ import qualified Cannelle.VM.Engine as Vm
 
 import Utils ((>>=?))
 
-import qualified RunTime.Interpreter as Ri
-import Generator.Types (ExecSystem (..), WorkPlan (..), ScfWorkPlan (..))
-import qualified Generator.Types as Scf
+import Generator.Types (ExecSystem (..), WorkPlan (..))
 
+import ProjectDefinition.Scaffold.Types (ScfWorkPlan (..))
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
@@ -174,7 +170,7 @@ createProject rtOpts newOpts =
       putStrLn "@[createProject] WebApp project."
       pure NilCcl
     LocalAppPK ->
-      createScaffolding rtOpts newOpts
+      createScaffold rtOpts newOpts
 
 
 buildWebApp :: RunOptions -> WebAppOptions -> IO (Either GenError ())
@@ -224,14 +220,18 @@ serveSite rtOpts = do
         listEiGen <- mapM (Mrkp.parseContent rtOpts rtOpts.baseDir) contentPages
         let
           eiTemplateSet = foldM (eiTemplateFinder siteDef) (Mp.empty :: TemplateMatches) listEiGen
-          execContext = Ri.createContext rtOpts
+          -- TODO: create a context for the execution.
         case eiTemplateSet of
           Left err -> pure $ Left err
           Right templateSet -> do
-            rez <- foldM (\eiCtxt aTmpl -> case eiCtxt of Left err -> pure $ Left err ; Right aCtxt -> genOutput rtOpts siteDef aCtxt aTmpl) (Right execContext :: Either GenError Ri.ExecContext) (Mp.assocs templateSet)
+            -- TODO: find the right execution approach for the server mode.
+            rez <- foldM (\eiCtxt aTmpl -> case eiCtxt of
+              Left err -> pure $ Left err
+              Right aCtxt -> genOutput rtOpts siteDef aCtxt aTmpl
+              ) (Right (0 :: Int)) (Mp.assocs templateSet)
             case rez of
               Left err -> pure $ Left err
-              Right execContext ->
+              Right tmpValue ->
                 -- Send back a result that will help the upper layer; maybe the list of all things created?
                 pure $ Right ()
   where
@@ -249,16 +249,10 @@ serveSite rtOpts = do
           Just genList -> Right $ Mp.insert aTmpl (anItem : genList) matchSet
 
 
-genOutput :: RunOptions -> ProjectDefinition -> Ri.ExecContext -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Ri.ExecContext)
+genOutput :: RunOptions -> ProjectDefinition -> Int -> (FilePath, [ MarkupPage ]) -> IO (Either GenError Int)
 genOutput rtOpts siteDef execCtxt (tmplName, genList) = do
-  eiTemplate <- Tmpl.parse rtOpts siteDef tmplName
-  case eiTemplate of
-    Left err -> pure . Left . SimpleMsg $ err
-    Right template ->
-      foldM (\eiCtxt item -> case eiCtxt of
-          Left err -> pure $ Left err
-          Right aCtxt -> Ri.execute rtOpts siteDef template aCtxt (Just item)
-        ) (Right execCtxt) genList
+  -- TODO: generate the output for the given project/site.BuildKind
+  pure $ Left . SimpleMsg . pack $ "@[genOutput] not implemented yet."
 
 
 showSiteDef :: Either String Fs.PathFiles -> String

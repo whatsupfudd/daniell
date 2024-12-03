@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-module Generator.Work where
+module ProjectDefinition.Scaffold.Work where
 
 -- TODO: change the module's name and a few details to set this as the Haskell scaffold specialized logic, as there is the Hugo and NextJS logic.
 
@@ -9,12 +10,20 @@ import Control.Monad (foldM, forM, forM_)
 
 import qualified Data.ByteString as BS
 import qualified Data.Foldable as Fld
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Mp
 import qualified Data.Sequence as Seq
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text.Encoding as TE
 
 import qualified System.Directory as SE
+
+import qualified Cannelle.VM.Context as Vm
+import qualified Cannelle.VM.Engine as Vm
+import qualified Cannelle.Hugo.Exec as Hg
+import qualified Cannelle.Templog.Parse as Tp
+import Cannelle.Templog.Types (FileTempl (..),Function(..))
+
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
@@ -26,24 +35,21 @@ import qualified ProjectDefinition.AssocRules as Rules
 import qualified ProjectDefinition.Hugo as Hu
 import qualified ProjectDefinition.NextJS as Nx
 import ProjectDefinition.Defaults (defaultLocations)
-import Template.Haskell (tsParseHaskell)
-import qualified Template.Parser as Tmpl
-import Template.Types (ScaffoldTempl (..), FileTempl (..), Function (..), Code (..))
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
-import qualified Cannelle.VM.Context as Vm
-import qualified Cannelle.VM.Engine as Vm
-import qualified Cannelle.Hugo.Exec as Hg
 
 import Utils (splitResults)
 import Generator.Types
-import Data.List.NonEmpty (NonEmpty)
+
+import Scaffold.Types (ScaffoldBundle (..))
+
+import ProjectDefinition.Scaffold.Types
 
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
 -- *** DEPRECATED: should use the Fuddle or Haskell WorkEngine instead.
-runGen :: RunOptions -> FilePath -> ScaffoldTempl -> NonEmpty ScfWorkItem -> IO (Either GenError ())
+runGen :: RunOptions -> FilePath -> ScaffoldBundle -> NonEmpty ScfWorkItem -> IO (Either GenError ())
 runGen rtOpts destDir projTempl wItems = do
   mapM_ (\wi -> do
       putStrLn $ "@[runGen] wi: " <> show wi
@@ -59,7 +65,13 @@ runGen rtOpts destDir projTempl wItems = do
   pure $ Right ()
 
 
-runItem :: RunOptions -> FilePath -> ScaffoldTempl -> ScfWorkItem -> IO (Either GenError ())
+instance ExecSystem ScfEngine ScfContext ScfWorkItem where
+  runWorkItem rtOpts engine context item = do
+    runItem rtOpts context.destDir context.bundle item
+    pure $ Right context
+
+
+runItem :: RunOptions -> FilePath -> ScaffoldBundle -> ScfWorkItem -> IO (Either GenError ())
 runItem rtOpts destDir projTempl = \case
   NewDirIfNotExist dirPath -> do
     let fullDirPath = destDir <> "/" <> dirPath
@@ -122,11 +134,11 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
   -- TODO: figure out a common interface amongst all template files for the VM execution.
   eiFTemplate <- case fType of
     Fs.Haskell -> do
-      putStrLn $ "@[runItem] Haskell: " <> show srcPath
+      putStrLn $ "@[runItem] Haskell+Templog: " <> show srcPath
       -- read/ts-parse the template file
-      rezA <- tsParseHaskell srcPath
+      rezA <- Tp.parse srcPath
       case rezA of
-        Left err -> pure $ Left err
+        Left err -> pure . Left . SimpleMsg . pack $ show err
         Right fTemplate -> do
           -- TEST:
           case fTemplate.logic of

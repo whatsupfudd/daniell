@@ -1,4 +1,4 @@
-module Template.FileTree where
+module Scaffold.FileTree where
 
 import Control.Monad (unless)
 
@@ -6,14 +6,17 @@ import Data.Text (Text, pack)
 
 import qualified System.Directory as SE
 
+import Cannelle.Templog.Types (Function (..))
+
 import qualified FileSystem.Explore as Exp
 import qualified Conclusion as Ccl
 import qualified Options.Types as Op
 import qualified Options.Runtime as Op
-import Template.Types
+
+import Scaffold.Types (ScaffoldBundle (..))
 
 
-loadTree :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
+loadTree :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldBundle)
 loadTree rtOpts path = do
   if isSuffix ".dtmpl" path then
       loadTreeLogic rtOpts path
@@ -35,27 +38,27 @@ loadTree rtOpts path = do
   , logic :: Function
 -}
 
-loadTreeLogic :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
+loadTreeLogic :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldBundle)
 loadTreeLogic rtOpts path =
   -- TODO: load the template file, and create a ScaffholdTempl from it.
-  pure . Right $ ScaffoldTempl path Nothing Nothing mempty mempty Noop
+  pure . Right $ ScaffoldBundle path Nothing Nothing mempty mempty Noop
 
 
-loadTreeContent :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldTempl)
+loadTreeContent :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldBundle)
 loadTreeContent rtOpts path = do
   eiTree <- Exp.loadFolderTree path
   case eiTree of
     Left err -> pure . Left $ pack err
     Right fTree -> do
       -- putStrLn $ "fTree: " <> show fTree
-      pure $ Right $ ScaffoldTempl path Nothing Nothing fTree mempty Noop
+      pure $ Right $ ScaffoldBundle path Nothing Nothing fTree mempty Noop
 
 
-mergeTemplates :: [ScaffoldTempl] -> ScaffoldTempl
-mergeTemplates =
-  foldl1 mergeTemplate
+mergeBundles :: [ScaffoldBundle] -> ScaffoldBundle
+mergeBundles =
+  foldl1 mergeBundle
   where
     -- TODO: define how two project templates are merged together.
-    mergeTemplate :: ScaffoldTempl -> ScaffoldTempl -> ScaffoldTempl
-    mergeTemplate a b = a
+    mergeBundle :: ScaffoldBundle -> ScaffoldBundle -> ScaffoldBundle
+    mergeBundle a b = a
 

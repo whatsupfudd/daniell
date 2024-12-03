@@ -44,7 +44,6 @@ buildWebApp rtOpts buildOpts waOpts = do
       putStrLn $ "@[buildWebApp] buildCmd: " <> show genErr
     Right aSite -> do
       putStrLn "@[buildWebApp] build done."
-
   pure Ccl.NilCcl
 
 
