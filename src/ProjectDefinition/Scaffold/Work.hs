@@ -21,11 +21,11 @@ import qualified System.Directory as SE
 
 import qualified Cannelle.VM.Context as Vm
 import qualified Cannelle.VM.Engine as Vm
-import qualified Cannelle.Hugo.Exec as Hg
+import qualified Cannelle.Hugo.Exec as He
 import qualified Cannelle.Templog.Parse as Tp
+import qualified Cannelle.Templog.Exec as Te
 import qualified Cannelle.FileUnit.Types as Fu
 import Cannelle.FileUnit.Types (FileUnit (..), FunctionDefTpl (..))
-import Cannelle.Templog.Types (FileTempl (..),Function(..))
 
 
 import Conclusion (GenError (..), Conclusion (..))
@@ -140,7 +140,7 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
     Fs.Haskell -> do
       putStrLn $ "@[runItem] Haskell+Templog: " <> show srcPath
       -- read/ts-parse the template file
-      rezA <- Tp.parse srcPath
+      rezA <- Tp.parse (rtOpts.debug /= 0) srcPath
       case rezA of
         Left err -> pure . Left . SimpleMsg . pack $ show err
         Right fileUnit ->
@@ -193,7 +193,8 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
         putStrLn $ "@[genFileFromTemplate] Haskell templ, executing VM module: " <> show vmModule
         -- TODO: create a runtime context, execute the VM on the FileTemplate produced:
         -- TODO: pass the proper context, HugoLib context isn't appropriate for all cases.
-        eiRez <- Vm.execModule vmModule Hg.fakeHugoContext Nothing
+        -- Hg.fakeHugoContext
+        eiRez <- Vm.execModule vmModule Te.fakeTemplogContext Nothing  
         case eiRez of
           Left errMsg -> do
             putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg
