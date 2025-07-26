@@ -9,6 +9,7 @@ import Options.Types
 
 data Command =
   BuildCmd BuildOptions
+  | BundleCmd BundleOptions
   | ConfigCmd
   | ConvertCmd
   | DeployCmd
@@ -76,6 +77,7 @@ commandsDef =
   let
     cmdArray = [
         ("build", BuildCmd <$> buildOpts, "Builds a project into a static website or a dynamic web application.")
+      , ("bundle", BundleCmd <$> bundleOpts, "Bundle a project into a single file.")
       , ("config", pure ConfigCmd, "Print the site configuration.")
       , ("convert", pure ConvertCmd, "Convert your content to different formats.")
       , ("deploy", pure DeployCmd, "Deploy your site to a Cloud provider.")
@@ -184,6 +186,11 @@ buildOpts = do
   -w, --watch                      watch filesystem for changes and recreate as needed
   -}
 
+bundleOpts :: Parser BundleOptions
+bundleOpts =
+  BundleOptions <$> strOption (long "destination" <> short 'd' <> help "(string) filesystem path to write files to.")
+
+
 siteOpts :: Parser SiteOptions
 siteOpts = 
   subparser (
@@ -248,7 +255,7 @@ webappOpts :: Parser WebAppOptions
 webappOpts =
   subparser (
       command "next" (info (NextWA <$> nextAppOpts <**> helper) (progDesc "Builds a Next project."))
-    <> command "fuddle" (info (pure FuddleWA <**> helper) (progDesc "Builds a Fuddle project."))
+    <> command "wapp" (info (pure EwWappWA <**> helper) (progDesc "Builds a EasyWordy Wapp project."))
   )
 
 

@@ -13,6 +13,7 @@ import FileSystem.Types (PathFiles)
  project creation.
 -}
 
+
 data ScaffoldBundle = ScaffoldBundle {
   path :: FilePath
   , hasPrefix :: Maybe FilePath
@@ -22,4 +23,3 @@ data ScaffoldBundle = ScaffoldBundle {
   , logic :: Function
   }
   deriving Show
-

@@ -87,6 +87,8 @@ dependencies:
   # For PHP ScannerB:
   - deepseq
   - transformers
+  # For generating new app IDs:
+  - uuid
 
 
 default-extensions:

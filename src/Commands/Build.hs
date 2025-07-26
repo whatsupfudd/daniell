@@ -36,7 +36,8 @@ buildWebApp rtOpts buildOpts waOpts = do
   let
     techOpts = case waOpts of
       NextWA nxOpts -> Rto.NextOptions nxOpts
-      FuddleWA -> Rto.FuddleOptions
+      -- TODO: disambiguate between Fuddle and EwWapp.
+      EwWappWA -> Rto.FuddleOptions
     updatedRtOpts = rtOpts { Rto.baseDir = srcDir, Rto.techOpts = techOpts }
   mbSite <- Gen.buildWebApp updatedRtOpts waOpts
   case mbSite of

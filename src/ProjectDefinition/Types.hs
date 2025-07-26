@@ -10,6 +10,8 @@ import qualified Data.Vector as Vc
 import qualified Data.Aeson.Types as Ae
 import Data.Scientific (toRealFloat)
 
+import Cannelle.FileUnit.Types (FileUnit)
+
 import Scaffold.Types (ScaffoldBundle)
 import FileSystem.Types (PathFiles, FileItem, FileWithPath, FileKind)
 

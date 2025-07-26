@@ -6,13 +6,13 @@ import Data.Text (Text, pack)
 
 import qualified System.Directory as SE
 
-import Cannelle.Templog.Types (Function (..))
+-- import Cannelle.Templog.Types (Function (..))
 
 import qualified FileSystem.Explore as Exp
 import qualified Conclusion as Ccl
 import qualified Options.Types as Op
 import qualified Options.Runtime as Op
-
+import qualified Cannelle.Templog.Types as Tpl
 import Scaffold.Types (ScaffoldBundle (..))
 
 
@@ -41,7 +41,7 @@ loadTree rtOpts path = do
 loadTreeLogic :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldBundle)
 loadTreeLogic rtOpts path =
   -- TODO: load the template file, and create a ScaffholdTempl from it.
-  pure . Right $ ScaffoldBundle path Nothing Nothing mempty mempty Noop
+  pure . Right $ ScaffoldBundle path Nothing Nothing mempty mempty Tpl.Noop
 
 
 loadTreeContent :: Op.RunOptions -> FilePath -> IO (Either Text ScaffoldBundle)
@@ -51,7 +51,7 @@ loadTreeContent rtOpts path = do
     Left err -> pure . Left $ pack err
     Right fTree -> do
       -- putStrLn $ "fTree: " <> show fTree
-      pure $ Right $ ScaffoldBundle path Nothing Nothing fTree mempty Noop
+      pure $ Right $ ScaffoldBundle path Nothing Nothing fTree mempty Tpl.Noop
 
 
 mergeBundles :: [ScaffoldBundle] -> ScaffoldBundle

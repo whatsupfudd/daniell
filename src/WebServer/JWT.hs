@@ -1,7 +1,8 @@
 module WebServer.JWT where
 
 import Control.Lens ((?~), (^.))
-import Control.Monad.Except ( MonadIO(liftIO), runExceptT, withExceptT )
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Except ( runExceptT, withExceptT )
 import Crypto.JOSE.JWA.JWS (Alg (ES256))
 import Crypto.JOSE.JWK (AsPublicKey (asPublicKey), Crv (P_256),
                                        JWK, JWKAlg (JWSAlg),

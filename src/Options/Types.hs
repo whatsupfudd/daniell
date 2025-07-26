@@ -33,6 +33,10 @@ data BuildOptions = BuildOptions {
   }
   deriving Show
 
+newtype BundleOptions = BundleOptions {
+    destination :: FilePath
+  }
+  deriving Show
 
 data BuildKind =
   SiteBK SiteOptions
@@ -51,7 +55,7 @@ data SiteOptions =
 
 data WebAppOptions =
   NextWA NextJSBuildOptions
-  | FuddleWA
+  | EwWappWA
   deriving Show
 
 

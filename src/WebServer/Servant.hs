@@ -96,6 +96,7 @@ runAPI rtOpts = do
     cookieCfg = defaultCookieSettings { cookieIsSecure = NotSecure }
     jwtDefSettings = Sauth.defaultJWTSettings <$> myKey
     -- FOr file upload support, will be used later:
+    multipartOpts :: MultipartOptions Tmp
     multipartOpts = (defaultMultipartOptions (Proxy :: Proxy Tmp)) {
           generalOptions = setMaxRequestKeyLength 512 defaultParseRequestBodyOptions
       }

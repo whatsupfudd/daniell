@@ -16,38 +16,51 @@ import Scaffold.FileTree (mergeBundles, loadTree)
 
 import Utils (splitResults)
 
+import Template.EwWapp (defaultEwWapp)
+
 import ProjectDefinition.Defaults (defaultLocations)
 import ProjectDefinition.Scaffold.Types
 import ProjectDefinition.Scaffold.Work (runItem)  -- For runPlan.
 
-createScaffold :: Op.RunOptions -> Op.NewOptions -> IO Conclusion
-createScaffold rtOpts newOpts = do
-  rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
-  let
-    (errTemplates, userTemplates) = splitResults rezTemplates
-  case errTemplates of
-    -- No errors, keep going.
-    [] -> do
-      -- putStrLn $ "Parsed templates: " <> show userTemplates
-      -- if there's no 'no-default template' instruction in the specified templates, load the default template.
-      rezA <- do
-        -- TODO: figure out when to not scan the defaultLocations...
-        --  if False then pure $ Right userTemplates else
-        rezB <- parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
-        case rezB of
-          Left errMsg -> pure . Left $ show errMsg
-          Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
-      case rezA of
-        Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error loading default template: " <> show errMsg
-        Right allTemplates -> do
-          rezC <- createFileTree rtOpts newOpts allTemplates
-          case rezC of
-            Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error creating project: " <> show errMsg
-            Right _ -> pure NilCcl
-    -- Errors while reading templates, abort.
-    _ -> do
-      putStrLn $ "@[createScaffold] Template loading error: " <> show errTemplates
-      pure $ ErrorCcl $ "@[createScaffold] error loading templates: " <> show errTemplates
+createScaffold :: Op.RunOptions -> ProjectKindScf -> Op.NewOptions -> IO Conclusion
+createScaffold rtOpts projKind newOpts =
+  case projKind of
+    EwWappSF ->
+      case newOpts.templates of
+        [] -> -- Use the default structure.(&&)
+          defaultEwWapp rtOpts newOpts
+        _ -> -- Use the supplied templates.
+          replicateTemplates rtOpts projKind newOpts.templates
+    LocalAppSF ->
+      replicateTemplates rtOpts projKind newOpts.templates
+  where
+  replicateTemplates rtOpts projKind templates = do
+      rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
+      let
+        (errTemplates, userTemplates) = splitResults rezTemplates
+      case errTemplates of
+        -- No errors, keep going.
+        [] -> do
+          -- putStrLn $ "Parsed templates: " <> show userTemplates
+          -- if there's no 'no-default template' instruction in the specified templates, load the default template.
+          rezA <- do
+            -- TODO: figure out when to not scan the defaultLocations...
+            --  if False then pure $ Right userTemplates else
+            rezB <- parseFileTree rtOpts (defaultLocations rtOpts newOpts.projKind)
+            case rezB of
+              Left errMsg -> pure . Left $ show errMsg
+              Right defTempl -> pure . Right $ userTemplates <> [ defTempl ]
+          case rezA of
+            Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error loading default template: " <> show errMsg
+            Right allTemplates -> do
+              rezC <- createFileTree rtOpts newOpts allTemplates
+              case rezC of
+                Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error creating project: " <> show errMsg
+                Right _ -> pure NilCcl
+        -- Errors while reading templates, abort.
+        _ -> do
+          putStrLn $ "@[createScaffold] Template loading error: " <> show errTemplates
+          pure $ ErrorCcl $ "@[createScaffold] error loading templates: " <> show errTemplates
 
 
 parseFileTree :: Op.RunOptions -> FilePath -> IO (Either GenError ScaffoldBundle)

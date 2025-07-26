@@ -71,6 +71,7 @@ library
       RunTime.StaticSite
       Scaffold.FileTree
       Scaffold.Types
+      Template.EwWapp
       Template.Hugo
       Template.Jinja2
       Template.NextJS
@@ -133,6 +134,7 @@ library
     , unix
     , unordered-containers
     , utf8-string
+    , uuid
     , validation-selective
     , vector
     , wai
@@ -201,6 +203,7 @@ executable daniell
     , unix
     , unordered-containers
     , utf8-string
+    , uuid
     , validation-selective
     , vector
     , wai

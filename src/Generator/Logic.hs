@@ -27,6 +27,7 @@ import qualified ProjectDefinition.NextJS.Types as NxT
 import qualified ProjectDefinition.Gatsby as Gb
 import qualified ProjectDefinition.Fuddle as Fd
 import ProjectDefinition.Scaffold (createScaffold)
+import ProjectDefinition.Scaffold.Types (ScfWorkPlan (..), ProjectKindScf (..))
 import ProjectDefinition.Gatsby (analyseGatsbyProject)
 import ProjectDefinition.Fuddle (analyseFuddleProject)
 import Cannelle.PHP.Parse (tsParsePhp)
@@ -39,7 +40,6 @@ import Utils ((>>=?))
 
 import Generator.Types (ExecSystem (..), WorkPlan (..))
 
-import ProjectDefinition.Scaffold.Types (ScfWorkPlan (..))
 
 type TemplateMatches = Mp.Map FilePath [ MarkupPage ]
 
@@ -167,17 +167,17 @@ createProject rtOpts newOpts =
       putStrLn "@[createProject] Site project."
       pure NilCcl
     WebAppPK -> do
-      putStrLn "@[createProject] WebApp project."
-      pure NilCcl
+      createScaffold rtOpts EwWappSF newOpts
     LocalAppPK ->
-      createScaffold rtOpts newOpts
+      createScaffold rtOpts LocalAppSF newOpts
 
 
 buildWebApp :: RunOptions -> WebAppOptions -> IO (Either GenError ())
 buildWebApp rtOpts waOpts = do
   putStrLn "@[buildWebApp] starting."
   case waOpts of
-    FuddleWA -> pure . Left . SimpleMsg . pack $ "@[buildWebApp] Fuddle not supported yet."
+    EwWappWA ->
+      pure . Left $ SimpleMsg "@[buildWebApp] EwWappWA build not implemented yet."
     NextWA nextOpts -> do
       eiSiteDef <- Fs.loadFolderTree rtOpts.baseDir
       putStrLn $ "@[buildWebApp] eiSiteDef:\n" <> showSiteDef eiSiteDef

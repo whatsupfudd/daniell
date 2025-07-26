@@ -5,6 +5,9 @@ import FileSystem.Types (FileItem, FileKind)
 import Scaffold.Types (ScaffoldBundle (..))
 import Generator.Types (WorkPlan (..))
 
+data ProjectKindScf =
+  LocalAppSF
+  | EwWappSF
 
 type ScfWorkPlan = WorkPlan ScfEngine ScfContext ScfWorkItem
 
