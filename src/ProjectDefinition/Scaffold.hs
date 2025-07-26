@@ -16,21 +16,27 @@ import Scaffold.FileTree (mergeBundles, loadTree)
 
 import Utils (splitResults)
 
-import Template.EwWapp (defaultEwWapp)
+import Scaffold.EwWapp (defaultEwWapp)
 
 import ProjectDefinition.Defaults (defaultLocations)
 import ProjectDefinition.Scaffold.Types
 import ProjectDefinition.Scaffold.Work (runItem)  -- For runPlan.
+import qualified Scaffold.Archive as Arc
 
 createScaffold :: Op.RunOptions -> ProjectKindScf -> Op.NewOptions -> IO Conclusion
 createScaffold rtOpts projKind newOpts =
   case projKind of
     EwWappSF ->
       case newOpts.templates of
-        [] -> -- Use the default structure.(&&)
+        [] -> -- Use the default structure.
           defaultEwWapp rtOpts newOpts
         _ -> -- Use the supplied templates.
-          replicateTemplates rtOpts projKind newOpts.templates
+          let
+            tTemplate = head newOpts.templates
+          in do
+            Arc.listTarBz2Contents tTemplate
+            pure NilCcl
+            -- replicateTemplates rtOpts projKind newOpts.templates
     LocalAppSF ->
       replicateTemplates rtOpts projKind newOpts.templates
   where

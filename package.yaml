@@ -89,6 +89,9 @@ dependencies:
   - transformers
   # For generating new app IDs:
   - uuid
+  # For tar/bz2 archives:
+  - bzlib
+  - tar
 
 
 default-extensions:

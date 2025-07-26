@@ -1,4 +1,4 @@
-module Template.EwWapp where
+module Scaffold.EwWapp where
 
 import Control.Monad (forM_)
 

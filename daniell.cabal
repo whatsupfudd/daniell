@@ -69,9 +69,10 @@ library
       ProjectDefinition.Scaffold.Work
       ProjectDefinition.Types
       RunTime.StaticSite
+      Scaffold.Archive
+      Scaffold.EwWapp
       Scaffold.FileTree
       Scaffold.Types
-      Template.EwWapp
       Template.Hugo
       Template.Jinja2
       Template.NextJS
@@ -93,6 +94,7 @@ library
     , base >=4.7 && <5
     , base-compat
     , bytestring
+    , bzlib
     , cannelle
     , case-insensitive
     , containers
@@ -124,6 +126,7 @@ library
     , servant-multipart
     , servant-server
     , split
+    , tar
     , text
     , time
     , tomland
@@ -161,6 +164,7 @@ executable daniell
     , base
     , base-compat
     , bytestring
+    , bzlib
     , cannelle
     , case-insensitive
     , containers
@@ -193,6 +197,7 @@ executable daniell
     , servant-multipart
     , servant-server
     , split
+    , tar
     , text
     , time
     , tomland
