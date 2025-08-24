@@ -281,7 +281,7 @@ fullExploration rtOpts = do
   pure . Right $ ()
 
 
-displayFTrees :: RunOptions -> [ Seq.Seq (String, [Fs.FileItem]) ] -> IO ()
+displayFTrees :: RunOptions -> [ Seq.Seq (String, [Fs.ExtFileItem]) ] -> IO ()
 displayFTrees rtOpts fTrees = do
   putStrLn $ "@[displayFTrees] folder count: " <> (show . length $ fTrees) <> "."
   forM_ fTrees (\fTree ->
@@ -295,8 +295,8 @@ displayFTrees rtOpts fTrees = do
                     rez <- Cfgp.parseToml (r <> "/" <> filePath)
                     pure ()
                   -}
-                  Fs.KnownFile Fs.Markdown filePath -> do
-                    Mrkp.parseContent rtOpts folder (folder, item)
+                  Fs.ReferFI fileItem@(Fs.KnownFile Fs.Markdown filePath) -> do
+                    Mrkp.parseContent rtOpts folder (folder, fileItem)
                     -- TMP:
                     pure $ Right ()
                   _ -> pure . Left . SimpleMsg . pack $ "@[displayFTrees] unknown item: " <> show item

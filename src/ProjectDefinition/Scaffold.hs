@@ -34,8 +34,15 @@ createScaffold rtOpts projKind newOpts =
           let
             tTemplate = head newOpts.templates
           in do
-            Arc.listTarBz2Contents tTemplate
-            pure NilCcl
+          eiScaffold <-Arc.loadArchive tTemplate
+          case eiScaffold of
+            Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error loading archive: " <> show errMsg
+            Right scaffold -> do
+              putStrLn $ "@[createScaffold] scaffold: " <> show scaffold
+              rezC <- createFileTree rtOpts newOpts [scaffold]
+              case rezC of
+                Left errMsg -> pure $ ErrorCcl $ "@[createScaffold] error creating project: " <> show errMsg
+                Right _ -> pure NilCcl
             -- replicateTemplates rtOpts projKind newOpts.templates
     LocalAppSF ->
       replicateTemplates rtOpts projKind newOpts.templates
@@ -132,14 +139,23 @@ analyzeSources (dir, srcs) =
     ) [] srcs
 
 
-workForSource :: FilePath -> Fs.FileItem -> Maybe ScfWorkItem
+workForSource :: FilePath -> Fs.ExtFileItem -> Maybe ScfWorkItem
 workForSource dir src =
   case src of
-    Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
-    Fs.KnownFile fileType path ->
-      case fileType of
-        Fs.DanTmpl -> Just $ RunTemplate (buildPath dir path)
-        _ -> Just $ RunTemplateToDest fileType dir src (buildPath dir path)
+    Fs.ReferFI fileItem ->
+      case fileItem of
+        Fs.MiscFile srcPath -> Just $ CloneSource (buildPath dir srcPath) (buildPath dir srcPath)
+        Fs.KnownFile fileType path ->
+          case fileType of
+            Fs.DanTmpl -> Just $ RunTemplate (buildPath dir path)
+            _ -> Just $ RunTemplateToDest fileType dir fileItem (buildPath dir path)
+    Fs.ContentFI fileItem content ->
+      case fileItem of
+        Fs.MiscFile srcPath -> Just $ CloneSourceImmediate content (buildPath dir srcPath)
+        Fs.KnownFile fileType path ->
+          case fileType of
+            Fs.DanTmpl -> Just $ RunTemplateImmediate content (buildPath dir path)
+            _ -> Just $ RunTemplateToDestImmediate fileType content (buildPath dir path)
 
 
 buildPath :: FilePath -> FilePath -> FilePath

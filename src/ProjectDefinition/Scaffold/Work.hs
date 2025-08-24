@@ -9,6 +9,7 @@ module ProjectDefinition.Scaffold.Work where
 import Control.Monad (foldM, forM, forM_)
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as Lbs
 import qualified Data.Foldable as Fld
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Mp
@@ -96,6 +97,13 @@ runItem rtOpts destDir projTempl = \case
     else
       SE.copyFile srcPath fullDestPath
     pure $ Right ()
+  CloneSourceImmediate content destPath ->
+    let
+      fullDestPath = destDir <> "/" <> destPath
+    in do
+    putStrLn $ "@[runItem] CloneSourceImmediate to: " <> fullDestPath
+    Lbs.writeFile fullDestPath content
+    pure $ Right ()
   DupFromSource fItem srcPath destPath ->
     let
       fullDestPath = destDir <> "/" <> destPath
@@ -110,6 +118,13 @@ runItem rtOpts destDir projTempl = \case
   RunTemplate path -> do
     putStrLn $ "@[runItem] RunTemplate: " <> path
     pure $ Right ()
+  RunTemplateImmediate content destPath ->
+    let
+      fullDestPath = destDir <> "/" <> destPath
+    in do
+    putStrLn $ "@[runItem] RunTemplateImmediate to: " <> fullDestPath
+    Lbs.writeFile fullDestPath content
+    pure $ Right ()
   RunTemplateToDest tKind dir tPath destPath -> do
     case tPath of
         Fs.KnownFile fType srcPath ->
@@ -122,7 +137,12 @@ runItem rtOpts destDir projTempl = \case
         Fs.MiscFile srcPath -> do
           putStrLn $ "@[runItem] RunTemplateToDest: " <> show tKind <> ", src: " <> show tPath <> ", dst: " <> destPath
           pure $ Right ()
-
+  RunTemplateToDestImmediate tKind content destPath ->
+    let
+      fullDestPath = destDir <> "/" <> destPath
+    in do
+    putStrLn $ "@[runItem] RunTemplateToDestImmediate: " <> fullDestPath
+    genFileFromTemplateImmediate rtOpts destPath tKind content fullDestPath
 
 data ExecTemplate =
   CannelleVM Fu.FunctionDefTpl (V.Vector Vm.ConstantValue)
@@ -172,49 +192,98 @@ genFileFromTemplate rtOpts fType srcPath destPath = do
     Left err -> do
       putStrLn $ "@[genFileFromTemplate] eiFtemplate error: " <> show err
       pure $ Left err
-    Right execCmd -> case execCmd of
-      CannelleVM fctDef constants ->
-        let
-          fctTest = Vm.FunctionDef {
-                  moduleID = 0
-                  , fname = fctDef.name
-                  , args = Nothing
-                  , returnType = Vm.FirstOrderSO Vm.IntTO
-                  , heapSize = 32
-                  , body = Vm.ByteCode fctDef.bytecode
-                }
-          vmModule = Vm.VMModule {
-            functions = V.singleton fctTest
-          , fctMap = Mp.singleton fctDef.name 0
-          , constants = constants
-          , externModules = Mp.empty
-        }
-        in do
-        putStrLn $ "@[genFileFromTemplate] Haskell templ, executing VM module: " <> show vmModule
-        -- TODO: create a runtime context, execute the VM on the FileTemplate produced:
-        -- TODO: pass the proper context, HugoLib context isn't appropriate for all cases.
-        -- Hg.fakeHugoContext
-        eiRez <- Vm.execModule vmModule Te.fakeTemplogContext Nothing  
-        case eiRez of
-          Left errMsg -> do
-            putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg
-            pure $ Left $ SimpleMsg (pack errMsg)
-          Right (Vm.ExecResult vmContext) -> do
-            -- putStrLn $ "@[genFileFromTemplate] result: " <> unpack (TE.decodeUtf8 vmContext.outStream)
-            BS.writeFile destPath vmContext.outStream
-            pure $ Right ()
-      ConcatET content -> do
-        putStrLn $ "@[genFileFromTemplate] ConcatET templ: " <> show srcPath
-        BS.writeFile destPath content
-        pure $ Right ()
-      Jinja _ -> do
-        putStrLn $ "@[genFileFromTemplate] Jinja templ: " <> show srcPath
-        -- TMP: execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
-        pure $ Right ()
-      EndExec -> do
-        putStrLn $ "@[genFileFromTemplate] EndExec: " <> show srcPath
-        pure $ Right ()
-      -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
-  -- with a Right template parsing, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
-  pure $ Right ()
+    Right execCmd -> runExecCommand rtOpts fType execCmd destPath
 
+
+genFileFromTemplateImmediate :: RunOptions -> FilePath ->Fs.FileKind -> Lbs.ByteString -> FilePath -> IO (Either GenError ())
+genFileFromTemplateImmediate rtOpts srcPath fType content destPath = do
+  putStrLn $ "@[genFileFromTemplateImmediate] starting: " <> destPath
+  -- TODO: figure out a common interface amongst all template files for the VM execution.
+  eiExecCmd <- case fType of
+      Fs.Haskell -> do
+        rezA <- Tp.parseFromContent (rtOpts.debug /= 0) srcPath (Lbs.toStrict content) Nothing
+        case rezA of
+          Left err -> pure . Left . SimpleMsg . pack $ show err
+          Right fileUnit ->
+            -- TEST:
+            if V.null fileUnit.definitions then
+              pure $ Right EndExec
+            else
+              let
+                anAction = V.head fileUnit.definitions
+              in
+              case anAction of
+                Fu.CloneVerbatim _ -> do
+                  Lbs.writeFile destPath content
+                  pure $ Right EndExec
+                Fu.Concat crpMode content ->
+                  pure . Right $ ConcatET content
+                Fu.Exec fctDef -> do
+                  pure . Right $ CannelleVM fctDef fileUnit.constants
+                _ -> pure . Left . SimpleMsg . pack $ "@[genFileFromTemplate] logic " <> show anAction <> " not implemented."
+      Fs.Markdown -> do
+        putStrLn $ "@[genFileFromTemplate] no engine for: " <> show destPath <> ", defaulting to CloneVerbatim."
+        Lbs.writeFile destPath content
+        pure $ Right EndExec
+      Fs.Yaml -> do
+        putStrLn $ "@[genFileFromTemplate] no engine for: " <> show destPath <> ", defaulting to CloneVerbatim."
+        Lbs.writeFile destPath content
+        pure $ Right EndExec
+      _ -> do
+        putStrLn $ "@[genFileFromTemplate] no engine for: " <> show destPath <> ", defaulting to CloneVerbatim."
+        Lbs.writeFile destPath content
+        pure $ Right EndExec
+  case eiExecCmd of
+    Left err -> do
+      putStrLn $ "@[genFileFromTemplate] eiFtemplate error: " <> show err
+      pure $ Left err
+    Right execCmd -> runExecCommand rtOpts fType execCmd destPath
+
+
+runExecCommand :: RunOptions -> Fs.FileKind -> ExecTemplate -> FilePath -> IO (Either GenError ())
+runExecCommand rtOpts fType execCmd destPath = do
+  case execCmd of
+    CannelleVM fctDef constants ->
+      let
+        fctTest = Vm.FunctionDef {
+                moduleID = 0
+                , fname = fctDef.name
+                , args = Nothing
+                , returnType = Vm.FirstOrderSO Vm.IntTO
+                , heapSize = 32
+                , body = Vm.ByteCode fctDef.bytecode
+              }
+        vmModule = Vm.VMModule {
+          functions = V.singleton fctTest
+        , fctMap = Mp.singleton fctDef.name 0
+        , constants = constants
+        , externModules = Mp.empty
+      }
+      in do
+      putStrLn $ "@[genFileFromTemplate] Haskell templ, executing VM module: " <> show vmModule
+      -- TODO: create a runtime context, execute the VM on the FileTemplate produced:
+      -- TODO: pass the proper context, HugoLib context isn't appropriate for all cases.
+      -- Hg.fakeHugoContext
+      eiRez <- Vm.execModule vmModule Te.fakeTemplogContext Nothing  
+      case eiRez of
+        Left errMsg -> do
+          putStrLn $ "@[genFileFromTemplate] VM error: " <> show errMsg
+          pure $ Left $ SimpleMsg (pack errMsg)
+        Right (Vm.ExecResult vmContext) -> do
+          -- putStrLn $ "@[genFileFromTemplate] result: " <> unpack (TE.decodeUtf8 vmContext.outStream)
+          BS.writeFile destPath vmContext.outStream
+          pure $ Right ()
+    ConcatET content -> do
+      putStrLn $ "@[genFileFromTemplate] ConcatET templ: " <> show destPath
+      BS.writeFile destPath content
+      pure $ Right ()
+    Jinja _ -> do
+      putStrLn $ "@[genFileFromTemplate] Jinja templ: " <> show destPath
+      -- TMP: execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+      pure $ Right ()
+    EndExec -> do
+      putStrLn $ "@[genFileFromTemplate] EndExec: " <> show destPath
+      pure $ Right ()
+    -- execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+-- with a Right template parsing, execute the VM on the FileTemplate produced (can be Hugo, Haskell-dant, etc):
+  pure $ Right ()

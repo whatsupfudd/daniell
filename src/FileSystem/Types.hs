@@ -1,7 +1,17 @@
 module FileSystem.Types where
 
+import qualified Data.ByteString.Lazy as Lbs
 import qualified Data.Sequence as Seq
 import qualified Data.Map as Mp
+
+
+data ExtFileItem =
+  ReferFI FileItem
+  | ContentFI FileItem Lbs.ByteString
+
+instance Show ExtFileItem where
+  show (ReferFI fi) = show fi
+  show (ContentFI fi content) = show fi <> " (" <> show (Lbs.length content) <> " bytes)"
 
 
 data FileItem =
@@ -39,7 +49,7 @@ getItemPath (MiscFile fp) = fp
 getItemPath (KnownFile _ fp) = fp
 
 
-type PathNode = (FilePath, [FileItem])
+type PathNode = (FilePath, [ExtFileItem])
 type PathFiles = Seq.Seq PathNode
 type FileWithPath = (FilePath, FileItem)
 
@@ -48,5 +58,6 @@ type DirTreeMap = Mp.Map FilePath DirNode
 data DirNode = DirNode {
     dirPath :: FilePath
     , subTree :: DirTreeMap
-    , files :: [ FileItem ]
+    , files :: [ ExtFileItem ]
   }
+  deriving Show

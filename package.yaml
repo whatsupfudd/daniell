@@ -23,6 +23,7 @@ dependencies:
   - directory
   - either
   - exceptions
+  # For filesystem exploration:
   - filepath
   - pathwalk
   # - ginger >= 0.10.4.1

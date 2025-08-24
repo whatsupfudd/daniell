@@ -1,5 +1,6 @@
 module ProjectDefinition.Scaffold.Types where
 
+import qualified Data.ByteString.Lazy as Lbs
 
 import FileSystem.Types (FileItem, FileKind)
 import Scaffold.Types (ScaffoldBundle (..))
@@ -26,8 +27,11 @@ data ScfWorkItem =
   | DupFromSource FileItem FilePath FilePath
   -- straight copy from source to destination:
   | CloneSource FilePath FilePath
+  | CloneSourceImmediate Lbs.ByteString FilePath
   -- run a 'logic' template, no implied result.AnonymousRoutes
   | RunTemplate FilePath
+  | RunTemplateImmediate Lbs.ByteString FilePath
   | RunTemplateToDest FileKind FilePath FileItem FilePath
+  | RunTemplateToDestImmediate FileKind Lbs.ByteString FilePath
   | ConfigWith FileItem
   deriving Show

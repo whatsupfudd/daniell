@@ -73,11 +73,16 @@ classifyContent rtOpts pathFiles =
     foldl (\accum (dirPath, files) ->
             foldl (flip (classifyFile dirPath)) accum files
       ) (Mp.empty, [])
-  classifyFile :: FilePath -> Fs.FileItem -> FileSet -> FileSet
+  classifyFile :: FilePath -> Fs.ExtFileItem -> FileSet -> FileSet
   classifyFile dirPath aFile (fileDict, miscItems) =
-    case aFile of
-      Fs.KnownFile aKind aPath -> (Mp.insertWith (<>) aKind [(dirPath, aFile)] fileDict, miscItems)
-      Fs.MiscFile aPath -> (fileDict, miscItems <> [ (dirPath, aFile) ])
+    let
+      fileItem = case aFile of
+        Fs.ReferFI fileItem -> fileItem
+        Fs.ContentFI fileItem content -> fileItem
+    in
+    case fileItem of
+      Fs.KnownFile aKind aPath -> (Mp.insertWith (<>) aKind [(dirPath, fileItem)] fileDict, miscItems)
+      Fs.MiscFile aPath -> (fileDict, miscItems <> [ (dirPath, fileItem) ])
 
 
 organizeFiles :: FileSet -> NextJSComponents

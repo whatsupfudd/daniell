@@ -37,7 +37,7 @@ filesAnalyser prefixLength root dirs files =
       items = foldl (\accum file ->
                       case itemMaker file of
                         Nothing -> accum
-                        Just anItem -> accum <> [anItem]
+                        Just anItem -> accum <> [ReferFI anItem]
                       ) [] files
     in
     if length items > 0 then
@@ -89,12 +89,14 @@ buildDirTree rtOpts = do
       pure . Right $ pathList
 
   where
+  massgeDirName :: FilePath -> DirTreeMap -> Int -> (FilePath, [ExtFileItem]) -> DirTreeMap
   massgeDirName baseDir dMap index (aPath, fileList) =
     let
       relDirs = splitDirectories $ makeRelative baseDir aPath -- drop prefixLength aPath
     in
     addTreeNode dMap relDirs fileList
 
+  addTreeNode :: DirTreeMap -> [FilePath] -> [ExtFileItem] -> DirTreeMap
   addTreeNode dMap dirList fileItems =
     case dirList of
       -- Protect against a weird case:
