@@ -9,6 +9,7 @@ import Data.Version (showVersion)
 import Development.GitRev (gitHash, gitCommitDate)
 import Paths_daniell (version)
 
+
 versionHu :: Rto.RunOptions -> IO Ccl.Conclusion
 versionHu rtOpts = do
   putStrLn $ "Version: " <> showVersion version <> ", git " <> $(gitHash) <> " (" <> $(gitCommitDate) <> ")."

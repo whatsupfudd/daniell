@@ -81,7 +81,7 @@ loadArchive archivePath = do
           ) Mp.empty tEntries
         fileTree = dirMapToPathNodes Nothing (Mp.elems dirMap)
       in do
-      putStrLn $ "@[loadArchive] dirMap: " <> show dirMap
+      -- putStrLn $ "@[loadArchive] dirMap: " <> show dirMap
       pure . Right $ St.ScaffoldBundle archivePath Nothing Nothing fileTree mempty Tpl.Noop
 
 
