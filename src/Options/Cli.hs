@@ -8,7 +8,8 @@ import Options.Applicative
 import Options.Types
 
 data Command =
-  BuildCmd BuildOptions
+  AnalyseCmd AnalyseOptions
+  | BuildCmd BuildOptions
   | BundleCmd BundleOptions
   | ConfigCmd
   | ConvertCmd
@@ -76,7 +77,8 @@ commandsDef :: Mod CommandFields Command
 commandsDef =
   let
     cmdArray = [
-        ("build", BuildCmd <$> buildOpts, "Builds a project into a static website or a dynamic web application.")
+        ("analyse", AnalyseCmd <$> analyseOpts, "Analyses a project and store it into a DB for introspection.")
+      , ("build", BuildCmd <$> buildOpts, "Builds a project into a static website or a dynamic web application.")
       , ("bundle", BundleCmd <$> bundleOpts, "Bundle a project into a single file.")
       , ("config", pure ConfigCmd, "Print the site configuration.")
       , ("convert", pure ConvertCmd, "Convert your content to different formats.")
@@ -121,9 +123,24 @@ newOpts =
         <> help "Parameter for the template."
     ))
   where
-  sitePK = command "site" (info (pure SitePK) (progDesc "Create a new site project."))
-  webAppPK = command "webapp" (info (pure WebAppPK) (progDesc "Create a new webapp project."))
-  localAppPK = command "localapp" (info (pure LocalAppPK) (progDesc "Create a new localapp project."))
+  sitePK = command "site" (info (pure SitePK  <**> helper) (progDesc "Create a new site project."))
+  webAppPK = command "webapp" (info (pure WebAppPK  <**> helper) (progDesc "Create a new webapp project."))
+  localAppPK = command "localapp" (info (pure LocalAppPK  <**> helper) (progDesc "Create a new localapp project."))
+
+
+analyseOpts :: Parser AnalyseOptions
+analyseOpts =
+  AnalyseOptions <$> techKindOpts
+     <*> optional (strOption (long "srcDir" <> help "(string) entry path where the project resides."))
+
+
+techKindOpts :: Parser TechKind
+techKindOpts =
+  subparser (
+      command "haskell" (info (pure HaskellTK <**> helper) (progDesc "Haskell project."))
+    <> command "php" (info (pure PhpTK <**> helper) (progDesc "PHP project."))
+    <> command "tryton" (info (pure TrytonTK <**> helper) (progDesc "Tryton project."))
+  )
 
 
 buildOpts :: Parser BuildOptions
@@ -192,7 +209,7 @@ bundleOpts =
 
 
 siteOpts :: Parser SiteOptions
-siteOpts = 
+siteOpts =
   subparser (
       command "hugo" (info (HugoSS <$> hugoOpts <**> helper) (progDesc "Build a Hugo project."))
     <> command "php" (info (PhpSS <$> phpOpts <**> helper) (progDesc "Builds a PHP project."))
@@ -245,9 +262,9 @@ hugoOpts =
   <*> optional (switch (long "watch" <> short 'w' <> help "watch filesystem for changes and recreate as needed"))
 
 
-phpOpts :: Parser PhpBuildOptions
+phpOpts :: Parser TopDirOptions
 phpOpts =
-  PhpBuildOptions <$> optional (strOption (long "srcDir" <> help "(string) filesystem path to read files relative from"))
+  TopDirOptions <$> optional (strOption (long "srcDir" <> help "(string) filesystem path to read files relative from"))
 
 
 

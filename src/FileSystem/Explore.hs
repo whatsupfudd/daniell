@@ -68,6 +68,11 @@ itemMaker fileName
   | ".xml" `isSuffixOf` fileName = Just $ KnownFile Xml fileName
   | ".txt" `isSuffixOf` fileName = Just $ KnownFile TxtTempl fileName
   | ".php" `isSuffixOf` fileName = Just $ KnownFile Php fileName
+  | ".py" `isSuffixOf` fileName = Just $ KnownFile Python fileName
+  | ".cpp" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
+  | ".hpp" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
+  | ".h" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
+  | ".c" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
   | otherwise = Just $ MiscFile fileName
 
 

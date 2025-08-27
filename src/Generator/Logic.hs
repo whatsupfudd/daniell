@@ -14,7 +14,7 @@ import qualified System.Directory as SE
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions (..))
-import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..), PhpBuildOptions (..), WebAppOptions (..))
+import Options.Types (NewOptions (..), ProjectKind (..), SiteOptions (..), TopDirOptions (..), WebAppOptions (..), TechKind (..))
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 import ProjectDefinition.Types (ProjectDefinition (..), ProjectType (..), SiteType (..), WebAppType (..), LocalAppType (..))
@@ -30,6 +30,7 @@ import ProjectDefinition.Scaffold (createScaffold)
 import ProjectDefinition.Scaffold.Types (ScfWorkPlan (..), ProjectKindScf (..))
 import ProjectDefinition.Gatsby (analyseGatsbyProject)
 import ProjectDefinition.Fuddle (analyseFuddleProject)
+import qualified ProjectDefinition.Haskell as Skl
 import Cannelle.PHP.Parse (tsParsePhp)
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
@@ -79,6 +80,23 @@ data SpecPlan =
   | PhpPlan
   deriving Show
 
+analyseProject :: RunOptions -> TechKind -> FilePath -> IO (Either GenError ())
+analyseProject rtOpts techKind srcDir = do
+  eiRez <- case techKind of
+    HaskellTK -> do
+      eiRez <- Skl.analyseProject rtOpts techKind srcDir
+      pure ()
+    PhpTK ->
+      putStrLn $ "@[analyseProject] php: not supported yet."
+    TrytonTK ->
+      putStrLn $ "@[analyseProject] tryton: not supported yet."
+    DjangoTK ->
+      putStrLn $ "@[analyseProject] django: not supported yet."
+    PythonTK ->
+      putStrLn $ "@[analyseProject] python: not supported yet."
+    CppTK ->
+      putStrLn $ "@[analyseProject] cpp: not supported yet."
+  pure $ Right ()
 
 buildSite :: RunOptions -> SiteOptions -> IO (Either GenError ())
 buildSite rtOpts siteOpts = do

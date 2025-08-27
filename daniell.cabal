@@ -18,6 +18,7 @@ extra-source-files:
 library
   exposed-modules:
       Commands
+      Commands.Analyse
       Commands.Build
       Commands.Config
       Commands.Convert
@@ -54,6 +55,10 @@ library
       ProjectDefinition.Defaults
       ProjectDefinition.Fuddle
       ProjectDefinition.Gatsby
+      ProjectDefinition.Haskell
+      ProjectDefinition.Haskell.Analyse
+      ProjectDefinition.Haskell.Types
+      ProjectDefinition.Haskell.Work
       ProjectDefinition.Hugo
       ProjectDefinition.Hugo.Analyze
       ProjectDefinition.Hugo.Config

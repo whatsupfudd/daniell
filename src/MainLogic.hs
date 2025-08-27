@@ -28,11 +28,12 @@ runWithOptions cliOptions fileOptions = do
             , listenPort = Nothing
             -- TODO: put additional env vars.
           }
-      rtOptions <- Opt.mergeOptions cliOptions fileOptions envOptions 
+      rtOptions <- Opt.mergeOptions cliOptions fileOptions envOptions
         -- switchboard to command executors:
       let
         cmdExecutor =
           case aJob of
+            Opt.AnalyseCmd opts -> Cmd.analyseCmd opts
             Opt.BuildCmd opts -> Cmd.buildCmd opts
             Opt.ConfigCmd -> Cmd.configHu
             Opt.ConvertCmd -> Cmd.convertHu

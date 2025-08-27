@@ -21,6 +21,23 @@ data NewOptions = NewOptions {
   deriving Show
 
 
+data AnalyseOptions = AnalyseOptions {
+    techKind :: TechKind
+    , projDir :: Maybe FilePath
+  }
+  deriving Show
+
+
+data TechKind =
+  HaskellTK
+  | PhpTK
+  | TrytonTK
+  | DjangoTK
+  | PythonTK
+  | CppTK
+  deriving Show
+
+
 data ParameterTpl =
   AssignmentP (Text, Text)
   | FlagP Text
@@ -49,7 +66,7 @@ data SiteOptions =
   | NextSS
   | FuddleSS
   | GatsbySS
-  | PhpSS PhpBuildOptions
+  | PhpSS TopDirOptions
   deriving Show
 
 
@@ -105,7 +122,7 @@ data HugoBuildOptions = HugoBuildOptions {
   deriving Show
 
 
-newtype PhpBuildOptions = PhpBuildOptions {
+newtype TopDirOptions = TopDirOptions {
     srcDir :: Maybe Text
   }
   deriving Show

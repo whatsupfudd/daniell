@@ -41,6 +41,9 @@ data FileKind =
   | Xml
   | TxtTempl
   | Php
+  | Python
+  | Cpp
+  | CppHeader
   deriving (Eq, Ord, Show)
 
 

@@ -1,5 +1,6 @@
 module Commands  (
-  module Commands.Build
+  module Commands.Analyse
+  , module Commands.Build
   , module Commands.Config
   , module Commands.Convert
   , module Commands.Deploy
@@ -16,6 +17,7 @@ module Commands  (
  )
 where
 
+import Commands.Analyse
 import Commands.Build
 import Commands.Config
 import Commands.Convert
