@@ -1,10 +1,15 @@
 module ProjectDefinition.Haskell.Analyse where
 
+import Data.Either (lefts, rights)
 import qualified Data.Map as Mp
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 
-import System.FilePath (takeExtension)
+import System.FilePath (takeExtension, (</>))
+
+import qualified Cannelle.Templog.Parse as Tp
+import qualified Cannelle.FileUnit.Types as Fu
+import Cannelle.Common.Error ( CompError )
 
 import Conclusion (GenError (..), Conclusion (..))
 import Options.Runtime (RunOptions)
@@ -13,6 +18,7 @@ import ProjectDefinition.Types (FileSet)
 
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
+
 import ProjectDefinition.Haskell.Types
 
 
@@ -25,9 +31,12 @@ analyseProject rtOpts techKind srcDir = do
       let
         content = organizeFiles rtOpts pathFiles 
       in do
+      {-
       putStrLn $ "buildInfo: " <> show content.buildInfo
       putStrLn $ "modules: " <> show content.modules
       putStrLn $ "otherLogic: " <> show content.otherLogic
+      -}
+      parseFiles rtOpts srcDir content
       pure $ Right ()
 
 
@@ -51,17 +60,17 @@ organizeFiles rtOpts pathFiles =
     in
     case fileItem of
       Fs.KnownFile aKind aPath -> case aKind of
-        Fs.Haskell -> Mp.insertWith (<>) "modules" [(dirPath, fileItem)] aMap
+        Fs.Haskell -> Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "modules" aMap
         Fs.Yaml -> case aPath of
-          "stack.yaml" -> Mp.insertWith (<>) "buildInfo" [(dirPath, fileItem)] aMap
-          "package.yaml" -> Mp.insertWith (<>) "buildInfo" [(dirPath, fileItem)] aMap
+          "stack.yaml" -> Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "buildInfo" aMap
+          "package.yaml" -> Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "buildInfo" aMap
           _ -> aMap
-        Fs.Cpp -> Mp.insertWith (<>) "otherLogic" [(dirPath, fileItem)] aMap
-        Fs.CppHeader -> Mp.insertWith (<>) "otherLogic" [(dirPath, fileItem)] aMap
+        Fs.Cpp -> Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "otherLogic" aMap
+        Fs.CppHeader -> Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "otherLogic" aMap
         _ -> aMap
       Fs.MiscFile aPath ->
         if takeExtension aPath == ".cabal" then
-          Mp.insertWith (<>) "buildInfo" [(dirPath, fileItem)] aMap
+          Mp.alter (Just . maybe [(dirPath, fileItem)] ((dirPath, fileItem) :)) "buildInfo" aMap
         else
           aMap
   organizeBuildFiles ::[Fs.FileWithPath] -> Mp.Map FilePath BuildInfo
@@ -85,12 +94,12 @@ organizeFiles rtOpts pathFiles =
               updBuildInfo = case fileItem of
                 Fs.KnownFile fKind fPath ->
                   case fPath of
-                    "stack.yaml" -> Just $ aBuildInfo { stack = Just fPath }
-                    "package.yaml" -> Just $aBuildInfo { package = Just fPath }
+                    "stack.yaml" -> Just aBuildInfo { stack = Just fPath }
+                    "package.yaml" -> Just aBuildInfo { package = Just fPath }
                     _ -> Nothing
                 Fs.MiscFile aPath ->
                   if takeExtension aPath == ".cabal" then
-                    Just $ aBuildInfo { package = Just aPath }
+                    Just aBuildInfo { package = Just aPath }
                   else
                     Nothing
               in
@@ -98,3 +107,36 @@ organizeFiles rtOpts pathFiles =
                 Nothing -> accum
                 Just aBuildInfo -> Mp.insert dirPath aBuildInfo accum
       ) Mp.empty
+
+
+parseFiles :: RunOptions -> FilePath -> HaskellComponents -> IO ()
+parseFiles rtOpts srcDir content = do
+  ieRez <- mapM (parseFile rtOpts srcDir) content.modules
+  case lefts ieRez of
+    [] ->
+      let
+        fileUnits = rights ieRez
+      in do
+      putStrLn $ "@[parseFiles] fileUnits: " <> show fileUnits
+      pure ()
+    errs -> do
+      putStrLn $ "@[parseFiles] Error parsing file: " <> show errs
+      pure ()
+
+
+parseFile :: RunOptions -> FilePath -> (FilePath, Fs.FileItem) -> IO (Either GenError Fu.FileUnit)
+parseFile rtOpts srcDir (filePath, fileItem) =
+  case fileItem of
+    Fs.KnownFile aKind aPath ->
+      let
+        fullPath = srcDir </> filePath </> aPath
+      in
+      case aKind of
+        Fs.Haskell -> do
+          eiRez <- Tp.parse False fullPath
+          case eiRez of
+            Left err -> pure $ Left $ SimpleMsg $ "@[parseFile] Tp.parse err: " <> pack filePath <> " " <> pack (show err)
+            Right fileUnit -> pure $ Right fileUnit
+        _ -> pure $ Left $ SimpleMsg $ "@[parseFile] not a Haskell file: " <> pack filePath <> " " <> pack (show fileItem)
+    _ -> pure $ Left $ SimpleMsg $ "@[parseFile] not a Haskell file: " <> pack filePath <> " " <> pack (show fileItem)
+
