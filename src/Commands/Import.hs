@@ -11,6 +11,7 @@ import qualified Options.Runtime as Rto
 import qualified Options.Types as Opts
 
 import qualified ProjectDefinition.Php.Analyse as Php
+import qualified ProjectDefinition.Html.Analyse as Html
 
 
 importCmd :: Opts.ImportOptions -> Rto.RunOptions -> IO Ccl.Conclusion
@@ -52,15 +53,16 @@ importProject importOpts rtOpts dbPool = do
     Opts.TrytonIS -> do
       putStrLn "@[importCmd] TrytonIS" >> pure Ccl.NilCcl
     Opts.HtmlIS -> do
-      importHtml importOpts rtOpts
+      importHtml importOpts rtOpts dbPool
     _ -> do
       putStrLn "@[importCmd] Unknown specifics"
       pure Ccl.NilCcl
 
 
-importHtml :: Opts.ImportOptions -> Rto.RunOptions -> IO Ccl.Conclusion
-importHtml importOpts rtOpts = do
+importHtml :: Opts.ImportOptions -> Rto.RunOptions -> Pool -> IO Ccl.Conclusion
+importHtml importOpts rtOpts dbPool = do
   putStrLn $ "@[importHtml] starting, dir: " <> show importOpts.sourceDir <> ", name: " <> show importOpts.projectName
+  Html.processDir importOpts.projectName importOpts.sourceDir dbPool
   pure Ccl.NilCcl
 
 

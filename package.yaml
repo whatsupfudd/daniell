@@ -100,6 +100,8 @@ dependencies:
   - hasql-pool
   # Temp, for binary serialization:
   - binary
+  # Temp, for HTML parsing:
+  - html-parse
 
 
 default-extensions:

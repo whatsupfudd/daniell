@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 module ProjectDefinition.Php.Analyse where
 
 import qualified Data.ByteString as Bs
@@ -9,15 +8,14 @@ import Data.Int (Int32)
 import qualified Data.Map as Mp
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Data.Sequence as Seq
-import Data.Text (Text, pack, unpack, splitOn)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text.Encoding as T
 import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import qualified Data.Vector as V
 
 import qualified Crypto.Hash.MD5 as Cr
 
-import System.Directory (doesFileExist, doesDirectoryExist)
-import System.FilePath.Posix ((</>), isExtensionOf)
+import System.FilePath.Posix ((</>))
 
 import Hasql.Pool (Pool)
 
@@ -77,7 +75,7 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
     fullPath = rootPath </> dirPath
   in do
   putStrLn $ "@[processFilesInDir] folderID: " <> show folderID <> " fullPath: " <> fullPath
-  fRegistries <- mapM (registerFile dbPool folderID fullPath) files
+  fRegistries <- mapM (registerFile dbPool folderID fullPath) (filter Fs.isPhpExtItem files)
   case partitionEithers fRegistries of
     (errs, _) -> do
       putStrLn $ "@[processFilesInDir] registerFile errs: " <> show errs
@@ -85,19 +83,10 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
   pure ()
 
 
-getExtFileItemPath :: Fs.ExtFileItem -> FilePath
-getExtFileItemPath (Fs.ReferFI fileItem) = getItemPath fileItem
-getExtFileItemPath (Fs.ContentFI fileItem _) = getItemPath fileItem
-
-getItemPath :: Fs.FileItem -> FilePath
-getItemPath (Fs.MiscFile filePath) = filePath
-getItemPath (Fs.KnownFile _ filePath) = filePath
-
-
 registerFile :: Pool -> Int32 -> FilePath -> Fs.ExtFileItem -> IO (Either String ())
 registerFile dbPool folderID fullDirPath fileItem =
   let
-    fileItemPath = getExtFileItemPath fileItem
+    fileItemPath = Fs.getExtFileItemPath fileItem
   in do
   putStrLn $ "@[registerFile] folderID: " <> show folderID <> " file: " <> fileItemPath
   rezA <- Do.getFile dbPool folderID fileItemPath

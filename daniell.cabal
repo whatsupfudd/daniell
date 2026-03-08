@@ -62,6 +62,8 @@ library
       ProjectDefinition.Haskell.Analyse
       ProjectDefinition.Haskell.Types
       ProjectDefinition.Haskell.Work
+      ProjectDefinition.Html.Analyse
+      ProjectDefinition.Html.Parser
       ProjectDefinition.Hugo
       ProjectDefinition.Hugo.Analyze
       ProjectDefinition.Hugo.Config
@@ -107,6 +109,7 @@ library
     , bzlib
     , cannelle
     , case-insensitive
+    , cdp
     , containers
     , cryptohash-md5
     , deepseq
@@ -119,6 +122,7 @@ library
     , hasql
     , hasql-pool
     , hasql-th
+    , html-parse
     , http-client
     , http-media
     , http-types
@@ -182,6 +186,7 @@ executable daniell
     , bzlib
     , cannelle
     , case-insensitive
+    , cdp
     , containers
     , cryptohash-md5
     , daniell
@@ -195,6 +200,7 @@ executable daniell
     , hasql
     , hasql-pool
     , hasql-th
+    , html-parse
     , http-client
     , http-media
     , http-types

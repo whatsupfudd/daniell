@@ -65,3 +65,26 @@ data DirNode = DirNode {
     , files :: [ ExtFileItem ]
   }
   deriving Show
+
+
+getExtFileItemPath :: ExtFileItem -> FilePath
+getExtFileItemPath (ReferFI fileItem) = getItemPath fileItem
+getExtFileItemPath (ContentFI fileItem _) = getItemPath fileItem
+
+isPhpExtItem :: ExtFileItem -> Bool
+isPhpExtItem (ReferFI fileItem) = isPhpFileItem fileItem
+isPhpExtItem (ContentFI fileItem _) = isPhpFileItem fileItem
+
+isPhpFileItem :: FileItem -> Bool
+isPhpFileItem (MiscFile filePath) = False
+isPhpFileItem (KnownFile fileKind _) = fileKind == Php
+
+
+isHtmlExtItem :: ExtFileItem -> Bool
+isHtmlExtItem (ReferFI fileItem) = isHtmlFileItem fileItem
+isHtmlExtItem (ContentFI fileItem _) = isHtmlFileItem fileItem
+
+isHtmlFileItem :: FileItem -> Bool
+isHtmlFileItem (MiscFile filePath) = False
+isHtmlFileItem (KnownFile fileKind _) = fileKind == Html
+
