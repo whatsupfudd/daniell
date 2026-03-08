@@ -3,7 +3,9 @@ module Options.Runtime where
 import Data.Text (Text)
 import Options.SiteConfig as Scfg
 import WebServer.CorsPolicy (CORSConfig, defaultCorsPolicy)
+import DB.Connect (PgDbConfig (..), defaultPgDbConf)
 import Options.Types (HugoBuildOptions (..), NextJSBuildOptions (..))
+
 
 data RunOptions = RunOptions {
     debug :: Int
@@ -14,6 +16,7 @@ data RunOptions = RunOptions {
     , corsPolicy :: Maybe CORSConfig
     , templateDir :: FilePath
     , techOpts :: TechOptions
+    , pgDbConf :: PgDbConfig
   }
 
 data TechOptions =
@@ -45,4 +48,5 @@ defaultRun appHome baseURL =
     , corsPolicy = Just defaultCorsPolicy
     , templateDir = appHome <> "/templates"
     , techOpts = NoTech
+    , pgDbConf = defaultPgDbConf
   }

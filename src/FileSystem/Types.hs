@@ -44,6 +44,7 @@ data FileKind =
   | Python
   | Cpp
   | CppHeader
+  | RubyFK
   deriving (Eq, Ord, Show)
 
 

@@ -55,20 +55,25 @@ defaultEwWapp rtOpts newOpts = do
 
   -- Create the directory structure for a new EwWapp project
   let
-    directories = [
-        "build" </> "app",
-        "build" </> "config",
-        "build" </> "css",
-        "build" </> "Data",
-        "build" </> "en",
-        "build" </> "imgs",
-        "build" </> "js" </> "app",
-        "resources" </> "js",
-        "resources" </> "css",
-        "wapp" </> "Components",
-        "wapp" </> "Intl",
-        "wapp" </> "Protected"
-      ]
+    directories =
+      (map ("build" </>) [
+        "app",
+        "config",
+        "css",
+        "Data",
+        "en",
+        "imgs",
+        "js" </> "app"
+      ])
+      ++ (map ("resources" </>) [
+        "js",
+        "css"
+      ])
+      ++ (map ("wapp" </>) [
+        "Components",
+        "Intl",
+        "Protected"
+      ])
 
   -- Create all directories
   forM_ directories $ \dir -> do
@@ -131,17 +136,9 @@ defaultWappFileWithArgs fileName path args =
           \*.swo \
           \# OS files \
           \.DS_Store"
+
         "all.css" -> Right "@import \"tailwindcss\";"
-        "tailwind.config.js" -> Right "\
-          \module.exports = {\n\
-          \  content: [\n\
-          \    \"./wapp/**/*.elm\",\n\
-          \    \"./resources/html/**/*.html\",\n\
-          \  ],\n\
-          \  theme: {\n\
-          \    extend: {},\n\
-          \  },\n\
-          \}\n"
+
         "mkBuildPages" -> Right "\
           \#!/bin/bash\n\
           \n\
@@ -197,6 +194,7 @@ rootLayoutVerbatim :: Bs.ByteString
 rootLayoutVerbatim = "module RootLayout exposing (default)\n\
 \\n\
 \-- While the Fuddle compiler with template support is not ready.\n\
+\import AppDef exposing (AppDef, defaultApp)\n\
 \import Html.String exposing (Html)\n\
 \import Html.String.Attributes as A\n\
 \import Html.Extra as Hx\n\
@@ -211,75 +209,64 @@ rootLayoutVerbatim = "module RootLayout exposing (default)\n\
 \-}\n\
 \\n\
 \-- While using the Elm compiler, we type for convenience:\n\
-\default : Sr.RenderOptions -> List (Html msg) -> Html msg\n\
-\default rtOpts children =\n\
-\  Hx.html [A.lang rtOpts.locale, A.dir (L.directionFor rtOpts.locale) ] [\n\
-\    headR\n\
-\    , bodyR children\n\
+\default : Sr.RenderOptions -> (List (Html msg), List (Html msg), AppDef) -> Html msg\n\
+\default rtOpts (children, scripts, appDef) =\n\
+\  Hx.html [A.lang rtOpts.locale, A.dir (L.directionFor rtOpts.locale), A.class \"dark\" ] <| [\n\
+\    headR appDef\n\
+\    , bodyR appDef children\n\
 \  ]\n\
+\  ++ scripts\n\
 \\n\
 \\n\
-\headR =\n\
+\headR appDef =\n\
+\  Hx.head [] <| [\n\
+\      Hx.title [] <| L.l appDef.title\n\
+\    , Hx.style [ A.attribute \"data-emotion\" \"cl-internal\", A.attribute \"nonce\" \"\", A.attribute \"data-s\" \"\"] []\n\
+\    , Hx.meta [ Hx.name \"description\", Hx.content <| L.ls appDef.description ]\n\
+\    , Hx.meta [ Hx.charset \"utf-8\" ]\n\
+\    , Hx.meta [ A.name \"viewport\", Hx.content \"width=device-width, initial-scale=1\" ]\n\
+\    , Hx.link [ A.href \"https://fonts.googleapis.com\", A.rel \"preconnect\" ]\n\
+\    , Hx.link [ A.href \"https://fonts.gstatic.com\", A.rel \"preconnect\" ]\n\
+\    , Hx.link [ A.href \"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap\", A.rel \"stylesheet\" ]\n\
+\    , Hx.script [ A.src \"https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.js\" ] \"\"\n\
+\    -- , Hx.script [ A.src \"https://cdn.tailwindcss.com\" ] \"\"\n\
+\    ]\n\
+\    ++\n\
+\    (List.map (\\cssUrl -> Hx.link [ A.href cssUrl, A.rel \"stylesheet\", Hx.async ]) appDef.css)\n\
+\    ++ (if appDef.isActive then\n\
+\        [\n\
+\          Hx.script [ A.src \"https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js\", Hx.crossOrigin \"anonymous\", Hx.defer] \"\"\n\
+\        , Hx.script [ A.src \"https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js\", Hx.crossOrigin \"anonymous\", Hx.defer] \"\"\n\
+\        ]\n\
+\      else [])\n\
+\    ++ case appDef.imports of\n\
+\         [] -> []\n\
+\         _ -> [ makeImportMap appDef.imports ]\n\
+\\n\
+\makeImportMap importList =\n\
 \  let\n\
-\    appCss = \"/css/base.css\"\n\
+\    refDefs = List.map (\\(label, url) -> \"\\\"\" ++ label ++ \"\\\":\\\"\" ++ url ++ \"\\\"\") importList\n\
+\    jsObjDef = \"{ \\\"imports\\\" : {\" ++ String.concat (List.intersperse \",\" refDefs) ++ \" }}\"\n\
 \  in\n\
-\    Hx.head [] [\n\
-\      Hx.title [] <| L.l \"MarketingLayout.title\"\n\
-\      , Hx.style [ A.attribute \"data-emotion\" \"cl-internal\", A.attribute \"nonce\" \"\", A.attribute \"data-s\" \"\"] []\n\
-\      , Hx.meta [ Hx.charset \"utf-8\" ]\n\
-\      , Hx.meta [ A.name \"viewport\", Hx.content \"width=device-width, initial-scale=1\" ]\n\
-\      , Hx.link [ A.href \"https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css\", A.rel \"stylesheet\", Hx.async]\n\
-\      , Hx.link [ A.href appCss, A.rel \"stylesheet\", Hx.async]\n\
-\      , Hx.script [ A.src \"https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js\", Hx.crossOrigin \"anonymous\", Hx.defer] \"\"\n\
-\      , Hx.script [ A.src \"https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js\", Hx.crossOrigin \"anonymous\", Hx.defer] \"\"\n\
-\      , Hx.script [\n\
-\            A.src \"https://clerk.z14learning.com/npm/@clerk/clerk-js@5/dist/clerk.browser.js\"\n\
-\            , A.attribute \"data-clerk-js-script\" \"true\"\n\
-\            , A.attribute \"async\" \"\"\n\
-\            , A.attribute \"crossorigin\" \"anonymous\"\n\
-\            , A.attribute \"data-clerk-publishable-key\" \"pk_live_Y2xlcmsuejE0bGVhcm5pbmcuY29tJA\"\n\
-\           ] \"\"\n\
-\      , Hx.script [ A.type_ \"importmap\"] \"\"\"\n\
-\          {\n\
-\            \"imports\" : {\n\
-\                \"three\" : \"https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js\"\n\
-\              , \"three/addons/\" : \"https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/\"\n\
-\              , \"three/webgpu\": \"https://threejs.org/build/three.webgpu.js\"\n\
-\              , \"three/tsl\": \"https://threejs.org/build/three.tsl.js\"\n\
-\              , \"htmx\" : \"https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js\"\n\
-\              , \"flowbite\" : \"https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js\"\n\
-\              , \"d3\" : \"https://esm.run/d3\"\n\
-\              , \"d3-hierarchy\" : \"https://esm.run/d3-hierarchy\"\n\
-\              , \"d3-shape\" : \"https://esm.run/d3-shape\"\n\
-\              , \"d3-array\" : \"https://esm.run/d3-array\"\n\
-\              , \"@fullcalendar/core\" : \"https://cdn.skypack.dev/@fullcalendar/core@6.1.15\"\n\
-\              , \"@fullcalendar/interaction\" : \"https://cdn.skypack.dev/@fullcalendar/interaction@6.1.15\"\n\
-\              , \"@fullcalendar/daygrid\" : \"https://cdn.skypack.dev/@fullcalendar/daygrid@6.1.15\"\n\
-\              , \"@fullcalendar/timegrid\" : \"https://cdn.skypack.dev/@fullcalendar/timegrid@6.1.15\"\n\
-\              , \"@fullcalendar/list\" : \"https://cdn.skypack.dev/@fullcalendar/list@6.1.15\"\n\
-\              , \"webrtc-adapter\" : \"https://cdn.jsdelivr.net/npm/webrtc-adapter@9.0.1/+esm\"\n\
-\              , \"sortablejs\" : \"https://unpkg.com/sortablejs@1.15.6/modular/sortable.esm.js\"\n\
-\            }\n\
-\          }\n\
-\        \"\"\"\n\
-\    ]\n\
+\  Hx.script [ A.type_ \"importmap\"] jsObjDef\n\
 \\n\
 \\n\
-\bodyR children =\n\
-\  Hx.body [] <|\n\
+\bodyR appDef children =\n\
+\  let\n\
+\    bodyClasses = case appDef.bodyClass of\n\
+\      Nothing -> []\n\
+\      Just aClass -> [ A.class aClass ]\n\
+\  in\n\
+\  Hx.body bodyClasses <|\n\
 \    [\n\
-\        Hx.script [ A.src \"/js/easyWordy.js\", Hx.crossOrigin \"anonymous\", Hx.async] \"\"\n\
-\      , Hx.script [ A.type_ \"module\"] <| \"\"\"\n\
-\          import \"htmx\"\n\
-\          htmx.logAll()\n\
-\        \"\"\"\n\
+\        Hx.script [ A.src \"/js/easyWordy_v2.js\", Hx.crossOrigin \"anonymous\", Hx.async, A.type_ \"module\"] \"\"\n\
 \    ]\n\
-\    ++ children\n\
-\    ++ [\n\
-\      -- Note: @expand automatically inserts the elements in children between the 2 script elements.\n\
-\      -- Hx.script [] \"initWapp()\"\n\
-\      Hx.script [ A.src \"https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js\", Hx.async] \"\"\n\
-\    ]"
+\    ++ (if appDef.isActive then\n\
+\         [ Hx.script [ A.type_ \"module\"] <| \"import \\\"https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js\\\"; htmx.logAll()\" ]\n\
+\      else [])\n\
+\    ++ children\n"
+
+
 
 
 buildPageVerbatim :: Bs.ByteString
@@ -1558,7 +1545,7 @@ iconsVerbatim = "module Components.Icons exposing (..)\n\
 
 -- TODO: use the WAPP_LIB env variable to set the source-directories prefixes.
 elmJsonVerbatim :: Bs.ByteString
-elmJsonVerbatim = 
+elmJsonVerbatim =
   let
     libPrefix = "/Volumes/ledna/Projets/Fudd/EasyWordy/"
   in

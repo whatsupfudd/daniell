@@ -1,6 +1,8 @@
 module ProjectDefinition.Scaffold where
 
 import Control.Monad (unless, when)
+
+import Data.Either (partitionEithers)
 import qualified Data.Foldable as Fld
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified System.Directory as SE
@@ -13,8 +15,6 @@ import qualified FileSystem.Types as Fs
 import Generator.Types (ExecSystem (..), WorkPlan (..))
 import Scaffold.Types (ScaffoldBundle (..))
 import Scaffold.FileTree (mergeBundles, loadTree)
-
-import Utils (splitResults)
 
 import Scaffold.EwWapp (defaultEwWapp)
 
@@ -50,7 +50,7 @@ createScaffold rtOpts projKind newOpts =
   replicateTemplates rtOpts projKind templates = do
       rezTemplates <- mapM (parseFileTree rtOpts) newOpts.templates
       let
-        (errTemplates, userTemplates) = splitResults rezTemplates
+        (errTemplates, userTemplates) = partitionEithers rezTemplates
       case errTemplates of
         -- No errors, keep going.
         [] -> do

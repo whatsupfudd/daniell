@@ -17,7 +17,7 @@ data Command =
   | EnvCmd
   | GenCmd
   | HelpCmd
-  | ImportCmd
+  | ImportCmd ImportOptions
   | ListCmd
   | ModCmd
   | NewCmd NewOptions
@@ -86,7 +86,7 @@ commandsDef =
       , ("env", pure EnvCmd, "Print Hugo version and environment info.")
       , ("gen", pure GenCmd, "A collection of several useful generators.")
       , ("help", pure HelpCmd, "Help about any command.")
-      , ("import", pure ImportCmd, "Import your site from others.")
+      , ("import", ImportCmd <$> importOpts, "Import your site from others.")
       , ("list", pure ListCmd, "Listing out various types of content.")
       , ("mod", pure ModCmd, "Various Hugo Modules helpers.")
       , ("new", NewCmd <$> newOpts, "Create a new project or add new content in a project.")
@@ -292,3 +292,18 @@ paramParser = eitherReader $ \s ->
       "" -> Left "Invalid parameter format, expected <key>=<value>."
       _ -> Right $ FlagP tS
 
+importOpts :: Parser ImportOptions
+importOpts =
+  ImportOptions <$> strOption (long "sourceDir" <> help "(string) filesystem path to read files relative from")
+  <*> strOption (long "projectName" <> help "(string) name of the project")
+  <*> specificsParser
+  where
+  specificsParser :: Parser ImportSpecifics
+  specificsParser =
+    subparser (
+      command "php" (info (pure PhpIS <**> helper) (progDesc "PHP project."))
+      <> command "django" (info (pure DjangoIS <**> helper) (progDesc "Django project."))
+      <> command "rails" (info (pure RailsIS <**> helper) (progDesc "Rails project."))
+      <> command "tryton" (info (pure TrytonIS <**> helper) (progDesc "Tryton project."))
+      <> command "html" (info (pure HtmlIS <**> helper) (progDesc "HTML project."))
+    )

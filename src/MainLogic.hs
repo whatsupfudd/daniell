@@ -41,7 +41,7 @@ runWithOptions cliOptions fileOptions = do
             Opt.EnvCmd -> Cmd.envHu
             Opt.GenCmd -> Cmd.genHu
             Opt.HelpCmd -> Cmd.helpHu
-            Opt.ImportCmd -> Cmd.importHu
+            Opt.ImportCmd opts -> Cmd.importCmd opts
             Opt.ListCmd -> Cmd.listHu
             Opt.ModCmd -> Cmd.modHu
             Opt.NewCmd opts -> Cmd.newCmd opts

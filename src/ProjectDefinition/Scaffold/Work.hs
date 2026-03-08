@@ -42,7 +42,6 @@ import ProjectDefinition.Defaults (defaultLocations)
 import qualified Markup.Page as Mrkp
 import Markup.Types (MarkupPage (..))
 
-import Utils (splitResults)
 import Generator.Types
 
 import Scaffold.Types (ScaffoldBundle (..))

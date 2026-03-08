@@ -93,6 +93,13 @@ dependencies:
   # For tar/bz2 archives:
   - bzlib
   - tar
+  # For SQL:
+  - postgresql-binary
+  - hasql
+  - hasql-th
+  - hasql-pool
+  # Temp, for binary serialization:
+  - binary
 
 
 default-extensions:

@@ -34,6 +34,9 @@ library
       Commands.Server
       Commands.Version
       Conclusion
+      DB.Connect
+      DB.FileOps
+      DB.FileStmt
       FileSystem.Explore
       FileSystem.Types
       Generator.Logic
@@ -69,6 +72,7 @@ library
       ProjectDefinition.NextJS.Types
       ProjectDefinition.NextJS.Work
       ProjectDefinition.Paraml
+      ProjectDefinition.Php.Analyse
       ProjectDefinition.Scaffold
       ProjectDefinition.Scaffold.Types
       ProjectDefinition.Scaffold.Work
@@ -98,6 +102,7 @@ library
     , array
     , base >=4.7 && <5
     , base-compat
+    , binary
     , bytestring
     , bzlib
     , cannelle
@@ -111,6 +116,9 @@ library
     , filepath
     , gitrev
     , hashmap
+    , hasql
+    , hasql-pool
+    , hasql-th
     , http-client
     , http-media
     , http-types
@@ -124,6 +132,7 @@ library
     , optparse-applicative
     , parser-combinators
     , pathwalk
+    , postgresql-binary
     , scientific
     , servant
     , servant-auth
@@ -168,6 +177,7 @@ executable daniell
     , array
     , base
     , base-compat
+    , binary
     , bytestring
     , bzlib
     , cannelle
@@ -182,6 +192,9 @@ executable daniell
     , filepath
     , gitrev
     , hashmap
+    , hasql
+    , hasql-pool
+    , hasql-th
     , http-client
     , http-media
     , http-types
@@ -195,6 +208,7 @@ executable daniell
     , optparse-applicative
     , parser-combinators
     , pathwalk
+    , postgresql-binary
     , scientific
     , servant
     , servant-auth

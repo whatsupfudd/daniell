@@ -73,6 +73,7 @@ itemMaker fileName
   | ".hpp" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
   | ".h" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
   | ".c" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
+  | ".rb" `isSuffixOf` fileName = Just $ KnownFile RubyFK fileName
   | otherwise = Just $ MiscFile fileName
 
 

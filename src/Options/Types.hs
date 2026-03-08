@@ -132,3 +132,20 @@ newtype NextJSBuildOptions = NextJSBuildOptions {
     packagePath :: Maybe Text
   }
   deriving Show
+
+data ImportOptions = ImportOptions {
+    sourceDir :: FilePath
+    , projectName :: Text
+    , specifics :: ImportSpecifics
+  }
+  deriving Show
+
+-- For the Recycler content:
+data ImportSpecifics =
+  PhpIS
+  | DjangoIS
+  | RailsIS
+  | TrytonIS
+  | HtmlIS
+  deriving Show
+

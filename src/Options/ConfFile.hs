@@ -1,6 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Options.ConfFile where
 
@@ -22,7 +22,7 @@ import qualified Options.Config as Cnfg
 
 
 data ServerOpts = ServerOpts {
-    port :: Maybe Int
+    lport :: Maybe Int
   , cache :: Maybe FilePath
   }
   deriving stock (Show, Generic)
@@ -39,6 +39,17 @@ data CorsOpts = CorsOpts {
   }
   deriving stock (Show, Generic)
 
+data PgDbOpts = PgDbOpts {
+  port :: Maybe Int
+  , host :: Maybe String
+  , user :: Maybe String
+  , passwd :: Maybe String
+  , dbase :: Maybe String
+  , poolSize :: Maybe Int
+  , poolTimeOut :: Maybe Int
+}
+  deriving stock (Show, Generic)
+
 data FileOptions = FileOptions {
   -- debug :: Just DI.Int32
   debug :: Maybe Int
@@ -46,9 +57,9 @@ data FileOptions = FileOptions {
   , server :: Maybe ServerOpts
   , jwt :: Maybe JwtOpts
   , cors :: Maybe CorsOpts
+  , dbPg :: Maybe PgDbOpts
  }
  deriving stock (Show, Generic)
-
 
 defaultConfName = ".fudd/daniell/config.yaml"
 
@@ -68,10 +79,12 @@ tomlOptionCodec = FileOptions
   <*> dioptional (Toml.table serverCodec "server") .= server
   <*> dioptional (Toml.table jwtCodec "jwt") .= jwt
   <*> dioptional (Toml.table corsCodec "cors") .= cors
+  <*> dioptional (Toml.table pgDbCodec "dbPg") .= dbPg
+
 
 serverCodec :: TomlCodec ServerOpts
 serverCodec = ServerOpts
-  <$> dioptional (Toml.int "port") .= port
+  <$> dioptional (Toml.int "port") .= lport
   <*> dioptional (Toml.string "cache") .= cache
 
 jwtCodec :: TomlCodec JwtOpts
@@ -85,11 +98,22 @@ corsCodec = CorsOpts
   <*> dioptional (Toml.arrayOf Toml._String "allowed") .= allowed
 
 
+pgDbCodec :: TomlCodec PgDbOpts
+pgDbCodec = PgDbOpts
+  <$> dioptional (Toml.int "port") .= port
+  <*> dioptional (Toml.string "host") .= host
+  <*> dioptional (Toml.string "user") .= user
+  <*> dioptional (Toml.string "passwd") .= passwd
+  <*> dioptional (Toml.string "dbase") .= dbase
+  <*> dioptional (Toml.int "poolSize") .= poolSize
+  <*> dioptional (Toml.int "poolTimeOut") .= poolTimeOut
+
 -- YAML support:
 instance Aes.FromJSON FileOptions
 instance Aes.FromJSON ServerOpts
 instance Aes.FromJSON JwtOpts
 instance Aes.FromJSON CorsOpts
+instance Aes.FromJSON PgDbOpts
 
 parseFileOptions :: FilePath -> IO (Either String FileOptions)
 parseFileOptions filePath =

@@ -34,6 +34,7 @@ extra-deps:
   - ../../LocalPkgs/haskell-tree-sitter/tree-sitter-php
   - ../../LocalPkgs/haskell-tree-sitter/tree-sitter-tsx
   - ../../LocalPkgs/haskell-tree-sitter/tree-sitter-elm
+  - ../../LocalPkgs/haskell-tree-sitter/tree-sitter-ruby
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
