@@ -103,8 +103,8 @@ registerFile dbPool folderID fullDirPath fileItem =
           pure $ Left err
         Right mbAst ->
           case mbAst of
-            Just ast -> do
-              putStrLn $ "@[registerFile] getAst ast: " <> show (Bs.length ast)
+            Just (format, ast) -> do
+              putStrLn $ "@[registerFile] getAst format: " <> show format <> " ast: " <> show (Bs.length ast)
               pure $ Right ()
             Nothing -> do
               let
@@ -126,7 +126,7 @@ registerFile dbPool folderID fullDirPath fileItem =
                   let
                     bsAst = convertAST phpContext.logic compactConstants
                     bsConstants = convertConstants compactConstants
-                  rezC <- Do.addAST dbPool fileID bsAst
+                  rezC <- Do.addAST dbPool fileID "html" bsAst
                   rezD <- Do.addConstants dbPool fileID bsConstants
                   case (rezC, rezD) of
                     (Left dbErr, _) -> pure . Left $ "addAST err: " <> show dbErr

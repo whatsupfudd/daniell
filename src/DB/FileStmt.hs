@@ -57,16 +57,16 @@ insertFile folderID path =
   |]
 
 
-selectAST :: Int32 -> Session (Maybe Bs.ByteString)
+selectAST :: Int32 -> Session (Maybe (Text, Bs.ByteString))
 selectAST fileID =
   statement fileID [TH.maybeStatement|
-    select value::bytea from AST where file_fk = $1::int4
+    select format::text, value::bytea from AST where file_fk = $1::int4
   |]
 
-insertAST :: Int32 -> Bs.ByteString -> Session ()
-insertAST fileID ast =
-  statement (fileID, ast) [TH.resultlessStatement|
-    insert into AST (file_fk, value) values ($1::int4, $2::bytea)
+insertAST :: Int32 -> Text -> Bs.ByteString -> Session ()
+insertAST fileID format ast =
+  statement (fileID, format, ast) [TH.resultlessStatement|
+    insert into AST (file_fk, format, value) values ($1::int4, $2::text, $3::bytea)
   |]
 
 insertConstants :: Int32 -> Bs.ByteString -> Session ()

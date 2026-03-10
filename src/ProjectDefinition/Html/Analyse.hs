@@ -22,6 +22,7 @@ import qualified FileSystem.Types as Fs
 import qualified DB.FileOps as Do
 import Utils (seqPartitionEithers)
 import qualified ProjectDefinition.Html.Parser as Pr
+import qualified ProjectDefinition.Html.Serialise as Se
 
 
 processDir :: Text -> FilePath -> Pool -> IO ()
@@ -70,7 +71,7 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
 
 
 registerFile :: Pool -> Int32 -> FilePath -> Fs.ExtFileItem -> IO (Either String ())
-registerFile dbPool folderID fullDirPath fileItem = 
+registerFile dbPool folderID fullDirPath fileItem =
   let
     fileItemPath = Fs.getExtFileItemPath fileItem
   in do
@@ -89,8 +90,8 @@ registerFile dbPool folderID fullDirPath fileItem =
           pure $ Left err
         Right mbAst ->
           case mbAst of
-            Just ast -> do
-              putStrLn $ "@[registerFile] getAst ast: " <> show (Bs.length ast)
+            Just (format, ast) -> do
+              putStrLn $ "@[registerFile] getAst format: " <> show format <> " ast: " <> show (Bs.length ast)
               pure $ Right ()
             Nothing -> do
               let
@@ -98,10 +99,20 @@ registerFile dbPool folderID fullDirPath fileItem =
               startTime <- getCurrentTime
               parseRez <- parseHtml fullFilePath
               endTime <- getCurrentTime
-              pure $ Left "unimplemented"
+              case parseRez of
+                Left err -> do
+                  putStrLn $ "@[registerFile] parseHtml err: " <> err
+                  pure $ Left err
+                Right (serPool, serDoc) -> do
+                  rezC <- Do.addAST dbPool fileID "php" serDoc
+                  rezD <- Do.addConstants dbPool fileID serPool
+                  case (rezC, rezD) of
+                    (Left dbErr, _) -> pure . Left $ "addAST err: " <> show dbErr
+                    (_, Left dbErr) -> pure . Left $ "addConstants err: " <> show dbErr
+                    (Right _, Right _) -> pure $ Right ()
 
 
-parseHtml :: FilePath -> IO (Either String Bs.ByteString)
+parseHtml :: FilePath -> IO (Either String (Bs.ByteString, Bs.ByteString))
 parseHtml filePath = do
   inFile <- Tio.readFile filePath
   let
@@ -109,5 +120,16 @@ parseHtml filePath = do
     htmlDocument = Pr.htmlDocumentFromTokens tokens
     (textPool, htmlDocumentC) = Pr.compactHtmlDocument htmlDocument
     orderedTextPool = Pr.orderedTextPool textPool
-  putStrLn $ "@[parseHtml] orderedTextPool: " <> show orderedTextPool <> "\nhtmlDocumentC: " <> show htmlDocumentC
-  pure $ Right Bs.empty
+    eiSerPool = Se.serializeCompactText orderedTextPool
+    serDoc = Se.serializeHtmlDocumentC htmlDocumentC
+    eiDeserDoc = Se.deserializeHtmlDocumentC serDoc
+  case eiSerPool of
+    Left err -> pure $ Left err
+    Right serPool ->
+      case eiDeserDoc of
+        Left err -> pure $ Left err
+        Right deserDoc -> do
+          putStrLn $ "@[parseHtml] orderedTextPool: " <> show (length orderedTextPool) <> " entries, " <> show (Bs.length serPool) <> " bytes."
+          putStrLn $ "@[parseHtml] serDoc: " <> show (Bs.length serDoc) <> " bytes."
+          pure $ Right (serPool, serDoc)
+

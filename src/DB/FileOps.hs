@@ -70,7 +70,7 @@ addError dbPool fileID message procTime = do
     Right _ -> pure $ Right ()
 
 
-getAst :: Pool -> Int32 -> IO (Either String (Maybe Bs.ByteString))
+getAst :: Pool -> Int32 -> IO (Either String (Maybe (Text, Bs.ByteString)))
 getAst dbPool fileID = do
   rezA <- use dbPool $ Fs.selectAST fileID
   case rezA of
@@ -78,9 +78,9 @@ getAst dbPool fileID = do
     Right mbAst -> pure $ Right mbAst
 
 
-addAST :: Pool -> Int32 -> Bs.ByteString -> IO (Either String ())
-addAST dbPool fileID ast = do
-  rezA <- use dbPool $ Fs.insertAST fileID ast
+addAST :: Pool -> Int32 -> Text -> Bs.ByteString -> IO (Either String ())
+addAST dbPool fileID format ast = do
+  rezA <- use dbPool $ Fs.insertAST fileID format ast
   case rezA of
     Left err -> pure . Left $ "@[addAST] insertAST err: " <> show err
     Right _ -> pure $ Right ()
