@@ -21,8 +21,12 @@ import qualified FileSystem.Types as Fs
 
 import qualified DB.FileOps as Do
 import Utils (seqPartitionEithers)
+{-
 import qualified ProjectDefinition.Html.Parser as Pr
-import qualified ProjectDefinition.Html.Serialise as Se
+import qualified ProjectDefinition.Html.Serialize as Se
+-}
+import qualified Cannelle.Html.Parser as Pr
+import qualified Cannelle.Html.Serialize as Se
 
 
 processDir :: Text -> FilePath -> Pool -> IO ()

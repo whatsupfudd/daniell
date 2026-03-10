@@ -31,6 +31,8 @@ import Cannelle.PHP.AST (PhpContext (..), PhpAction (..)
         , ClassMemberDecl (..), UseList (..), MethodImplementation (..)
         , TypeDecl (..), QualifiedName (..))
 import Cannelle.PHP.Print (printPhpContext)
+import qualified Cannelle.PHP.Serialize as PhS
+
 import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
 
@@ -122,10 +124,10 @@ registerFile dbPool folderID fullDirPath fileItem =
                     Left dbErr -> pure . Left $ show dbErr
                     Right _ -> pure . Left $ show err
                 Right phpContext -> do
-                  compactConstants <- compactText fullFilePath phpContext.contentDemands
+                  compactConstants <- PhS.compactText fullFilePath phpContext.contentDemands
                   let
-                    bsAst = convertAST phpContext.logic compactConstants
-                    bsConstants = convertConstants compactConstants
+                    bsAst = PhS.convertAST phpContext.logic compactConstants
+                    bsConstants = PhS.convertConstants compactConstants
                   rezC <- Do.addAST dbPool fileID "html" bsAst
                   rezD <- Do.addConstants dbPool fileID bsConstants
                   case (rezC, rezD) of
@@ -133,7 +135,7 @@ registerFile dbPool folderID fullDirPath fileItem =
                     (_, Left dbErr) -> pure . Left $ "addConstants err: " <> show dbErr
                     (Right _, Right _) -> pure $ Right ()
 
-
+{-
 compactText :: FilePath -> V.Vector SegmentPos -> IO (Mp.Map Int32 (Bs.ByteString, [Int32]))
 compactText sourceFile contentDemands = do
   sourceText <- Bs.readFile sourceFile
@@ -512,3 +514,4 @@ convertConstants constants =
     bsConstants = Mp.foldl (\acc (lineText, users) -> acc <> lineText) "" constants
   in
   Bs.append (Bsl.toStrict $ Bsl.concat [bsNbrCtes, bsTotalLength, bsIndices]) bsConstants
+-}

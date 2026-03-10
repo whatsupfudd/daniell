@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
-module ProjectDefinition.Html.Serialise where
+module ProjectDefinition.Html.Serialize where
 
 import Control.Monad (unless, when, replicateM)
 import qualified Control.Monad.State.Strict as StS

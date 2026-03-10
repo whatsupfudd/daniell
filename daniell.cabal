@@ -64,7 +64,7 @@ library
       ProjectDefinition.Haskell.Work
       ProjectDefinition.Html.Analyse
       ProjectDefinition.Html.Parser
-      ProjectDefinition.Html.Serialise
+      ProjectDefinition.Html.Serialize
       ProjectDefinition.Html.Types
       ProjectDefinition.Hugo
       ProjectDefinition.Hugo.Analyze
