@@ -22,6 +22,9 @@ extra-deps:
   - servant-auth-0.4.2.0@sha256:5fa6b8c2b40deb542d9b2fc2d18ce0c90f7e4a26268f018dd933c8881c23db5f,2211
   - servant-server-0.20.2@sha256:5a2d11959256fed8f4918f02f55cb597b61cc92191a672cd2d2228fadd5ee0ec,6226
 
+  - blaze-htmx-0.1.0.0@sha256:cfd799bf5e0693879ad175168f6c78d45cb8f543428fa374f6ffb62fbc8dc52f,1327
+
+
   #- github: whatsupfudd/cannelle
   #  commit: f9530590734fdefa3ad5478444f61200591bab10
   # - github: whatsupfudd/haskell-tree-sitter
