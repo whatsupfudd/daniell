@@ -1,55 +1,35 @@
-module ProjectDefinition.Php.Analyse where
+module ProjectDefinition.Rails.Analyse where
 
 import qualified Data.ByteString as Bs
-import qualified Data.ByteString.Lazy as Bsl
-import Data.Binary.Put (runPut, putInt32be)
-import Data.Either (lefts, rights, partitionEithers)
+import Data.Either (partitionEithers)
 import Data.Int (Int32)
 import qualified Data.Map as Mp
-import Data.Maybe (fromMaybe, isNothing)
-import qualified Data.Sequence as Seq
-import Data.Text (Text, pack, unpack)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text, pack)
 import qualified Data.Text.Encoding as T
 import Data.Time.Clock (getCurrentTime, diffUTCTime)
-import qualified Data.Vector as V
-
-import qualified Crypto.Hash.MD5 as Cr
-
 import System.FilePath.Posix ((</>))
 
 import Hasql.Pool (Pool)
 
-import TreeSitter.Node (TSPoint(..))
-import Cannelle.TreeSitter.Types (SegmentPos)
-import Cannelle.PHP.Parse (tsParsePhp)
-import Cannelle.PHP.AST (PhpContext (..), PhpAction (..)
-        , PhpStatement (..), DanglingClosure (..), PhpExpression (..)
-        , CallerSpec (..), MemberAccessMode (..), ScopeMode (..), IncludeMode (..)
-        , VariableSpec (..), UnaryOps (..), BinaryOps (..), UpdateOp (..)
-        , LiteralValue (..), StringDetails (..), EncapsedMode (..)
-        , MemberModifier (..), Attribute (..), AttributeGroup (..), AttributeList (..)
-        , ClassMemberDecl (..), UseList (..), MethodImplementation (..)
-        , TypeDecl (..), QualifiedName (..))
-import Cannelle.PHP.Print (printPhpContext)
-import qualified Cannelle.PHP.Serialize as PhS
-import qualified Cannelle.Common.Serialize as CnC
-
-import qualified FileSystem.Types as Fs
 import qualified FileSystem.Explore as Fs
+import qualified FileSystem.Types as Fs
 
 import qualified DB.FileOps as Do
 import Utils (seqPartitionEithers)
+import qualified Cannelle.Ruby.Parse as Rp
+-- import qualified Cannelle.Ruby.Serialize as Rs
 
 
 processDir :: Text -> FilePath -> Pool -> IO ()
 processDir projectName rootPath dbPool = do
   eiPathFiles <- Fs.loadFolderTree rootPath
   case eiPathFiles of
-    Left err -> putStrLn $ "@[php.processDir] error loading folder tree: " <> rootPath <> " - " <> err
+    Left err -> putStrLn $ "@[ruby.processDir] error loading folder tree: " <> rootPath <> " - " <> err
     Right pathFiles -> do
       eiProject <- Do.getProject dbPool projectName
       case eiProject of
-        Left err -> putStrLn $ "@[php.processDir] getProject err: " <> err
+        Left err -> putStrLn $ "@[ruby.processDir] getProject err: " <> err
         Right projectID -> do
           eiRezA <- mapM (\aPathFile ->
               let
@@ -67,7 +47,7 @@ processDir projectName rootPath dbPool = do
               in
               mapM_ (processFilesInDir dbPool folderIDMap rootPath) pathFiles
             (errs, _) -> do
-              putStrLn $ "@[processDir] processFilesInDir errs: " <> show errs
+              putStrLn $ "@[ruby.processDir] processFilesInDir errs: " <> show errs
               pure ()
 
 
@@ -78,7 +58,7 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
     fullPath = rootPath </> dirPath
   in do
   putStrLn $ "@[processFilesInDir] folderID: " <> show folderID <> " fullPath: " <> fullPath
-  fRegistries <- mapM (registerFile dbPool folderID fullPath) (filter Fs.isPhpExtItem files)
+  fRegistries <- mapM (registerFile dbPool folderID fullPath) (filter Fs.isRubyExtItem files)
   case partitionEithers fRegistries of
     (errs, _) -> do
       putStrLn $ "@[processFilesInDir] registerFile errs: " <> show errs
@@ -113,25 +93,24 @@ registerFile dbPool folderID fullDirPath fileItem =
               let
                 fullFilePath = fullDirPath </> fileItemPath
               startTime <- getCurrentTime
-              parseRez <- tsParsePhp False fullFilePath
+              parseRez <- parseRuby fullFilePath
               endTime <- getCurrentTime
-              let
-                duration = diffUTCTime endTime startTime
-              putStrLn $ "@[registerFile] parse time: " <> show duration <> ", rez: " <> show parseRez
               case parseRez of
                 Left err -> do
-                  rezB <- Do.addError dbPool fileID (pack $ show err) (Just duration)
-                  case rezB of
-                    Left dbErr -> pure . Left $ show dbErr
-                    Right _ -> pure . Left $ show err
-                Right phpContext -> do
-                  compactConstants <- CnC.compactText fullFilePath phpContext.contentDemands
-                  let
-                    bsAst = PhS.convertAST phpContext.logic compactConstants
-                    bsConstants = CnC.convertConstants compactConstants
-                  rezC <- Do.addAST dbPool fileID "php" bsAst
-                  rezD <- Do.addConstants dbPool fileID bsConstants
+                  putStrLn $ "@[registerFile] parseHtml err: " <> err
+                  pure $ Left err
+                Right (serPool, serDoc) -> do
+                  rezC <- Do.addAST dbPool fileID "rb" serDoc
+                  rezD <- Do.addConstants dbPool fileID serPool
                   case (rezC, rezD) of
                     (Left dbErr, _) -> pure . Left $ "addAST err: " <> show dbErr
                     (_, Left dbErr) -> pure . Left $ "addConstants err: " <> show dbErr
                     (Right _, Right _) -> pure $ Right ()
+
+
+parseRuby :: FilePath -> IO (Either String (Bs.ByteString, Bs.ByteString))
+parseRuby filePath = do
+  inFile <- Bs.readFile filePath
+  let
+    tokens = Rp.parseFromContent False filePath inFile Nothing
+  pure $ Left "@[parseRuby] not implemented."

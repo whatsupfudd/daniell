@@ -12,6 +12,7 @@ import qualified Options.Types as Opts
 
 import qualified ProjectDefinition.Php.Analyse as Php
 import qualified ProjectDefinition.Html.Analyse as Html
+import qualified ProjectDefinition.Rails.Analyse as Rails
 
 
 importCmd :: Opts.ImportOptions -> Rto.RunOptions -> IO Ccl.Conclusion
@@ -70,4 +71,10 @@ importPhp :: Opts.ImportOptions -> Rto.RunOptions -> Pool -> IO Ccl.Conclusion
 importPhp importOpts rtOpts dbPool = do
   putStrLn $ "@[importPhp] starting, dir: " <> show importOpts.sourceDir <> ", name: " <> show importOpts.projectName
   Php.processDir importOpts.projectName importOpts.sourceDir dbPool
+  pure Ccl.NilCcl
+
+importRails :: Opts.ImportOptions -> Rto.RunOptions -> Pool -> IO Ccl.Conclusion
+importRails importOpts rtOpts dbPool = do
+  putStrLn $ "@[importRails] starting, dir: " <> show importOpts.sourceDir <> ", name: " <> show importOpts.projectName
+  Rails.processDir importOpts.projectName importOpts.sourceDir dbPool
   pure Ccl.NilCcl

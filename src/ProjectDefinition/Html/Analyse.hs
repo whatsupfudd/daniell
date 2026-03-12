@@ -4,11 +4,12 @@ import qualified Data.ByteString as Bs
 import Data.Either (partitionEithers)
 import Data.Int (Int32)
 import qualified Data.Map as Mp
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Text (Text, pack)
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as Tio
 import Data.Time.Clock (getCurrentTime, diffUTCTime)
+import qualified Data.Vector as V
 import System.FilePath.Posix ((</>))
 
 import Hasql.Pool (Pool)
@@ -21,12 +22,13 @@ import qualified FileSystem.Types as Fs
 
 import qualified DB.FileOps as Do
 import Utils (seqPartitionEithers)
-{-
-import qualified ProjectDefinition.Html.Parser as Pr
-import qualified ProjectDefinition.Html.Serialize as Se
--}
+
 import qualified Cannelle.Html.Parser as Pr
 import qualified Cannelle.Html.Serialize as Se
+import qualified Cannelle.React.Parse as Rp
+import qualified Cannelle.React.Serialize as Rs
+import Cannelle.React.AST (ReactContext(..))
+import qualified Cannelle.Common.Serialize as CnS
 
 
 processDir :: Text -> FilePath -> Pool -> IO ()
@@ -66,7 +68,11 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
     fullPath = rootPath </> dirPath
   in do
   putStrLn $ "@[processFilesInDir] folderID: " <> show folderID <> " fullPath: " <> fullPath
-  fRegistries <- mapM (registerFile dbPool folderID fullPath) (filter Fs.isHtmlExtItem files)
+  let
+    targetFiles = filter (\aFile -> Fs.isHtmlExtItem aFile || Fs.isJsExtItem aFile) files
+  fRegistries <- mapM (\aFile ->
+      registerFile dbPool folderID (fromJust $ Fs.getExtFileItemKind aFile) fullPath (Fs.getExtFileItemPath aFile)
+    ) targetFiles
   case partitionEithers fRegistries of
     (errs, _) -> do
       putStrLn $ "@[processFilesInDir] registerFile errs: " <> show errs
@@ -74,11 +80,8 @@ processFilesInDir dbPool folderIDMap rootPath (dirPath, files) =
   pure ()
 
 
-registerFile :: Pool -> Int32 -> FilePath -> Fs.ExtFileItem -> IO (Either String ())
-registerFile dbPool folderID fullDirPath fileItem =
-  let
-    fileItemPath = Fs.getExtFileItemPath fileItem
-  in do
+registerFile :: Pool -> Int32 -> Fs.FileKind -> FilePath -> FilePath -> IO (Either String ())
+registerFile dbPool folderID fileKind fullDirPath fileItemPath = do
   putStrLn $ "@[registerFile] folderID: " <> show folderID <> " file: " <> fileItemPath
   rezA <- Do.getFile dbPool folderID fileItemPath
   case rezA of
@@ -101,19 +104,27 @@ registerFile dbPool folderID fullDirPath fileItem =
               let
                 fullFilePath = fullDirPath </> fileItemPath
               startTime <- getCurrentTime
-              parseRez <- parseHtml fullFilePath
+              parseRez <- parseFile fileKind fullFilePath
               endTime <- getCurrentTime
               case parseRez of
                 Left err -> do
-                  putStrLn $ "@[registerFile] parseHtml err: " <> err
+                  putStrLn $ "@[registerFile] parseFile err: " <> err
                   pure $ Left err
                 Right (serPool, serDoc) -> do
-                  rezC <- Do.addAST dbPool fileID "php" serDoc
+                  rezC <- Do.addAST dbPool fileID (Fs.fileKindToStr fileKind) serDoc
                   rezD <- Do.addConstants dbPool fileID serPool
                   case (rezC, rezD) of
                     (Left dbErr, _) -> pure . Left $ "addAST err: " <> show dbErr
                     (_, Left dbErr) -> pure . Left $ "addConstants err: " <> show dbErr
                     (Right _, Right _) -> pure $ Right ()
+
+
+parseFile :: Fs.FileKind -> FilePath -> IO (Either String (Bs.ByteString, Bs.ByteString))
+parseFile fileKind filePath = do
+  case fileKind of
+    Fs.Html -> parseHtml filePath
+    Fs.Javascript -> parseJs filePath
+    _ -> pure $ Left $ "Unsupported file kind: " <> show fileKind
 
 
 parseHtml :: FilePath -> IO (Either String (Bs.ByteString, Bs.ByteString))
@@ -137,3 +148,15 @@ parseHtml filePath = do
           putStrLn $ "@[parseHtml] serDoc: " <> show (Bs.length serDoc) <> " bytes."
           pure $ Right (serPool, serDoc)
 
+
+parseJs :: FilePath -> IO (Either String (Bs.ByteString, Bs.ByteString))
+parseJs filePath = do
+  eiReactCtxt <- Rp.tsParseReact False filePath
+  case eiReactCtxt of
+    Left err -> pure $ Left $ show err
+    Right reactCtxt -> do
+      textMap <- CnS.compactText filePath reactCtxt.contentDemands
+      let
+        serCtePool = CnS.convertConstants textMap
+        serDoc = Rs.serializeTsxAst Rs.defaultSerializeOptions $ V.toList reactCtxt.tlElements
+      pure $ Right (serCtePool, serDoc)

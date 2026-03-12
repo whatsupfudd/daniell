@@ -77,6 +77,7 @@ library
       ProjectDefinition.NextJS.Work
       ProjectDefinition.Paraml
       ProjectDefinition.Php.Analyse
+      ProjectDefinition.Rails.Analyse
       ProjectDefinition.Scaffold
       ProjectDefinition.Scaffold.Types
       ProjectDefinition.Scaffold.Work

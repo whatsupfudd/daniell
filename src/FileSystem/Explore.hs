@@ -48,32 +48,32 @@ filesAnalyser prefixLength root dirs files =
 
 itemMaker :: FilePath -> Maybe FileItem
 itemMaker fileName
-  | ".html" `isSuffixOf` fileName = Just $ KnownFile Html fileName
-  | ".yaml" `isSuffixOf` fileName = Just $ KnownFile Yaml fileName
-  | ".toml" `isSuffixOf` fileName = Just $ KnownFile Toml fileName
-  | ".json" `isSuffixOf` fileName = Just $ KnownFile Json fileName
+  | ".adoc" `isSuffixOf` fileName = Just $ KnownFile AsciiDoc fileName
+  | ".c" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
+  | ".cpp" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
+  | ".css" `isSuffixOf` fileName = Just $ KnownFile Css fileName
   | ".dant" `isSuffixOf` fileName = Just $ KnownFile DanTmpl fileName
-  | ".hs" `isSuffixOf` fileName = Just $ KnownFile Haskell fileName
   | ".elm" `isSuffixOf` fileName = Just $ KnownFile Elm fileName
-  | ".ts" `isSuffixOf` fileName = Just $ KnownFile Typescript fileName
+  | ".h" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
+  | ".hpp" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
+  | ".hs" `isSuffixOf` fileName = Just $ KnownFile Haskell fileName
+  | ".html" `isSuffixOf` fileName = Just $ KnownFile Html fileName
   | ".js" `isSuffixOf` fileName = Just $ KnownFile Javascript fileName
-  | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
+  | ".json" `isSuffixOf` fileName = Just $ KnownFile Json fileName
   | ".jsx" `isSuffixOf` fileName = Just $ KnownFile JsReact fileName
   | ".md" `isSuffixOf` fileName = Just $ KnownFile Markdown fileName
   | ".org" `isSuffixOf` fileName = Just $ KnownFile EmacsOrg fileName
-  | ".css" `isSuffixOf` fileName = Just $ KnownFile Css fileName
-  | ".adoc" `isSuffixOf` fileName = Just $ KnownFile AsciiDoc fileName
   | ".pandoc" `isSuffixOf` fileName = Just $ KnownFile Pandoc fileName
-  | ".rss" `isSuffixOf` fileName = Just $ KnownFile Rss fileName
-  | ".xml" `isSuffixOf` fileName = Just $ KnownFile Xml fileName
-  | ".txt" `isSuffixOf` fileName = Just $ KnownFile TxtTempl fileName
   | ".php" `isSuffixOf` fileName = Just $ KnownFile Php fileName
   | ".py" `isSuffixOf` fileName = Just $ KnownFile Python fileName
-  | ".cpp" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
-  | ".hpp" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
-  | ".h" `isSuffixOf` fileName = Just $ KnownFile CppHeader fileName
-  | ".c" `isSuffixOf` fileName = Just $ KnownFile Cpp fileName
   | ".rb" `isSuffixOf` fileName = Just $ KnownFile RubyFK fileName
+  | ".rss" `isSuffixOf` fileName = Just $ KnownFile Rss fileName
+  | ".toml" `isSuffixOf` fileName = Just $ KnownFile Toml fileName
+  | ".ts" `isSuffixOf` fileName = Just $ KnownFile Typescript fileName
+  | ".tsx" `isSuffixOf` fileName = Just $ KnownFile TsReact fileName
+  | ".txt" `isSuffixOf` fileName = Just $ KnownFile TxtTempl fileName
+  | ".xml" `isSuffixOf` fileName = Just $ KnownFile Xml fileName
+  | ".yaml" `isSuffixOf` fileName = Just $ KnownFile Yaml fileName
   | otherwise = Just $ MiscFile fileName
 
 
