@@ -47,7 +47,7 @@ processDir projectName rootPath dbPool = do
   case eiPathFiles of
     Left err -> putStrLn $ "@[php.processDir] error loading folder tree: " <> rootPath <> " - " <> err
     Right pathFiles -> do
-      eiProject <- Do.getProject dbPool projectName
+      eiProject <- Do.getProject dbPool projectName "php"
       case eiProject of
         Left err -> putStrLn $ "@[php.processDir] getProject err: " <> err
         Right projectID -> do

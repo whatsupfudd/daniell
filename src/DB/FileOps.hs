@@ -14,15 +14,15 @@ import Hasql.Pool (Pool, use)
 import qualified DB.FileStmt as Fs
 
 
-getProject :: Pool -> Text -> IO (Either String Int32)
-getProject dbPool projectName = do
+getProject :: Pool -> Text -> Text -> IO (Either String Int32)
+getProject dbPool projectName kind = do
   rezA <- use dbPool $ Fs.locateProject projectName
   case rezA of
     Left err -> pure . Left $ "@[getProject] locateProject err: " <> show err
     Right mbUid -> case mbUid of
       Just (uid, _) -> pure $ Right uid
       Nothing -> do
-        rezB <- use dbPool $ Fs.insertProject projectName
+        rezB <- use dbPool $ Fs.insertProject projectName kind
         case rezB of
           Left err -> pure . Left $ "@[getProject] insertProject err: " <> show err
           Right (uid, _) -> pure $ Right uid

@@ -27,7 +27,7 @@ processDir projectName rootPath dbPool = do
   case eiPathFiles of
     Left err -> putStrLn $ "@[ruby.processDir] error loading folder tree: " <> rootPath <> " - " <> err
     Right pathFiles -> do
-      eiProject <- Do.getProject dbPool projectName
+      eiProject <- Do.getProject dbPool projectName "rails"
       case eiProject of
         Left err -> putStrLn $ "@[ruby.processDir] getProject err: " <> err
         Right projectID -> do

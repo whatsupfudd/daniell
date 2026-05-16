@@ -295,7 +295,7 @@ paramParser = eitherReader $ \s ->
 importOpts :: Parser ImportOptions
 importOpts =
   ImportOptions <$> strOption (long "sourceDir" <> help "(string) filesystem path to read files relative from")
-  <*> strOption (long "projectName" <> help "(string) name of the project")
+  <*> strOption (long "name" <> help "(string) name of the project")
   <*> specificsParser
   where
   specificsParser :: Parser ImportSpecifics

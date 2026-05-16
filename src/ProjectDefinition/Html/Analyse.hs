@@ -35,11 +35,11 @@ processDir :: Text -> FilePath -> Pool -> IO ()
 processDir projectName rootPath dbPool = do
   eiPathFiles <- Fs.loadFolderTree rootPath
   case eiPathFiles of
-    Left err -> putStrLn $ "@[php.processDir] error loading folder tree: " <> rootPath <> " - " <> err
+    Left err -> putStrLn $ "@[html.processDir] error loading folder tree: " <> rootPath <> " - " <> err
     Right pathFiles -> do
-      eiProject <- Do.getProject dbPool projectName
+      eiProject <- Do.getProject dbPool projectName "html"
       case eiProject of
-        Left err -> putStrLn $ "@[php.processDir] getProject err: " <> err
+        Left err -> putStrLn $ "@[html.processDir] getProject err: " <> err
         Right projectID -> do
           eiRezA <- mapM (\aPathFile ->
               let
@@ -57,7 +57,7 @@ processDir projectName rootPath dbPool = do
               in
               mapM_ (processFilesInDir dbPool folderIDMap rootPath) pathFiles
             (errs, _) -> do
-              putStrLn $ "@[processDir] processFilesInDir errs: " <> show errs
+              putStrLn $ "@[html.processDir] processFilesInDir errs: " <> show errs
               pure ()
 
 
